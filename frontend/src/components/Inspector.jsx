@@ -2,6 +2,7 @@ import { ALGO_ORDER, ALGO_SHORT } from '../lib/metrics.js'
 import { PRIORITY, REJECTION_LABEL, clock, fmt } from '../lib/format.js'
 import { familyLabel } from '../lib/fab.js'
 import RepairHistory from './RepairHistory.jsx'
+import InfoLink from './InfoLink.jsx'
 
 function JobView({ job, results, active, onSelect }) {
   return (
@@ -115,7 +116,7 @@ export default function Inspector({ selection, scenario, results, active, offShi
     <aside className="card inspector" aria-label="Inspector">
       {body ?? (
         <div className="empty">
-          <p style={{ margin: '0 0 6px', color: 'var(--ink)', fontWeight: 600 }}>Select a job or engineer</p>
+          <p style={{ margin: '0 0 6px', color: 'var(--ink)', fontWeight: 600 }}>Select a job or engineer <InfoLink slug="floor-plan" anchor="the-inspector" label="The inspector" /></p>
           Click a job to see how each strategy handled it and why. Click an engineer to see their route, or take them off shift.
         </div>
       )}

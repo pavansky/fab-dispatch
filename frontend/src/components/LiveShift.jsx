@@ -6,6 +6,7 @@ import { PRIORITY, clock, fmt } from '../lib/format.js'
 import { familyAt, familyPrefix, isConstraint, shiftLength } from '../lib/fab.js'
 import FloorPlan from './FloorPlan.jsx'
 import Schedule from './Schedule.jsx'
+import InfoLink from './InfoLink.jsx'
 
 const SPEEDS = [[5, '5 min/s'], [15, '15 min/s'], [30, '30 min/s']]
 const SLA_BOTTLENECK = 45
@@ -152,7 +153,7 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
     return (
       <>
         <section className="card">
-          <div className="card-h"><div><h2><span className="section-no">01</span>Live dispatch</h2>
+          <div className="card-h"><div><div className="h-row"><h2><span className="section-no">01</span>Live dispatch</h2><InfoLink slug="live-dispatch" label="Live dispatch" /></div>
             <p>Run this shift in real time. Tool-downs are revealed when they happen (no peeking ahead), started work is locked, and the chosen strategy re-plans open work on every event. Changes stream to every open dashboard.</p></div></div>
           <div className="card-b" style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
             <label className="field" style={{ margin: 0, width: 240 }}><span>Re-dispatch strategy</span>
@@ -273,7 +274,7 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
           </div>
         </section>
         <section className="card feed" aria-label="Dispatch log" aria-live="polite">
-          <div className="card-h"><div><h2>Dispatch log</h2><p>Every change and who made it, as it streams in.</p></div></div>
+          <div className="card-h"><div><div className="h-row"><h2>Dispatch log</h2><InfoLink slug="live-dispatch" anchor="re-plans-don-t-reshuffle-people" label="Re-plans" /></div><p>Every change and who made it, as it streams in.</p></div></div>
           {selection?.type === 'engineer' && canDispatch && (
             <div className="card-b" style={{ display: 'flex', gap: 8, alignItems: 'center', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
               <b>{selection.id}</b>

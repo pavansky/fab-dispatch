@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { PRIORITY } from '../lib/format.js'
 import { shiftLength } from '../lib/fab.js'
+import InfoLink from './InfoLink.jsx'
 
 const WEIGHTS = [
   ['priority_reward', 'Priority reward', 'per priority point served', 0, 200, 5],
@@ -29,7 +30,7 @@ export default function Sidebar({
       <aside className={`sidebar ${open ? 'open' : ''}`} aria-label="Controls">
         <div className="drawer-h"><b>Controls</b><button className="btn ghost" onClick={onClose} aria-label="Close controls">✕</button></div>
         <section className="card card-b">
-          <p className="eyebrow">Shift scenario</p>
+          <p className="eyebrow">Shift scenario <InfoLink slug="what-ifs" anchor="generate-a-shift" label="Generating shifts" /></p>
           <label className="field"><span>Preset</span>
             <select className="input" value={params.preset} onChange={(e) => setParams({ ...params, preset: e.target.value })}>
               {Object.entries(profile.presets).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
@@ -44,8 +45,8 @@ export default function Sidebar({
           <button className="btn primary block" onClick={() => { onGenerate(); onClose() }}>Generate shift</button>
         </section>
 
-        <details className="card card-b section" open>
-          <summary><p className="eyebrow" style={{ margin: 0 }}>Cost weights</p></summary>
+        <details className="card card-b section" open data-tour="weights">
+          <summary><p className="eyebrow" style={{ margin: 0 }}>Cost weights <InfoLink slug="constraints-and-weights" anchor="soft-constraints-the-cost-weights" label="Cost weights" /></p></summary>
           <p className="help" style={{ marginTop: 8 }}>Soft constraints. Every strategy re-solves as you drag.</p>
           {WEIGHTS.map(([key, label, unit, min, max, step]) => (
             <label key={key} className="field">
@@ -58,7 +59,7 @@ export default function Sidebar({
         </details>
 
         <details className="card card-b section" open>
-          <summary><p className="eyebrow" style={{ margin: 0 }}>What-if</p></summary>
+          <summary><p className="eyebrow" style={{ margin: 0 }}>What-if <InfoLink slug="what-ifs" label="What-if scenarios" /></p></summary>
           <label className="toggle" style={{ marginTop: 10 }}>
             <input type="checkbox" checked={addMode} onChange={(e) => { setAddMode(e.target.checked); if (e.target.checked) onClose() }} />
             Report a job by tapping the floor

@@ -1,3 +1,4 @@
+import InfoLink from './InfoLink.jsx'
 import { workforce } from '../lib/analysis.js'
 import { fmt } from '../lib/format.js'
 import { familyIds, familyLabel } from '../lib/fab.js'
@@ -13,7 +14,7 @@ export default function Workforce({ scenario, result, offShift, onSelect }) {
   return (
     <>
       <section className="card">
-        <div className="card-h"><div><h2>Demand vs certified supply</h2><p>By tool family, engineers on shift only. A family with unserved work and few top-level engineers is a staffing problem, not an algorithm problem.</p></div></div>
+        <div className="card-h"><div><div className="h-row"><h2>Demand vs certified supply</h2><InfoLink slug="views" anchor="workforce" label="Workforce view" /></div><p>By tool family, engineers on shift only. A family with unserved work and few top-level engineers is a staffing problem, not an algorithm problem.</p></div></div>
         <div className="card-b table-wrap">
           <table className="data">
             <thead>

@@ -34,6 +34,7 @@ function UserMenu({ theme, onTheme }) {
           <p className="help" style={{ margin: '6px 0 10px' }}>
             {user.role === 'dispatcher' ? 'You can drive live shifts, report tool-downs and run benchmarks.'
               : 'You can plan and watch. Ask an admin for the dispatcher role to drive live shifts.'}
+            {user.provider === 'guest' && ' This is a guest session: signing out ends it.'}
           </p>
           {/* On phones the theme switch lives here, where there's room for it. */}
           <div className="menu-theme"><span className="help">Theme</span><ThemeSwitch theme={theme} onTheme={onTheme} /></div>
@@ -44,7 +45,7 @@ function UserMenu({ theme, onTheme }) {
   )
 }
 
-export default function TopBar({ fabs, fabId, onFab, chips, busy, pending, solvedNote, theme, onTheme, onMenu }) {
+export default function TopBar({ fabs, fabId, onFab, chips, busy, pending, solvedNote, theme, onTheme, onMenu, onHelp }) {
   return (
     <header className="topbar">
       <button className="btn ghost menu-btn" onClick={onMenu} aria-label="Open controls">☰</button>
@@ -59,6 +60,7 @@ export default function TopBar({ fabs, fabId, onFab, chips, busy, pending, solve
       <span className="solve-state" aria-live="polite"><span className={`dot ${busy ? 'busy' : ''}`} />
         <span className="solve-text">{busy ? `Solving ${[...pending].map((a) => ALGO_SHORT[a]).join(', ')}…` : solvedNote}</span></span>
       <ThemeSwitch theme={theme} onTheme={onTheme} className="bar-theme" />
+      <button className="btn ghost help-btn" onClick={onHelp} aria-label="Help" aria-keyshortcuts="?" title="Help (?)" data-tour="help">?</button>
       <UserMenu theme={theme} onTheme={onTheme} />
     </header>
   )

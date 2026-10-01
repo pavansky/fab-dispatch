@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { generateScenario, getFab, getMeta, listFabs, predictDurations } from './api.js'
 import { SignIn, useAuth } from './auth.jsx'
 import { usePlans } from './lib/usePlans.js'
@@ -6,6 +6,8 @@ import { applyTheme, loadTheme } from './lib/theme.js'
 import { ALGO_ORDER, ALGO_SHORT } from './lib/metrics.js'
 import { PRIORITY } from './lib/format.js'
 import { areasOf, familyAt, familyLabel, familyPrefix, isConstraint, setActiveFab } from './lib/fab.js'
+import { GOALS, recommend } from './lib/analysis.js'
+import { HelpContext, TOUR_KEY, parseHelpTarget } from './lib/help.js'
 import FloorPlan from './components/FloorPlan.jsx'
 import Inspector from './components/Inspector.jsx'
 import Overview from './components/Overview.jsx'
@@ -15,10 +17,16 @@ import Benchmark from './components/Benchmark.jsx'
 import LiveShift from './components/LiveShift.jsx'
 import TopBar from './components/TopBar.jsx'
 import Sidebar from './components/Sidebar.jsx'
+import Tour from './components/Tour.jsx'
+
+// Help and the assistant load on first use, keeping Markdown rendering out of the main bundle.
+const HelpCenter = lazy(() => import('./components/HelpCenter.jsx'))
+const Assistant = lazy(() => import('./components/Assistant.jsx'))
 
 const TABS = [['overview', 'Overview'], ['floor', 'Floor plan'], ['schedule', 'Schedule'], ['workforce', 'Workforce'], ['live', 'Live dispatch'], ['benchmark', 'Benchmark']]
 const SLA = { 3: 45, 2: 120, 1: 240 }
 const FAB_KEY = 'fab-dispatch-fab'
+const TYPING = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
 
 function AlgoSwitch({ results, active, onChange, pending = new Set() }) {
   return (
@@ -84,6 +92,15 @@ function Workspace({ theme, setTheme }) {
   const [newJob, setNewJob] = useState({ priority: 3, at: 120 })
   const [error, setError] = useState(null)
   const [predicted, setPredicted] = useState(null) // { original, changes } when history durations are on
+  // Help center (null = closed, { slug: null } = home), assistant, and the first-run tour.
+  const [help, setHelp] = useState(() => {
+    const h = new URLSearchParams(location.search).get('help')
+    return h === null ? null : h ? parseHelpTarget(h) : { slug: null, anchor: '' }
+  })
+  const [askOpen, setAskOpen] = useState(false)
+  const [askDraft, setAskDraft] = useState('')
+  const [messages, setMessages] = useState([])
+  const [touring, setTouring] = useState(false)
 
   useEffect(() => {
     const url = new URL(location.href)
@@ -92,6 +109,30 @@ function Workspace({ theme, setTheme }) {
     if (selection) url.searchParams.set(selection.type, selection.id)
     history.replaceState(null, '', url)
   }, [selection])
+  useEffect(() => {
+    const url = new URL(location.href)
+    if (help) url.searchParams.set('help', help.slug ? `${help.slug}${help.anchor ? `#${help.anchor}` : ''}` : '')
+    else url.searchParams.delete('help')
+    history.replaceState(null, '', url)
+  }, [help])
+
+  const helpApi = useMemo(() => ({
+    openHelp: (slug = null, anchor = '') => setHelp({ slug, anchor }),
+    openAssistant: (draft = '') => { setAskDraft(draft); setAskOpen(true); setHelp(null) },
+  }), [])
+
+  // Keyboard: ? help, / assistant, 1-6 views. Never while typing in a field.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || TYPING.has(e.target.tagName) || e.target.isContentEditable) return
+      if (e.key === '?') { e.preventDefault(); setHelp((h) => h ?? { slug: null, anchor: '' }) }
+      else if (e.key === '/') { e.preventDefault(); helpApi.openAssistant() }
+      else if (/^[1-6]$/.test(e.key) && !help && !askOpen) setTab(TABS[Number(e.key) - 1][0])
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  })
+
   const regenerate = (p = params, { keepSelection = false, fab = profile } = {}) => {
     setError(null)
     generateScenario({ ...p, fab_id: fab.id })
@@ -138,6 +179,43 @@ function Workspace({ theme, setTheme }) {
 
   const { results, pending, errors: planErrors, cacheInfo } = usePlans(effective, weights)
   const busy = pending.size > 0
+  const reco = results.length ? recommend(results, goal) : null
+
+  // First visit: walk through the workspace once the first plans are on screen.
+  useEffect(() => {
+    if (!reco || tab !== 'overview') return
+    let seen = null
+    try { seen = localStorage.getItem(TOUR_KEY) } catch { /* private mode: show it */ }
+    if (!seen) setTouring(true)
+  }, [Boolean(reco)]) // eslint-disable-line react-hooks/exhaustive-deps
+  const endTour = useCallback(() => {
+    setTouring(false)
+    try { localStorage.setItem(TOUR_KEY, 'done') } catch { /* private mode */ }
+  }, [])
+
+  // What the assistant sees: exactly what's on screen.
+  const live = useRef({})
+  live.current = { profile, effective, weights, tab, active, selection, reco, goal }
+  const askContext = useCallback(() => {
+    const c = live.current
+    return {
+      fab_id: c.profile?.id, scenario: c.effective, weights: c.weights, tab: c.tab, active: c.active, selection: c.selection,
+      recommendation: c.reco && { algorithm: c.reco.winner.algorithm, why: c.reco.why, goal: c.goal, goal_label: GOALS[c.goal].label, tradeoff: c.reco.tradeoff.join('; ') },
+    }
+  }, [])
+  const suggestions = [
+    selection?.type === 'job' && `Why is ${selection.id} assigned this way?`,
+    selection?.type === 'engineer' && `What is ${selection.id} doing?`,
+    reco && `Why is ${ALGO_SHORT[reco.winner.algorithm]} recommended?`,
+    'Which jobs are unassigned?',
+    'What does idle wait mean?',
+  ].filter(Boolean).slice(0, 4)
+  const onAssistantAction = (a) => {
+    if (a.kind === 'job' || a.kind === 'engineer') { setSelection({ type: a.kind, id: a.target }); setTab('floor') }
+    else if (a.kind === 'strategy') { setActive(a.target); setTab('floor') }
+    else if (a.kind === 'tab') setTab(a.target)
+    if (window.innerWidth < 640) setAskOpen(false) // the panel covers the view on phones
+  }
 
   const togglePredicted = async (on) => {
     if (!on) {
@@ -186,9 +264,9 @@ function Workspace({ theme, setTheme }) {
   const unserved = activeResult?.unassigned.length ?? 0
 
   return (
-    <>
+    <HelpContext.Provider value={helpApi}>
       <TopBar fabs={fabs} fabId={profile.id} onFab={(id) => openFab(id)} theme={theme} onTheme={setTheme}
-        busy={busy} pending={pending} onMenu={() => setDrawer(true)}
+        busy={busy} pending={pending} onMenu={() => setDrawer(true)} onHelp={() => helpApi.openHelp()}
         solvedNote={`${results.length} strategies solved${Object.values(cacheInfo).some((c) => c !== 'miss') ? ' · cached' : ''}`}
         chips={<>
           <span className="chip">{profile.presets[params.preset]?.label}</span>
@@ -206,7 +284,7 @@ function Workspace({ theme, setTheme }) {
         <main className="content">
           {error && <div className="error-bar" role="alert">{error} <button className="btn ghost" onClick={() => setError(null)}>Dismiss</button></div>}
           {Object.entries(planErrors).map(([a, msg]) => <div key={a} className="error-bar" role="alert">{ALGO_SHORT[a]}: {msg}</div>)}
-          <nav className="nav" role="tablist" aria-label="Views">
+          <nav className="nav" role="tablist" aria-label="Views" data-tour="tabs">
             {TABS.map(([k, label], i) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>
                 <span className="idx">{String(i + 1).padStart(2, '0')}</span>{label}{k === 'workforce' && unserved > 0 && <span className="count">{unserved}</span>}
@@ -329,6 +407,15 @@ function Workspace({ theme, setTheme }) {
           )}
         </main>
       </div>
-    </>
+
+      {!askOpen && <button className="ask-fab" data-tour="ask" onClick={() => helpApi.openAssistant()} aria-label="Ask the assistant" aria-keyshortcuts="/"><span className="dot" />Ask</button>}
+      <Suspense fallback={null}>
+        {askOpen && <Assistant messages={messages} setMessages={setMessages} context={askContext} suggestions={suggestions}
+          draft={askDraft} onAction={onAssistantAction} onClose={() => setAskOpen(false)} />}
+        {help && <HelpCenter target={help} onNavigate={(slug, anchor = '') => setHelp({ slug, anchor })} onClose={() => setHelp(null)}
+          onTour={() => { setHelp(null); setTab('overview'); setTouring(true) }} />}
+      </Suspense>
+      {touring && results.length > 0 && tab === 'overview' && <Tour onDone={endTour} />}
+    </HelpContext.Provider>
   )
 }

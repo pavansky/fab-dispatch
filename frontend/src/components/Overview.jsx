@@ -4,6 +4,7 @@ import { GOALS, disagreements, insights, paretoFront, recommend } from '../lib/a
 import FrontierChart from './FrontierChart.jsx'
 import { PRIORITY, fmt } from '../lib/format.js'
 import MetricBars from './MetricBars.jsx'
+import InfoLink from './InfoLink.jsx'
 
 const KPI_KEYS = ['coverage_pct', 'critical_coverage_pct', 'mean_response_min', 'objective']
 
@@ -38,7 +39,7 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
 
   return (
     <>
-      <section className="card reco" aria-label="Recommendation">
+      <section className="card reco" aria-label="Recommendation" data-tour="reco">
         <div>
           <p className="eyebrow"><span className="sig">● Recommended</span> dispatch plan{pending.size > 0 && <span className="solving" style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}><span className="spinner" />waiting for {[...pending].map((a) => ALGO_SHORT[a]).join(', ')}</span>}</p>
           <h2>{reco.winner.label}</h2>
@@ -52,12 +53,12 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
               {Object.entries(GOALS).map(([k, g]) => <option key={k} value={k}>{g.label}</option>)}
             </select>
           </label>
-          <p className="help" style={{ margin: 0 }}>{GOALS[goal].help}</p>
+          <p className="help" style={{ margin: 0 }}>{GOALS[goal].help} <InfoLink slug="recommendation" anchor="planning-goals" label="Planning goals" /></p>
         </div>
       </section>
 
-      <section className="card">
-        <div className="card-h"><div><h2><span className="section-no">01</span>Cost × latency</h2>
+      <section className="card" data-tour="frontier">
+        <div className="card-h"><div><div className="h-row"><h2><span className="section-no">01</span>Cost × latency</h2><InfoLink slug="recommendation" anchor="the-cost-latency-chart" label="Cost × latency chart" /></div>
           <p>Lower-left is better on both. The line is the efficient frontier: nothing on it is beaten on both cost and speed. The shaded band is the noise margin ({reco.margin ? `±${fmt(reco.margin, 0)} pts` : 'per goal'}) above the cheapest plan; differences inside it aren't counted as wins.</p></div></div>
         <div className="card-b">
           <FrontierChart wide={wide} margin={goal === 'value' ? reco.margin : 0}

@@ -105,3 +105,10 @@ export const engineerOff = (id, engineerId) =>
 export const shiftEvents = (id, after = 0) => request(`/shifts/${id}/events?after=${after}`).then((r) => r.data)
 // EventSource can't send headers, so the stream (only) takes the token as a query parameter.
 export const streamUrl = (id) => `${BASE}/shifts/${id}/stream?access_token=${encodeURIComponent(tokenProvider() ?? '')}`
+
+// ------------------------------------------------------------------ help and assistant
+export const helpIndex = () => request('/help').then((r) => r.data)
+export const helpArticle = (slug) => request(`/help/${encodeURIComponent(slug)}`).then((r) => r.data)
+export const helpSearch = (q, signal) => request(`/help/search?q=${encodeURIComponent(q)}`, { signal }).then((r) => r.data)
+export const askAssistant = (question, context) =>
+  request('/assistant/ask', { method: 'POST', body: { question, context } }).then((r) => r.data)
