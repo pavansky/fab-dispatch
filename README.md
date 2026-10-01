@@ -334,6 +334,7 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
 | `FAB_PROFILES_DIR`, `FAB_DEFAULT_FAB` | bundled, `fab1-300mm-logic` | Where fab profiles live; the fab shown first |
 | `FAB_QDRANT_URL`, `FAB_QDRANT_API_KEY` | unset (in-memory index) | Use a Qdrant server or Qdrant Cloud |
 | `FAB_ALNS_ITERATIONS` / `FAB_PYVRP_ITERATIONS` | `300` / `1000` | Search budgets, sized from the measured quality curve |
+| `FAB_TURNSTILE_SITE_KEY` | unset | Cloudflare Turnstile site key, when CAPTCHA protection is on in Supabase Auth |
 | `FAB_GUEST_ROLE` | `viewer` | Role for one-click guest sign-ins (Supabase anonymous users), or `none` to refuse guests |
 | `FAB_ASSISTANT_LLM` | `none` | Optional model to reword assistant answers: `anthropic` (`ANTHROPIC_API_KEY`) or `ollama` (local) |
 | `CRON_SECRET` | unset | Protects the daily data-retention endpoint |

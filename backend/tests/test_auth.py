@@ -179,3 +179,28 @@ def test_auth_config_tells_the_ui_whether_guests_are_welcome(monkeypatch):
     assert auth_routes.auth_config()["guest_role"] == "dispatcher"
     monkeypatch.setattr(auth_routes, "get_settings", lambda: Settings(**base, guest_role="none"))
     assert auth_routes.auth_config()["guest_role"] is None
+
+
+def test_auth_config_shares_the_public_captcha_site_key_only(monkeypatch):
+    from app.routes import auth as auth_routes
+
+    base = {"auth_mode": "supabase", "supabase_url": "https://abc.supabase.co", "supabase_publishable_key": "pk"}
+    monkeypatch.setattr(auth_routes, "get_settings", lambda: Settings(**base))
+    assert auth_routes.auth_config()["captcha_site_key"] is None
+    monkeypatch.setattr(auth_routes, "get_settings", lambda: Settings(**base, turnstile_site_key="0x4AAAAAAA-site"))
+    assert auth_routes.auth_config()["captcha_site_key"] == "0x4AAAAAAA-site"
+
+
+def test_the_content_security_policy_is_identical_everywhere_it_is_served():
+    """Vercel, nginx and the Vite preview each send the CSP; a drift would only show up in one of them."""
+    import json
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    rules = json.loads((root / "vercel.json").read_text())["services"]["web"]["headers"]
+    from_vercel = next(h["value"] for r in rules for h in r["headers"] if h["key"] == "Content-Security-Policy")
+    from_nginx = re.search(r'Content-Security-Policy "([^"]+)"', (root / "frontend/nginx.conf").read_text()).group(1)
+    from_vite = re.search(r'const CSP = "([^"]+)"', (root / "frontend/vite.config.js").read_text()).group(1)
+    assert from_vercel == from_nginx == from_vite
+    assert "https://challenges.cloudflare.com" in from_vercel  # Turnstile CAPTCHA script and frame

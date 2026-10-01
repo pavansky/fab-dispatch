@@ -1,5 +1,5 @@
 // Supabase sign-in paths (guest, magic link + 6-digit code, password) with a fake client.
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fixtures, mockApi, workspaceRoutes } from './api.js'
 import { renderApp } from './app.jsx'
@@ -23,11 +23,11 @@ beforeEach(() => {
   })
 })
 
-function supabaseApi(guest_role = 'dispatcher') {
+function supabaseApi(guest_role = 'dispatcher', captcha_site_key = null) {
   const routes = workspaceRoutes()
   return mockApi({
     ...routes,
-    'GET /auth/config': { mode: 'supabase', supabase_url: 'https://example.supabase.co', supabase_publishable_key: 'sb_publishable_test', guest_role },
+    'GET /auth/config': { mode: 'supabase', supabase_url: 'https://example.supabase.co', supabase_publishable_key: 'sb_publishable_test', guest_role, captcha_site_key },
     'GET /auth/me': ({ headers }) => (headers.Authorization === 'Bearer guest-token'
       ? { id: 'anon-1', email: 'guest-8f2c1e', role: guest_role, fabs: ['*'], provider: 'guest' }
       : { ...fixtures.me, email: 'recruiter@company.com', role: 'viewer', provider: 'supabase' }),
@@ -81,5 +81,56 @@ describe('Supabase sign-in', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Sign out' }))
     await waitFor(() => expect(auth.signOut).toHaveBeenCalled())
     expect(await screen.findByRole('button', { name: 'Try it as a guest' })).toBeInTheDocument()
+  })
+})
+
+describe('CAPTCHA (Cloudflare Turnstile)', () => {
+  let widget
+  beforeEach(() => {
+    widget = null
+    window.turnstile = {
+      render: vi.fn((el, opts) => { widget = opts; return 'w1' }),
+      reset: vi.fn(),
+      remove: vi.fn(),
+    }
+    return () => { delete window.turnstile }
+  })
+  const solve = (token) => act(() => widget.callback(token))
+
+  it('waits for a CAPTCHA token, then sends it with the guest sign-in', async () => {
+    supabaseApi('dispatcher', '0x4AAAAAAA-site')
+    const user = renderApp()
+    const guest = await screen.findByRole('button', { name: 'Try it as a guest' })
+    await waitFor(() => expect(window.turnstile.render).toHaveBeenCalled())
+    expect(widget.sitekey).toBe('0x4AAAAAAA-site')
+    expect(guest).toBeDisabled()
+    expect(screen.getByText('Checking your browser…')).toBeInTheDocument()
+    solve('cap-1')
+    expect(guest).toBeEnabled()
+    await user.click(guest)
+    expect(auth.signInAnonymously).toHaveBeenCalledWith({ options: { captchaToken: 'cap-1' } })
+    await waitFor(() => expect(window.turnstile.reset).toHaveBeenCalledWith('w1')) // tokens are single-use
+  })
+
+  it('sends the token with the magic link and the password sign-in', async () => {
+    supabaseApi('dispatcher', '0x4AAAAAAA-site')
+    const user = renderApp()
+    await user.type(await screen.findByLabelText('Work email'), 'recruiter@company.com')
+    await waitFor(() => expect(window.turnstile.render).toHaveBeenCalled())
+    solve('cap-2')
+    await user.click(screen.getByRole('button', { name: 'Email me a sign-in link' }))
+    expect(auth.signInWithOtp).toHaveBeenCalledWith({ email: 'recruiter@company.com', options: { emailRedirectTo: location.origin, captchaToken: 'cap-2' } })
+    solve('cap-3')
+    await user.click(screen.getByRole('button', { name: 'Use a password instead' }))
+    await user.type(screen.getByLabelText('Password'), 'pw')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: 'recruiter@company.com', password: 'pw', options: { captchaToken: 'cap-3' } })
+  })
+
+  it('stays out of the way when CAPTCHA is off', async () => {
+    supabaseApi('dispatcher', null)
+    renderApp()
+    expect(await screen.findByRole('button', { name: 'Try it as a guest' })).toBeEnabled()
+    expect(window.turnstile.render).not.toHaveBeenCalled()
   })
 })

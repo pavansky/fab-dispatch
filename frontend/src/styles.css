@@ -499,6 +499,8 @@ svg.floor { touch-action: manipulation; }
 .info-link:hover { color: var(--signal-text); }
 .signin-guest { margin-top: 18px; }
 .signin-code { margin-top: 12px; }
+.captcha { margin-top: 12px; }
+.captcha:empty, .captcha > div:empty { margin: 0; }
 .code-input { font: 600 20px var(--mono); letter-spacing: .3em; text-align: center; }
 .signin-guest .help { margin: 8px 0 0; }
 .or { display: flex; align-items: center; gap: 10px; margin: 18px 0 2px; color: var(--ink-3); font: 11px var(--mono); text-transform: uppercase; letter-spacing: .04em; }
