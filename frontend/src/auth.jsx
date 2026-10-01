@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { authConfig, clearPlanCache, demoSignIn, getMe, setTokenProvider } from './api.js'
+import { loadTurnstile } from './lib/captcha.js'
 
 // Two sign-in modes behind one context:
 //  - supabase (UAT/prod): Supabase Auth in the browser (magic link or password); the API
@@ -79,20 +80,21 @@ export function AuthProvider({ children }) {
       store.set(access_token)
       await adopt(access_token)
     },
-    async sendMagicLink(email) {
-      const { error } = await supabase.current.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin } })
+    // captchaToken is required by Supabase when CAPTCHA protection is on (see Captcha below).
+    async sendMagicLink(email, captchaToken) {
+      const { error } = await supabase.current.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin, ...(captchaToken && { captchaToken }) } })
       if (error) throw error
     },
     async verifyCode(email, token) {
       const { error } = await supabase.current.auth.verifyOtp({ email, token, type: 'email' })
       if (error) throw error
     },
-    async signInAsGuest() {
-      const { error } = await supabase.current.auth.signInAnonymously()
+    async signInAsGuest(captchaToken) {
+      const { error } = await supabase.current.auth.signInAnonymously(captchaToken ? { options: { captchaToken } } : undefined)
       if (error) throw error
     },
-    async signInWithPassword(email, password) {
-      const { error } = await supabase.current.auth.signInWithPassword({ email, password })
+    async signInWithPassword(email, password, captchaToken) {
+      const { error } = await supabase.current.auth.signInWithPassword({ email, password, ...(captchaToken && { options: { captchaToken } }) })
       if (error) throw error
     },
     async signOut() {
@@ -104,6 +106,31 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+/** Turnstile widget: usually invisible, shows a check only when Cloudflare wants one. */
+function Captcha({ siteKey, onToken, resetRef }) {
+  const box = useRef(null)
+  const [error, setError] = useState(null)
+  useEffect(() => {
+    let id = null
+    let live = true
+    loadTurnstile().then((ts) => {
+      if (!live || !box.current) return
+      id = ts.render(box.current, {
+        sitekey: siteKey, appearance: 'interaction-only', theme: 'light', size: 'flexible',
+        callback: (t) => onToken(t), 'expired-callback': () => onToken(null), 'error-callback': () => onToken(null),
+      })
+      resetRef.current = () => { onToken(null); ts.reset(id) } // tokens are single-use
+    }).catch((e) => live && setError(e.message))
+    return () => { live = false; if (id !== null) window.turnstile?.remove(id) }
+  }, [siteKey, onToken, resetRef])
+  return (
+    <div className="captcha">
+      <div ref={box} />
+      {error && <p className="error-bar" role="alert">{error}</p>}
+    </div>
+  )
+}
+
 export function SignIn() {
   const auth = useAuth()
   const [email, setEmail] = useState('')
@@ -113,11 +140,15 @@ export function SignIn() {
   const [message, setMessage] = useState(null)
   const [sentTo, setSentTo] = useState(null) // email a link and code were sent to
   const [code, setCode] = useState('')
+  const siteKey = auth.config?.mode === 'supabase' ? auth.config.captcha_site_key : null
+  const [captcha, setCaptcha] = useState(null)
+  const resetCaptcha = useRef(() => {})
+  const needsCaptcha = Boolean(siteKey) && !captcha
   const [error, setError] = useState(auth.error)
 
   const run = async (fn) => {
     setBusy(true); setError(null); setMessage(null)
-    try { await fn() } catch (e) { setError(e.message) } finally { setBusy(false) }
+    try { await fn() } catch (e) { setError(e.message) } finally { setBusy(false); if (siteKey) resetCaptcha.current() }
   }
 
   return (
@@ -141,7 +172,7 @@ export function SignIn() {
 
         {auth.config?.mode === 'supabase' && auth.config.guest_role && (
           <div className="signin-guest">
-            <button className="btn primary block" disabled={busy} onClick={() => run(() => auth.signInAsGuest())}>Try it as a guest</button>
+            <button className="btn primary block" disabled={busy || needsCaptcha} onClick={() => run(() => auth.signInAsGuest(captcha))}>Try it as a guest</button>
             <p className="help">No email needed. Guests get {auth.config.guest_role === 'dispatcher' ? 'full dispatcher access' : 'read-only access'} to the sample fabs.</p>
             <div className="or"><span>or sign in with email</span></div>
           </div>
@@ -149,8 +180,8 @@ export function SignIn() {
 
         {auth.config?.mode === 'supabase' && (
           <form onSubmit={(e) => { e.preventDefault(); run(async () => {
-            if (usePassword) await auth.signInWithPassword(email, password)
-            else { await auth.sendMagicLink(email); setSentTo(email); setMessage(`Check ${email} for a sign-in link, or enter the 6-digit code from it.`) }
+            if (usePassword) await auth.signInWithPassword(email, password, captcha)
+            else { await auth.sendMagicLink(email, captcha); setSentTo(email); setMessage(`Check ${email} for a sign-in link, or enter the 6-digit code from it.`) }
           }) }}>
             <label className="field" style={{ marginTop: 18 }}><span>Work email</span>
               <input className="input" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -160,13 +191,15 @@ export function SignIn() {
                 <input className="input" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </label>
             )}
-            <button className={`btn block ${auth.config.guest_role ? '' : 'primary'}`} disabled={busy}>{usePassword ? 'Sign in' : 'Email me a sign-in link'}</button>
+            <button className={`btn block ${auth.config.guest_role ? '' : 'primary'}`} disabled={busy || needsCaptcha}>{usePassword ? 'Sign in' : 'Email me a sign-in link'}</button>
             <button type="button" className="btn ghost block" style={{ marginTop: 6 }} onClick={() => setUsePassword((v) => !v)}>
               {usePassword ? 'Use a magic link instead' : 'Use a password instead'}
             </button>
           </form>
         )}
 
+        {siteKey && <Captcha siteKey={siteKey} onToken={setCaptcha} resetRef={resetCaptcha} />}
+        {needsCaptcha && <p className="help" style={{ marginTop: 8 }}>Checking your browser…</p>}
         {message && <p className="notice" role="status">{message}</p>}
         {sentTo && (
           <form className="signin-code" onSubmit={(e) => { e.preventDefault(); run(() => auth.verifyCode(sentTo, code.trim())) }}>

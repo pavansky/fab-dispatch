@@ -26,6 +26,8 @@ def auth_config() -> dict:
             "supabase_url": s.supabase_url,
             "supabase_publishable_key": s.supabase_publishable_key,
             "guest_role": None if s.guest_role == "none" else s.guest_role,
+            # Supabase Auth verifies the token; the UI only needs the public site key.
+            "captcha_site_key": s.turnstile_site_key,
         }
     else:
         out["demo_roles"] = ["dispatcher", "viewer"]

@@ -57,6 +57,7 @@ access are configured in Supabase itself: see [supabase/README.md](../supabase/R
 | `CRON_SECRET` | random, ≥ 32 chars | random, ≥ 32 chars |
 | `FAB_DB_SCHEMA` | unset (`public`) | `uat` |
 | `FAB_GUEST_ROLE` | `dispatcher` for a public demo; `none` for a real fab | `dispatcher` |
+| `FAB_TURNSTILE_SITE_KEY` | the Turnstile site key | the same key (add the preview hostnames to the widget) |
 | `FAB_ASSISTANT_LLM` | `none` (or `anthropic` with `ANTHROPIC_API_KEY`) | `none` |
 
 ### Why UAT is a schema, not a second database

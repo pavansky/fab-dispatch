@@ -2,6 +2,18 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.2.0] - 2026-10-01
+
+### Added
+- **CAPTCHA on sign-in** (Cloudflare Turnstile, free): when `FAB_TURNSTILE_SITE_KEY` is set, the
+  sign-in screen loads the widget (usually invisible) and sends its token with guest, magic-link and
+  password sign-ins; Supabase Auth verifies it. Off, and not loaded, without the key.
+
+### Changed
+- The Content-Security-Policy allows Cloudflare's challenge script and frame. A test now fails if
+  the policy served by Vercel, nginx and the Vite preview ever differ.
+- Sign-in emails come from "Fab Dispatch by PavanSky".
+
 ## [2.1.0] - 2026-10-01
 
 ### Added

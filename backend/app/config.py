@@ -58,6 +58,9 @@ class Settings(BaseSettings):
         None, validation_alias=AliasChoices("FAB_SUPABASE_JWT_SECRET", "SUPABASE_JWT_SECRET")
     )
     dispatcher_emails: list[str] = Field(default_factory=list, description="bootstrap dispatchers by email")
+    turnstile_site_key: str | None = Field(
+        None, description="Cloudflare Turnstile site key (public); set when CAPTCHA is on in Supabase Auth"
+    )
     guest_role: Literal["none", "viewer", "dispatcher"] = Field(
         "viewer", description="role for Supabase anonymous (guest) sign-ins; none = guests refused"
     )
