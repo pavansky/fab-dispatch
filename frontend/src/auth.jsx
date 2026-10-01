@@ -83,6 +83,14 @@ export function AuthProvider({ children }) {
       const { error } = await supabase.current.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin } })
       if (error) throw error
     },
+    async verifyCode(email, token) {
+      const { error } = await supabase.current.auth.verifyOtp({ email, token, type: 'email' })
+      if (error) throw error
+    },
+    async signInAsGuest() {
+      const { error } = await supabase.current.auth.signInAnonymously()
+      if (error) throw error
+    },
     async signInWithPassword(email, password) {
       const { error } = await supabase.current.auth.signInWithPassword({ email, password })
       if (error) throw error
@@ -103,6 +111,8 @@ export function SignIn() {
   const [usePassword, setUsePassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState(null)
+  const [sentTo, setSentTo] = useState(null) // email a link and code were sent to
+  const [code, setCode] = useState('')
   const [error, setError] = useState(auth.error)
 
   const run = async (fn) => {
@@ -129,10 +139,18 @@ export function SignIn() {
           </>
         )}
 
+        {auth.config?.mode === 'supabase' && auth.config.guest_role && (
+          <div className="signin-guest">
+            <button className="btn primary block" disabled={busy} onClick={() => run(() => auth.signInAsGuest())}>Try it as a guest</button>
+            <p className="help">No email needed. Guests get {auth.config.guest_role === 'dispatcher' ? 'full dispatcher access' : 'read-only access'} to the sample fabs.</p>
+            <div className="or"><span>or sign in with email</span></div>
+          </div>
+        )}
+
         {auth.config?.mode === 'supabase' && (
           <form onSubmit={(e) => { e.preventDefault(); run(async () => {
             if (usePassword) await auth.signInWithPassword(email, password)
-            else { await auth.sendMagicLink(email); setMessage(`Check ${email} for a sign-in link.`) }
+            else { await auth.sendMagicLink(email); setSentTo(email); setMessage(`Check ${email} for a sign-in link, or enter the 6-digit code from it.`) }
           }) }}>
             <label className="field" style={{ marginTop: 18 }}><span>Work email</span>
               <input className="input" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -142,7 +160,7 @@ export function SignIn() {
                 <input className="input" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </label>
             )}
-            <button className="btn primary block" disabled={busy}>{usePassword ? 'Sign in' : 'Email me a sign-in link'}</button>
+            <button className={`btn block ${auth.config.guest_role ? '' : 'primary'}`} disabled={busy}>{usePassword ? 'Sign in' : 'Email me a sign-in link'}</button>
             <button type="button" className="btn ghost block" style={{ marginTop: 6 }} onClick={() => setUsePassword((v) => !v)}>
               {usePassword ? 'Use a magic link instead' : 'Use a password instead'}
             </button>
@@ -150,6 +168,15 @@ export function SignIn() {
         )}
 
         {message && <p className="notice" role="status">{message}</p>}
+        {sentTo && (
+          <form className="signin-code" onSubmit={(e) => { e.preventDefault(); run(() => auth.verifyCode(sentTo, code.trim())) }}>
+            <label className="field"><span>6-digit code</span>
+              <input className="input code-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6}
+                required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+            </label>
+            <button className="btn primary block" disabled={busy || code.length !== 6}>Verify code</button>
+          </form>
+        )}
         {error && <p className="error-bar" role="alert" style={{ marginTop: 12 }}>{error}</p>}
       </div>
     </main>

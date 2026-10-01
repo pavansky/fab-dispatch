@@ -5,6 +5,7 @@ import { ALGO_ORDER, ALGO_SHORT, METRICS } from '../lib/metrics.js'
 import { fmt } from '../lib/format.js'
 import { useTooltip, Tooltip } from './Tooltip.jsx'
 import FrontierChart from './FrontierChart.jsx'
+import InfoLink from './InfoLink.jsx'
 import { bootstrapMeanCI, pairedBootstrapCI } from '../lib/stats.js'
 
 const COLS = ['coverage_pct', 'critical_coverage_pct', 'mean_response_min', 'wait_min_total', 'workload_std', 'objective', 'runtime_ms']
@@ -49,7 +50,7 @@ function GapPanel({ weights, fabId, canDispatch }) {
   return (
     <section className="card">
       <div className="card-h">
-        <div><h2><span className="section-no">00</span>Distance from the proven optimum</h2>
+        <div><div className="h-row"><h2><span className="section-no">00</span>Distance from the proven optimum</h2><InfoLink slug="benchmark" anchor="distance-from-the-proven-optimum" label="Optimality gap" /></div>
           <p>On small shifts (4 engineers, 12 jobs) the exact solver enumerates every feasible route and solves a set-partitioning MILP, so we know the true optimum. Gap = how much worse each strategy's total cost is.</p></div>
         <button className="btn" onClick={run} disabled={busy || !canDispatch} title={canDispatch ? undefined : 'Dispatcher role required'}>{busy ? 'Solving to optimality…' : gap ? 'Re-run' : 'Measure gaps'}</button>
       </div>
@@ -107,7 +108,7 @@ export default function Benchmark({ profile, weights, size, canDispatch }) {
     <>
       <section className="card">
         <div className="card-h">
-          <div><h2>Benchmark across many shifts</h2>
+          <div><div className="h-row"><h2>Benchmark across many shifts</h2><InfoLink slug="benchmark" label="Benchmark" /></div>
             <p>One scenario can be luck. This runs all five strategies on {seeds} seeded shifts for each of the {presets.length} presets ({size.n_engineers} engineers, {Math.min(size.n_jobs, 120)} jobs, current weights). Takes about {Math.round(seeds * presets.length * 0.8)} s the first time; cached after.</p></div>
         </div>
         <div className="card-b" style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
