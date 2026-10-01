@@ -1,23 +1,81 @@
 name: Release
 
-# Promotion to production. Pushing a SemVer tag (vX.Y.Z) re-runs the full CI on that
-# exact commit, checks it is already on main (so it has been through UAT), then
-# fast-forwards the `production` branch. Vercel deploys production only from that branch.
+# Promotion to production. Pushing a SemVer tag (vX.Y.Z):
+#   1. re-runs the full CI on that exact commit,
+#   2. checks it is already on main (so it has been through UAT),
+#   3. publishes the API and UI images to GHCR with an SBOM and signed build provenance,
+#   4. fast-forwards the `production` branch (Vercel deploys production only from it),
+#   5. waits until production serves this release, then publishes the GitHub release.
 on:
   push:
     tags: ["v*.*.*"]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   verify:
     uses: ./.github/workflows/ci.yml
 
-  promote:
-    name: promote to production
+  images:
+    name: publish images
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: { contents: read, packages: write, id-token: write, attestations: write }
+    strategy:
+      matrix:
+        include:
+          - { name: api, context: backend }
+          - { name: ui, context: frontend }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ github.token }}" }
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-${{ matrix.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=Fab Dispatch ${{ matrix.name }}
+            org.opencontainers.image.licenses=MIT
+      - id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Signed build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}-${{ matrix.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Scan the published image
+        run: |
+          docker run --rm aquasec/trivy:0.67.0 image --quiet --severity CRITICAL,HIGH --ignore-unfixed \
+            --exit-code 1 "ghcr.io/${{ github.repository }}-${{ matrix.name }}@${{ steps.push.outputs.digest }}"
+
+  promote:
+    name: promote to production
+    needs: [verify, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: { contents: write }
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
@@ -32,9 +90,36 @@ jobs:
             git merge-base --is-ancestor origin/production "$GITHUB_SHA" || { echo "::error::production would move backwards"; exit 1; }
           fi
           git push origin "$GITHUB_SHA:refs/heads/production"
+
+  verify-production:
+    name: production serves the release
+    needs: promote
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: { contents: write }
+    env:
+      URL: ${{ vars.PRODUCTION_URL || 'https://fab-dispatch.vercel.app' }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Wait for the new release in production
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          for _ in $(seq 1 60); do
+            got=$(curl -sf "$URL/api/health" | python3 -c "import json,sys; h=json.load(sys.stdin); print(h['release'] if h['status']=='ok' and h['schema_ok'] else '')" || true)
+            [ "$got" = "$want" ] && { echo "production is on $want"; break; }
+            sleep 10
+          done
+          [ "$got" = "$want" ] || { echo "::error::production still reports '${got:-unhealthy}', expected $want"; exit 1; }
+          curl -sf -o /dev/null "$URL/" && curl -sf -o /dev/null "$URL/api/docs"
       - name: GitHub release from the changelog
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           version="${GITHUB_REF_NAME#v}"
           awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {on=0} on' CHANGELOG.md > notes.md
+          {
+            echo
+            echo "**Images** (SBOM and signed provenance attached):"
+            echo "- \`ghcr.io/${GITHUB_REPOSITORY}-api:${version}\`"
+            echo "- \`ghcr.io/${GITHUB_REPOSITORY}-ui:${version}\`"
+          } >> notes.md
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
