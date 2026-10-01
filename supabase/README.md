@@ -7,7 +7,7 @@ dashboard rather than in code; this is how, and why.
 
 `templates/` holds the six Auth emails, generated from one layout by `build_templates.py` so they
 stay consistent. They use email-safe HTML (tables, inline styles, no images or web fonts), a hidden
-preview line, a button with a plain-link fallback, and the 6-digit code where the flow supports it
+preview line, a button with a plain-link fallback, and the one-time code where the flow supports it
 (the sign-in screen accepts the code, which helps when the email is opened on another device).
 
 | Template (Supabase name) | File | Subject |

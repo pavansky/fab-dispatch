@@ -1,4 +1,4 @@
-// Supabase sign-in paths (guest, magic link + 6-digit code, password) with a fake client.
+// Supabase sign-in paths (guest, magic link + emailed code, password) with a fake client.
 import { act, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fixtures, mockApi, workspaceRoutes } from './api.js'
@@ -46,19 +46,23 @@ describe('Supabase sign-in', () => {
     expect(screen.getByRole('menu')).toHaveTextContent('guest session')
   })
 
-  it('emails a link and accepts the 6-digit code from it instead', async () => {
+  it('emails a link and accepts the code from it instead, whatever its length', async () => {
     supabaseApi()
     const user = renderApp()
     await user.type(await screen.findByLabelText('Work email'), 'recruiter@company.com')
     await user.click(screen.getByRole('button', { name: 'Email me a sign-in link' }))
     expect(auth.signInWithOtp).toHaveBeenCalledWith({ email: 'recruiter@company.com', options: { emailRedirectTo: location.origin } })
-    expect(await screen.findByRole('status')).toHaveTextContent('enter the 6-digit code')
+    expect(await screen.findByRole('status')).toHaveTextContent('enter the code from it')
     const verify = screen.getByRole('button', { name: 'Verify code' })
     expect(verify).toBeDisabled()
-    await user.type(screen.getByLabelText('6-digit code'), '48a2-913')
-    expect(screen.getByLabelText('6-digit code')).toHaveValue('482913') // digits only
+    const field = screen.getByLabelText('Code from the email')
+    await user.type(field, '48a2-91')
+    expect(field).toHaveValue('48291') // digits only
+    expect(verify).toBeDisabled() // shorter than any Supabase code
+    await user.type(field, '3671') // Supabase sends 6 to 10 digits; this project sends 8
+    expect(field).toHaveValue('482913671')
     await user.click(verify)
-    expect(auth.verifyOtp).toHaveBeenCalledWith({ email: 'recruiter@company.com', token: '482913', type: 'email' })
+    expect(auth.verifyOtp).toHaveBeenCalledWith({ email: 'recruiter@company.com', token: '482913671', type: 'email' })
     expect(await screen.findByRole('region', { name: 'Recommendation' }, { timeout: 4000 })).toBeInTheDocument()
   })
 

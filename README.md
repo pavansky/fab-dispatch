@@ -116,7 +116,7 @@ docker compose up --build        # production-like: Postgres + Qdrant + API + ng
 https://fab-dispatch.vercel.app runs the same build on Vercel with Supabase (Postgres and Auth).
 
 - **Try it as a guest:** one click, no email. Guests get full dispatcher access to the sample fabs.
-- **Or sign in with your email:** a magic link or a 6-digit code (in a branded email), or a password.
+- **Or sign in with your email:** a magic link or the code in it (a branded email), or a password.
   Named accounts start as **viewers**; an admin grants **dispatcher**.
 
 Press **?** in the app for help, or **/** to ask the assistant.
