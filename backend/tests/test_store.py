@@ -14,7 +14,7 @@ PG_URL = os.environ.get("FAB_TEST_PG_URL")
 def _stores():
     yield pytest.param(lambda: SQLiteStore(":memory:"), id="sqlite")
     yield pytest.param(
-        lambda: PostgresStore(PG_URL),
+        lambda: PostgresStore(PG_URL, f"t_{uuid.uuid4().hex[:8]}"),  # a fresh schema: tests never share rows
         id="postgres",
         marks=pytest.mark.skipif(not PG_URL, reason="FAB_TEST_PG_URL not set"),
     )
@@ -25,7 +25,12 @@ def store(request):
     s = request.param()
     s.init_schema()
     s.init_schema()  # idempotent
-    return s
+    yield s
+    if isinstance(s, PostgresStore):
+        import psycopg
+
+        with psycopg.connect(PG_URL, autocommit=True) as c:
+            c.execute(f'DROP SCHEMA "{s.schema}" CASCADE')
 
 
 def test_shift_roundtrip_and_optimistic_versioning(store):
