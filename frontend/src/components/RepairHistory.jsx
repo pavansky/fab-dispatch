@@ -42,7 +42,7 @@ export default function RepairHistory({ job }) {
               <li key={n.id}><span className="score">{Math.round(n.score * 100)}%</span><span>{n.symptom}: {n.fix}</span><span className="num muted">{n.minutes}m · {n.engineer}</span></li>
             ))}
           </ol>
-          <p className="help" style={{ marginTop: 8 }}>{data.index.size.toLocaleString()} past repairs · {data.index.mode} Qdrant · {data.index.embedder}</p>
+          <p className="help" style={{ marginTop: 8 }}>{data.index.size.toLocaleString()} past repairs · {data.index.mode === 'exact' ? 'exact search' : data.index.mode.replace('-', ' ')} · {data.index.embedder}</p>
         </>
       )}
     </div>

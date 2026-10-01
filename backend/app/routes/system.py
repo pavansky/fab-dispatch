@@ -91,7 +91,7 @@ def meta(request: Request):
         "auth_mode": s.auth_mode,
         "default_weights": Weights().model_dump(),
         "store": get_store().kind,
-        "vector_index": "qdrant-server" if s.qdrant_url else "qdrant-embedded",
+        "vector_index": "qdrant-server" if s.qdrant_url else "qdrant-disk" if s.qdrant_path else "exact",
         "solver_budget": {
             "alns_iterations": s.alns_iterations,
             "pyvrp_iterations": s.pyvrp_iterations,
