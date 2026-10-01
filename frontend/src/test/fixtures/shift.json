@@ -1,0 +1,702 @@
+{
+ "version": 1,
+ "state": {
+  "id": "aae6dc8d6dd3",
+  "created_at": "2026-10-01T13:20:46.594127+00:00",
+  "scenario": {
+   "fab_id": "fab1-300mm-logic",
+   "engineers": [
+    {
+     "id": "E01",
+     "name": "Arun",
+     "x": 161.5,
+     "y": 122.5,
+     "skills": {
+      "litho": 3,
+      "implant": 1
+     },
+     "shift_start": 0,
+     "shift_end": 720,
+     "max_jobs": 5
+    },
+    {
+     "id": "E02",
+     "name": "Mei",
+     "x": 29.1,
+     "y": 59.7,
+     "skills": {
+      "etch": 3,
+      "metrology": 1
+     },
+     "shift_start": 0,
+     "shift_end": 720,
+     "max_jobs": 4
+    },
+    {
+     "id": "E03",
+     "name": "Joon",
+     "x": 271.5,
+     "y": 70.2,
+     "skills": {
+      "deposition": 2,
+      "metrology": 2
+     },
+     "shift_start": 0,
+     "shift_end": 720,
+     "max_jobs": 5
+    },
+    {
+     "id": "E04",
+     "name": "Priya",
+     "x": 30.5,
+     "y": 152.7,
+     "skills": {
+      "cmp": 3,
+      "metrology": 2,
+      "litho": 1
+     },
+     "shift_start": 0,
+     "shift_end": 720,
+     "max_jobs": 5
+    },
+    {
+     "id": "E05",
+     "name": "Hsin",
+     "x": 327.8,
+     "y": 179.8,
+     "skills": {
+      "implant": 2,
+      "etch": 1
+     },
+     "shift_start": 0,
+     "shift_end": 720,
+     "max_jobs": 5
+    },
+    {
+     "id": "E06",
+     "name": "Daniel",
+     "x": 204.3,
+     "y": 27.5,
+     "skills": {
+      "metrology": 2,
+      "implant": 2,
+      "etch": 1
+     },
+     "shift_start": 0,
+     "shift_end": 720,
+     "max_jobs": 4
+    }
+   ],
+   "jobs": [
+    {
+     "id": "J001",
+     "x": 319.6,
+     "y": 67.5,
+     "skill": "deposition",
+     "min_level": 1,
+     "priority": 2,
+     "kind": "down",
+     "earliest": 306,
+     "latest": 426,
+     "duration": 105,
+     "tool": "DEP-03D",
+     "symptom": "film thickness non-uniformity on chamber B"
+    },
+    {
+     "id": "J002",
+     "x": 322.8,
+     "y": 95.0,
+     "skill": "deposition",
+     "min_level": 1,
+     "priority": 3,
+     "kind": "down",
+     "earliest": 524,
+     "latest": 569,
+     "duration": 120,
+     "tool": "DEP-04C",
+     "symptom": "base pressure too high after PM"
+    },
+    {
+     "id": "J003",
+     "x": 193.0,
+     "y": 63.5,
+     "skill": "metrology",
+     "min_level": 1,
+     "priority": 2,
+     "kind": "down",
+     "earliest": 508,
+     "latest": 628,
+     "duration": 90,
+     "tool": "MET-01C",
+     "symptom": "image focus failing on CD-SEM"
+    },
+    {
+     "id": "J004",
+     "x": 98.1,
+     "y": 29.9,
+     "skill": "etch",
+     "min_level": 1,
+     "priority": 2,
+     "kind": "down",
+     "earliest": 355,
+     "latest": 475,
+     "duration": 60,
+     "tool": "ETC-03D",
+     "symptom": "plasma will not strike after PM"
+    },
+    {
+     "id": "J005",
+     "x": 319.3,
+     "y": 42.5,
+     "skill": "deposition",
+     "min_level": 1,
+     "priority": 1,
+     "kind": "pm",
+     "earliest": 203,
+     "latest": 443,
+     "duration": 240,
+     "tool": "DEP-03B",
+     "symptom": "scheduled chamber PM: shield kit and showerhead"
+    },
+    {
+     "id": "J006",
+     "x": 195.4,
+     "y": 123.5,
+     "skill": "litho",
+     "min_level": 2,
+     "priority": 1,
+     "kind": "pm",
+     "earliest": 142,
+     "latest": 382,
+     "duration": 240,
+     "tool": "LIT-02D",
+     "symptom": "scheduled scanner PM: lens and stage checks"
+    },
+    {
+     "id": "J007",
+     "x": 306.8,
+     "y": 43.5,
+     "skill": "deposition",
+     "min_level": 1,
+     "priority": 2,
+     "kind": "down",
+     "earliest": 12,
+     "latest": 132,
+     "duration": 120,
+     "tool": "DEP-01B",
+     "symptom": "pump down too slow on chamber B"
+    },
+    {
+     "id": "J008",
+     "x": 168.1,
+     "y": 122.4,
+     "skill": "litho",
+     "min_level": 2,
+     "priority": 3,
+     "kind": "down",
+     "earliest": 527,
+     "latest": 572,
+     "duration": 165,
+     "tool": "LIT-03B",
+     "symptom": "laser energy fluctuating"
+    },
+    {
+     "id": "J009",
+     "x": 225.2,
+     "y": 60.0,
+     "skill": "metrology",
+     "min_level": 1,
+     "priority": 3,
+     "kind": "down",
+     "earliest": 410,
+     "latest": 455,
+     "duration": 60,
+     "tool": "MET-04D",
+     "symptom": "measurement drift on reference wafer"
+    },
+    {
+     "id": "J010",
+     "x": 37.1,
+     "y": 73.1,
+     "skill": "etch",
+     "min_level": 1,
+     "priority": 2,
+     "kind": "down",
+     "earliest": 372,
+     "latest": 492,
+     "duration": 180,
+     "tool": "ETC-01A",
+     "symptom": "particle adders on monitor wafer"
+    },
+    {
+     "id": "J011",
+     "x": 281.3,
+     "y": 45.2,
+     "skill": "deposition",
+     "min_level": 1,
+     "priority": 3,
+     "kind": "down",
+     "earliest": 499,
+     "latest": 544,
+     "duration": 120,
+     "tool": "DEP-03C",
+     "symptom": "chamber leak check failed during production lot"
+    },
+    {
+     "id": "J012",
+     "x": 164.2,
+     "y": 109.0,
+     "skill": "litho",
+     "min_level": 2,
+     "priority": 1,
+     "kind": "pm",
+     "earliest": 82,
+     "latest": 322,
+     "duration": 90,
+     "tool": "LIT-03D",
+     "symptom": "scheduled scanner PM: lens and stage checks"
+    },
+    {
+     "id": "J013",
+     "x": 202.5,
+     "y": 30.9,
+     "skill": "metrology",
+     "min_level": 2,
+     "priority": 1,
+     "kind": "pm",
+     "earliest": 46,
+     "latest": 286,
+     "duration": 180,
+     "tool": "MET-01C",
+     "symptom": "scheduled metrology PM: calibration and standards"
+    },
+    {
+     "id": "J014",
+     "x": 170.0,
+     "y": 139.0,
+     "skill": "litho",
+     "min_level": 2,
+     "priority": 3,
+     "kind": "down",
+     "earliest": 199,
+     "latest": 244,
+     "duration": 105,
+     "tool": "LIT-03B",
+     "symptom": "alignment residuals trending high on chamber B"
+    },
+    {
+     "id": "J015",
+     "x": 64.1,
+     "y": 27.3,
+     "skill": "etch",
+     "min_level": 1,
+     "priority": 3,
+     "kind": "down",
+     "earliest": 352,
+     "latest": 397,
+     "duration": 120,
+     "tool": "ETC-01C",
+     "symptom": "backside helium flow alarm after PM"
+    },
+    {
+     "id": "J016",
+     "x": 164.2,
+     "y": 117.9,
+     "skill": "litho",
+     "min_level": 3,
+     "priority": 3,
+     "kind": "down",
+     "earliest": 1,
+     "latest": 46,
+     "duration": 75,
+     "tool": "LIT-03B",
+     "symptom": "best focus shifted after PM"
+    },
+    {
+     "id": "J017",
+     "x": 214.5,
+     "y": 148.7,
+     "skill": "litho",
+     "min_level": 2,
+     "priority": 1,
+     "kind": "pm",
+     "earliest": 222,
+     "latest": 462,
+     "duration": 180,
+     "tool": "LIT-02D",
+     "symptom": "scheduled scanner PM: lens and stage checks"
+    },
+    {
+     "id": "J018",
+     "x": 371.9,
+     "y": 166.7,
+     "skill": "implant",
+     "min_level": 1,
+     "priority": 1,
+     "kind": "pm",
+     "earliest": 87,
+     "latest": 327,
+     "duration": 120,
+     "tool": "IMP-04A",
+     "symptom": "scheduled implanter PM: source rebuild"
+    }
+   ],
+   "settings": {
+    "walk_m_per_min": 60.0,
+    "floor_width": 400.0,
+    "floor_height": 240.0
+   }
+  },
+  "weights": {
+   "travel_100m": 4.0,
+   "wait_min": 0.2,
+   "overqualification": 8.0,
+   "workload_balance": 5.0,
+   "priority_reward": 60.0,
+   "stability": 25.0
+  },
+  "algorithm": "alns",
+  "clock": 0.0,
+  "released": [
+   "J005",
+   "J006",
+   "J012",
+   "J013",
+   "J017",
+   "J018"
+  ],
+  "off_shift": {},
+  "plan": {
+   "algorithm": "alns",
+   "label": "ALNS (adaptive large neighbourhood search)",
+   "assignments": [
+    {
+     "job_id": "J012",
+     "tech_id": "E01",
+     "sequence": 1,
+     "arrival": 0.3,
+     "start": 82.0,
+     "end": 172.0,
+     "travel_m": 16.2,
+     "cost": -52.86,
+     "cost_breakdown": {
+      "travel": 1.08,
+      "waiting": -11.94,
+      "overqualification": 8.0,
+      "workload": 10.0,
+      "priority": -60.0
+     },
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E01 at cost -52.9; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+     "alternatives": [],
+     "rejections": {
+      "skill_missing": 4,
+      "level_too_low": 1
+     }
+    },
+    {
+     "job_id": "J006",
+     "tech_id": "E01",
+     "sequence": 2,
+     "arrival": 172.8,
+     "start": 172.8,
+     "end": 412.8,
+     "travel_m": 45.7,
+     "cost": -51.7,
+     "cost_breakdown": {
+      "travel": 0.0,
+      "waiting": -9.7,
+      "overqualification": 8.0,
+      "workload": 10.0,
+      "priority": -60.0
+     },
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E01 at cost -51.7; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+     "alternatives": [],
+     "rejections": {
+      "skill_missing": 4,
+      "level_too_low": 1
+     }
+    },
+    {
+     "job_id": "J017",
+     "tech_id": "E01",
+     "sequence": 3,
+     "arrival": 413.5,
+     "start": 413.5,
+     "end": 593.5,
+     "travel_m": 44.3,
+     "cost": -40.23,
+     "cost_breakdown": {
+      "travel": 1.77,
+      "waiting": 0.0,
+      "overqualification": 8.0,
+      "workload": 10.0,
+      "priority": -60.0
+     },
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E01 at cost -40.2; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+     "alternatives": [],
+     "rejections": {
+      "skill_missing": 4,
+      "level_too_low": 1
+     }
+    },
+    {
+     "job_id": "J013",
+     "tech_id": "E03",
+     "sequence": 1,
+     "arrival": 1.8,
+     "start": 46.0,
+     "end": 226.0,
+     "travel_m": 108.3,
+     "cost": -80.06,
+     "cost_breakdown": {
+      "travel": 6.45,
+      "waiting": -31.51,
+      "overqualification": 0.0,
+      "workload": 5.0,
+      "priority": -60.0
+     },
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E03 at cost -80.1; next best E06 at -50.6. Rejected: 2 lacks the skill, 1 certification too low.",
+     "alternatives": [
+      {
+       "tech_id": "E06",
+       "cost": -50.61
+      },
+      {
+       "tech_id": "E04",
+       "cost": -40.03
+      }
+     ],
+     "rejections": {
+      "skill_missing": 2,
+      "level_too_low": 1
+     }
+    },
+    {
+     "job_id": "J005",
+     "tech_id": "E03",
+     "sequence": 2,
+     "arrival": 228.1,
+     "start": 228.1,
+     "end": 468.1,
+     "travel_m": 128.4,
+     "cost": -41.86,
+     "cost_breakdown": {
+      "travel": 5.14,
+      "waiting": 0.0,
+      "overqualification": 8.0,
+      "workload": 5.0,
+      "priority": -60.0
+     },
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E03 at cost -41.9; no other feasible engineer. Rejected: 5 lacks the skill.",
+     "alternatives": [],
+     "rejections": {
+      "skill_missing": 5
+     }
+    },
+    {
+     "job_id": "J018",
+     "tech_id": "E05",
+     "sequence": 1,
+     "arrival": 1.0,
+     "start": 87.0,
+     "end": 207.0,
+     "travel_m": 57.2,
+     "cost": -32.5,
+     "cost_breakdown": {
+      "travel": 2.29,
+      "waiting": 17.21,
+      "overqualification": 8.0,
+      "workload": 0.0,
+      "priority": -60.0
+     },
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E05 at cost -32.5; next best E06 at -23.4. Rejected: 3 lacks the skill, 1 cannot arrive inside the time window.",
+     "alternatives": [
+      {
+       "tech_id": "E06",
+       "cost": -23.35
+      }
+     ],
+     "rejections": {
+      "window_missed": 1,
+      "skill_missing": 3
+     }
+    }
+   ],
+   "unassigned": [],
+   "routes": [
+    {
+     "tech_id": "E01",
+     "stops": [
+      {
+       "job_id": "J012",
+       "arrival": 0.3,
+       "start": 82.0,
+       "end": 172.0,
+       "locked": false
+      },
+      {
+       "job_id": "J006",
+       "arrival": 172.8,
+       "start": 172.8,
+       "end": 412.8,
+       "locked": false
+      },
+      {
+       "job_id": "J017",
+       "arrival": 413.5,
+       "start": 413.5,
+       "end": 593.5,
+       "locked": false
+      }
+     ],
+     "metres": 106.2,
+     "end_time": 593.5
+    },
+    {
+     "tech_id": "E02",
+     "stops": [],
+     "metres": 0.0,
+     "end_time": 0.0
+    },
+    {
+     "tech_id": "E03",
+     "stops": [
+      {
+       "job_id": "J013",
+       "arrival": 1.8,
+       "start": 46.0,
+       "end": 226.0,
+       "locked": false
+      },
+      {
+       "job_id": "J005",
+       "arrival": 228.1,
+       "start": 228.1,
+       "end": 468.1,
+       "locked": false
+      }
+     ],
+     "metres": 236.7,
+     "end_time": 468.1
+    },
+    {
+     "tech_id": "E04",
+     "stops": [],
+     "metres": 0.0,
+     "end_time": 0.0
+    },
+    {
+     "tech_id": "E05",
+     "stops": [
+      {
+       "job_id": "J018",
+       "arrival": 1.0,
+       "start": 87.0,
+       "end": 207.0,
+       "locked": false
+      }
+     ],
+     "metres": 57.2,
+     "end_time": 207.0
+    },
+    {
+     "tech_id": "E06",
+     "stops": [],
+     "metres": 0.0,
+     "end_time": 0.0
+    }
+   ],
+   "metrics": {
+    "jobs": 6.0,
+    "assigned": 6.0,
+    "coverage_pct": 100.0,
+    "critical_coverage_pct": 100.0,
+    "priority_weighted_coverage_pct": 100.0,
+    "mean_response_min": 0.0,
+    "walk_m_total": 400.0,
+    "walk_m_per_job": 66.7,
+    "wait_min_total": 212.0,
+    "overqualification_levels": 5.0,
+    "utilization_pct": 24.3,
+    "engineers_used": 3.0,
+    "workload_std": 1.15,
+    "objective": 98.4,
+    "runtime_ms": 3.19
+   },
+   "solver": {
+    "iterations": 60,
+    "best_iteration": 0,
+    "hit_time_cap": false,
+    "operator_weights": {
+     "random": 1.2,
+     "worst": 1.15,
+     "related": 1.17,
+     "route": 1.13,
+     "greedy": 1.14,
+     "regret": 1.2
+    }
+   }
+  },
+  "replans": 1,
+  "ended": false,
+  "created_by": "dispatcher@demo.local",
+  "driver": null,
+  "driver_until": 0.0
+ },
+ "status": {
+  "J005": "planned",
+  "J006": "planned",
+  "J012": "planned",
+  "J013": "planned",
+  "J017": "planned",
+  "J018": "planned"
+ },
+ "progress": {
+  "done": 0,
+  "in_progress": 0,
+  "planned": 6,
+  "unassigned": 0,
+  "known": 6,
+  "total": 18
+ },
+ "viewers": [],
+ "clock_driver": null,
+ "events": [
+  {
+   "kind": "shift_started",
+   "clock": 0.0,
+   "message": "dispatcher@demo.local started the shift with 6 known jobs and 6 engineers.",
+   "data": {},
+   "actor": "dispatcher@demo.local",
+   "at": "2026-10-01T13:20:46.594153+00:00"
+  },
+  {
+   "kind": "replanned",
+   "clock": 0.0,
+   "message": "Re-planned (shift start) with ALNS (adaptive large neighbourhood search): 6 newly assigned, 0 moved between engineers, 0 dropped, 0 unassigned.",
+   "data": {
+    "moved": [],
+    "newly_assigned": [
+     "J005",
+     "J006",
+     "J012",
+     "J013",
+     "J017",
+     "J018"
+    ],
+    "dropped": [],
+    "runtime_ms": 3.19,
+    "assignments": {
+     "J005": "E03",
+     "J006": "E01",
+     "J012": "E01",
+     "J013": "E03",
+     "J017": "E01",
+     "J018": "E05"
+    }
+   },
+   "actor": "dispatcher@demo.local",
+   "at": "2026-10-01T13:20:46.597488+00:00"
+  }
+ ]
+}

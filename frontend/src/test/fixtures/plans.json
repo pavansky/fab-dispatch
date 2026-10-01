@@ -1,0 +1,2884 @@
+{
+ "greedy": {
+  "algorithm": "greedy",
+  "label": "Greedy (priority, then deadline)",
+  "assignments": [
+   {
+    "job_id": "J016",
+    "tech_id": "E01",
+    "sequence": 1,
+    "arrival": 0.1,
+    "start": 1.0,
+    "end": 76.0,
+    "travel_m": 7.3,
+    "cost": -179.53,
+    "cost_breakdown": {
+     "travel": 0.29,
+     "waiting": 0.18,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Dispatched #1 in priority/deadline order; cheapest feasible was E01 at cost -179.5; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J012",
+    "tech_id": "E01",
+    "sequence": 2,
+    "arrival": 76.1,
+    "start": 82.0,
+    "end": 172.0,
+    "travel_m": 8.9,
+    "cost": -54.35,
+    "cost_breakdown": {
+     "travel": 0.71,
+     "waiting": -18.06,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -60.0
+    },
+    "explanation": "Dispatched #14 in priority/deadline order; cheapest feasible was E01 at cost -54.4; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J014",
+    "tech_id": "E01",
+    "sequence": 3,
+    "arrival": 172.6,
+    "start": 199.0,
+    "end": 304.0,
+    "travel_m": 35.8,
+    "cost": -141.41,
+    "cost_breakdown": {
+     "travel": 1.08,
+     "waiting": 24.51,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -180.0
+    },
+    "explanation": "Dispatched #2 in priority/deadline order; cheapest feasible was E01 at cost -141.4; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J018",
+    "tech_id": "E01",
+    "sequence": 4,
+    "arrival": 307.8,
+    "start": 307.8,
+    "end": 427.8,
+    "travel_m": 229.6,
+    "cost": -47.16,
+    "cost_breakdown": {
+     "travel": 18.37,
+     "waiting": -25.53,
+     "overqualification": 0.0,
+     "workload": 20.0,
+     "priority": -60.0
+    },
+    "explanation": "Dispatched #15 in priority/deadline order; cheapest feasible was E01 at cost -47.2; next best E05 at -32.5. Rejected: 3 lacks the skill, 1 already at max jobs.",
+    "alternatives": [
+     {
+      "tech_id": "E05",
+      "cost": -32.5
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3,
+     "at_capacity": 1
+    }
+   },
+   {
+    "job_id": "J008",
+    "tech_id": "E01",
+    "sequence": 5,
+    "arrival": 432.0,
+    "start": 527.0,
+    "end": 692.0,
+    "travel_m": 248.1,
+    "cost": -116.72,
+    "cost_breakdown": {
+     "travel": 0.74,
+     "waiting": 44.54,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -180.0
+    },
+    "explanation": "Dispatched #7 in priority/deadline order; cheapest feasible was E01 at cost -116.7; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J009",
+    "tech_id": "E02",
+    "sequence": 1,
+    "arrival": 3.3,
+    "start": 410.0,
+    "end": 470.0,
+    "travel_m": 196.4,
+    "cost": -90.79,
+    "cost_breakdown": {
+     "travel": 7.86,
+     "waiting": 81.35,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Dispatched #4 in priority/deadline order; cheapest feasible was E02 at cost -90.8; next best E03 at -87.9. Rejected: 2 lacks the skill, 1 cannot arrive inside the time window.",
+    "alternatives": [
+     {
+      "tech_id": "E03",
+      "cost": -87.93
+     },
+     {
+      "tech_id": "E04",
+      "cost": -79.46
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J010",
+    "tech_id": "E02",
+    "sequence": 2,
+    "arrival": 473.4,
+    "start": 473.4,
+    "end": 653.4,
+    "travel_m": 201.2,
+    "cost": -90.95,
+    "cost_breakdown": {
+     "travel": 8.05,
+     "waiting": 0.0,
+     "overqualification": 16.0,
+     "workload": 5.0,
+     "priority": -120.0
+    },
+    "explanation": "Dispatched #11 in priority/deadline order; cheapest feasible was E02 at cost -91.0; next best E05 at -31.0. Rejected: 3 lacks the skill, 1 cannot arrive inside the time window.",
+    "alternatives": [
+     {
+      "tech_id": "E05",
+      "cost": -31.02
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J007",
+    "tech_id": "E03",
+    "sequence": 1,
+    "arrival": 1.0,
+    "start": 12.0,
+    "end": 132.0,
+    "travel_m": 62.0,
+    "cost": -129.0,
+    "cost_breakdown": {
+     "travel": 2.18,
+     "waiting": -24.18,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -120.0
+    },
+    "explanation": "Dispatched #8 in priority/deadline order; cheapest feasible was E03 at cost -129.0; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J001",
+    "tech_id": "E03",
+    "sequence": 2,
+    "arrival": 132.6,
+    "start": 306.0,
+    "end": 411.0,
+    "travel_m": 36.8,
+    "cost": -120.42,
+    "cost_breakdown": {
+     "travel": 2.81,
+     "waiting": -21.23,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -120.0
+    },
+    "explanation": "Dispatched #9 in priority/deadline order; cheapest feasible was E03 at cost -120.4; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J011",
+    "tech_id": "E03",
+    "sequence": 3,
+    "arrival": 412.0,
+    "start": 499.0,
+    "end": 619.0,
+    "travel_m": 60.6,
+    "cost": -70.93,
+    "cost_breakdown": {
+     "travel": 1.39,
+     "waiting": 99.68,
+     "overqualification": 8.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Dispatched #5 in priority/deadline order; cheapest feasible was E03 at cost -70.9; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J013",
+    "tech_id": "E06",
+    "sequence": 1,
+    "arrival": 0.1,
+    "start": 46.0,
+    "end": 226.0,
+    "travel_m": 5.2,
+    "cost": -80.75,
+    "cost_breakdown": {
+     "travel": 0.27,
+     "waiting": -36.02,
+     "overqualification": 0.0,
+     "workload": 15.0,
+     "priority": -60.0
+    },
+    "explanation": "Dispatched #13 in priority/deadline order; cheapest feasible was E06 at cost -80.8; next best E03 at -72.4. Rejected: 2 lacks the skill, 1 certification too low.",
+    "alternatives": [
+     {
+      "tech_id": "E03",
+      "cost": -72.43
+     },
+     {
+      "tech_id": "E04",
+      "cost": -40.03
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J015",
+    "tech_id": "E06",
+    "sequence": 2,
+    "arrival": 228.4,
+    "start": 352.0,
+    "end": 472.0,
+    "travel_m": 142.0,
+    "cost": -104.45,
+    "cost_breakdown": {
+     "travel": 5.62,
+     "waiting": 69.93,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Dispatched #3 in priority/deadline order; cheapest feasible was E06 at cost -104.4; next best E05 at -94.3. Rejected: 3 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E05",
+      "cost": -94.34
+     },
+     {
+      "tech_id": "E02",
+      "cost": -91.12
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3
+    }
+   },
+   {
+    "job_id": "J004",
+    "tech_id": "E06",
+    "sequence": 3,
+    "arrival": 472.6,
+    "start": 472.6,
+    "end": 532.6,
+    "travel_m": 36.6,
+    "cost": -113.54,
+    "cost_breakdown": {
+     "travel": 1.46,
+     "waiting": 0.0,
+     "overqualification": 0.0,
+     "workload": 5.0,
+     "priority": -120.0
+    },
+    "explanation": "Dispatched #10 in priority/deadline order; cheapest feasible was E06 at cost -113.5; next best E02 at -107.3. Rejected: 3 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E02",
+      "cost": -107.29
+     },
+     {
+      "tech_id": "E05",
+      "cost": -35.09
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3
+    }
+   },
+   {
+    "job_id": "J003",
+    "tech_id": "E06",
+    "sequence": 4,
+    "arrival": 534.8,
+    "start": 534.8,
+    "end": 624.8,
+    "travel_m": 128.5,
+    "cost": -96.86,
+    "cost_breakdown": {
+     "travel": 5.14,
+     "waiting": 0.0,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -120.0
+    },
+    "explanation": "Dispatched #12 in priority/deadline order; cheapest feasible was E06 at cost -96.9; next best E03 at -92.7. Rejected: 2 lacks the skill, 1 cannot arrive inside the time window.",
+    "alternatives": [
+     {
+      "tech_id": "E03",
+      "cost": -92.74
+     },
+     {
+      "tech_id": "E04",
+      "cost": -1.17
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2,
+     "window_missed": 1
+    }
+   }
+  ],
+  "unassigned": [
+   {
+    "job_id": "J002",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 cannot arrive inside the time window.",
+    "rejections": {
+     "skill_missing": 5,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J005",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 cannot arrive inside the time window.",
+    "rejections": {
+     "skill_missing": 5,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J006",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 4 lacks the skill, 1 already at max jobs, 1 certification too low.",
+    "rejections": {
+     "at_capacity": 1,
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J017",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 4 lacks the skill, 1 already at max jobs, 1 certification too low.",
+    "rejections": {
+     "at_capacity": 1,
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   }
+  ],
+  "routes": [
+   {
+    "tech_id": "E01",
+    "stops": [
+     {
+      "job_id": "J016",
+      "arrival": 0.1,
+      "start": 1.0,
+      "end": 76.0,
+      "locked": false
+     },
+     {
+      "job_id": "J012",
+      "arrival": 76.1,
+      "start": 82.0,
+      "end": 172.0,
+      "locked": false
+     },
+     {
+      "job_id": "J014",
+      "arrival": 172.6,
+      "start": 199.0,
+      "end": 304.0,
+      "locked": false
+     },
+     {
+      "job_id": "J018",
+      "arrival": 307.8,
+      "start": 307.8,
+      "end": 427.8,
+      "locked": false
+     },
+     {
+      "job_id": "J008",
+      "arrival": 432.0,
+      "start": 527.0,
+      "end": 692.0,
+      "locked": false
+     }
+    ],
+    "metres": 529.7,
+    "end_time": 692.0
+   },
+   {
+    "tech_id": "E02",
+    "stops": [
+     {
+      "job_id": "J009",
+      "arrival": 3.3,
+      "start": 410.0,
+      "end": 470.0,
+      "locked": false
+     },
+     {
+      "job_id": "J010",
+      "arrival": 473.4,
+      "start": 473.4,
+      "end": 653.4,
+      "locked": false
+     }
+    ],
+    "metres": 397.6,
+    "end_time": 653.4
+   },
+   {
+    "tech_id": "E03",
+    "stops": [
+     {
+      "job_id": "J007",
+      "arrival": 1.0,
+      "start": 12.0,
+      "end": 132.0,
+      "locked": false
+     },
+     {
+      "job_id": "J001",
+      "arrival": 132.6,
+      "start": 306.0,
+      "end": 411.0,
+      "locked": false
+     },
+     {
+      "job_id": "J011",
+      "arrival": 412.0,
+      "start": 499.0,
+      "end": 619.0,
+      "locked": false
+     }
+    ],
+    "metres": 159.4,
+    "end_time": 619.0
+   },
+   {
+    "tech_id": "E04",
+    "stops": [],
+    "metres": 0.0,
+    "end_time": 0.0
+   },
+   {
+    "tech_id": "E05",
+    "stops": [],
+    "metres": 0.0,
+    "end_time": 0.0
+   },
+   {
+    "tech_id": "E06",
+    "stops": [
+     {
+      "job_id": "J013",
+      "arrival": 0.1,
+      "start": 46.0,
+      "end": 226.0,
+      "locked": false
+     },
+     {
+      "job_id": "J015",
+      "arrival": 228.4,
+      "start": 352.0,
+      "end": 472.0,
+      "locked": false
+     },
+     {
+      "job_id": "J004",
+      "arrival": 472.6,
+      "start": 472.6,
+      "end": 532.6,
+      "locked": false
+     },
+     {
+      "job_id": "J003",
+      "arrival": 534.8,
+      "start": 534.8,
+      "end": 624.8,
+      "locked": false
+     }
+    ],
+    "metres": 312.3,
+    "end_time": 624.8
+   }
+  ],
+  "metrics": {
+   "jobs": 18.0,
+   "assigned": 14.0,
+   "coverage_pct": 77.8,
+   "critical_coverage_pct": 85.7,
+   "priority_weighted_coverage_pct": 83.8,
+   "mean_response_min": 22.3,
+   "walk_m_total": 1399.0,
+   "walk_m_per_job": 99.9,
+   "wait_min_total": 976.0,
+   "overqualification_levels": 9.0,
+   "utilization_pct": 36.8,
+   "engineers_used": 4.0,
+   "workload_std": 1.89,
+   "objective": 683.1,
+   "runtime_ms": 2
+  },
+  "solver": {}
+ },
+ "hungarian": {
+  "algorithm": "hungarian",
+  "label": "Hungarian (batch rounds)",
+  "assignments": [
+   {
+    "job_id": "J016",
+    "tech_id": "E01",
+    "sequence": 1,
+    "arrival": 0.1,
+    "start": 1.0,
+    "end": 76.0,
+    "travel_m": 7.3,
+    "cost": -179.53,
+    "cost_breakdown": {
+     "travel": 0.29,
+     "waiting": 0.18,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Round 1: optimal matching of 6 engineers x 18 open jobs chose E01 at cost -179.5; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J012",
+    "tech_id": "E01",
+    "sequence": 2,
+    "arrival": 76.1,
+    "start": 82.0,
+    "end": 172.0,
+    "travel_m": 8.9,
+    "cost": -49.35,
+    "cost_breakdown": {
+     "travel": 0.71,
+     "waiting": -18.06,
+     "overqualification": 8.0,
+     "workload": 20.0,
+     "priority": -60.0
+    },
+    "explanation": "Round 5: optimal matching of 6 engineers x 4 open jobs chose E01 at cost -49.4; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J014",
+    "tech_id": "E01",
+    "sequence": 3,
+    "arrival": 172.6,
+    "start": 199.0,
+    "end": 304.0,
+    "travel_m": 35.8,
+    "cost": -141.41,
+    "cost_breakdown": {
+     "travel": 1.08,
+     "waiting": 24.51,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -180.0
+    },
+    "explanation": "Round 2: optimal matching of 6 engineers x 12 open jobs chose E01 at cost -141.4; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J006",
+    "tech_id": "E01",
+    "sequence": 4,
+    "arrival": 304.7,
+    "start": 304.7,
+    "end": 544.7,
+    "travel_m": 40.9,
+    "cost": -79.51,
+    "cost_breakdown": {
+     "travel": 2.03,
+     "waiting": -44.54,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -60.0
+    },
+    "explanation": "Round 4: optimal matching of 6 engineers x 5 open jobs chose E01 at cost -79.5; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J008",
+    "tech_id": "E01",
+    "sequence": 5,
+    "arrival": 545.2,
+    "start": 545.2,
+    "end": 710.2,
+    "travel_m": 28.4,
+    "cost": -116.72,
+    "cost_breakdown": {
+     "travel": 0.74,
+     "waiting": 44.54,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -180.0
+    },
+    "explanation": "Round 3: optimal matching of 6 engineers x 7 open jobs chose E01 at cost -116.7; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J009",
+    "tech_id": "E02",
+    "sequence": 1,
+    "arrival": 3.3,
+    "start": 410.0,
+    "end": 470.0,
+    "travel_m": 196.4,
+    "cost": -90.79,
+    "cost_breakdown": {
+     "travel": 7.86,
+     "waiting": 81.35,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Round 1: optimal matching of 6 engineers x 18 open jobs chose E02 at cost -90.8; next best E06 at -88.0. Rejected: 2 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E06",
+      "cost": -88.04
+     },
+     {
+      "tech_id": "E03",
+      "cost": -87.93
+     },
+     {
+      "tech_id": "E04",
+      "cost": -79.46
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2
+    }
+   },
+   {
+    "job_id": "J003",
+    "tech_id": "E02",
+    "sequence": 2,
+    "arrival": 470.6,
+    "start": 508.0,
+    "end": 598.0,
+    "travel_m": 35.7,
+    "cost": -106.09,
+    "cost_breakdown": {
+     "travel": 1.43,
+     "waiting": 7.48,
+     "overqualification": 0.0,
+     "workload": 5.0,
+     "priority": -120.0
+    },
+    "explanation": "Round 2: optimal matching of 6 engineers x 12 open jobs chose E02 at cost -106.1; next best E06 at -93.8. Rejected: 2 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E06",
+      "cost": -93.75
+     },
+     {
+      "tech_id": "E04",
+      "cost": -49.06
+     },
+     {
+      "tech_id": "E03",
+      "cost": -26.9
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2
+    }
+   },
+   {
+    "job_id": "J007",
+    "tech_id": "E03",
+    "sequence": 1,
+    "arrival": 1.0,
+    "start": 12.0,
+    "end": 132.0,
+    "travel_m": 62.0,
+    "cost": -107.33,
+    "cost_breakdown": {
+     "travel": 2.48,
+     "waiting": 2.19,
+     "overqualification": 8.0,
+     "workload": 0.0,
+     "priority": -120.0
+    },
+    "explanation": "Round 1: optimal matching of 6 engineers x 18 open jobs chose E03 at cost -107.3; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J001",
+    "tech_id": "E03",
+    "sequence": 2,
+    "arrival": 132.6,
+    "start": 306.0,
+    "end": 411.0,
+    "travel_m": 36.8,
+    "cost": -120.42,
+    "cost_breakdown": {
+     "travel": 2.81,
+     "waiting": -21.23,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -120.0
+    },
+    "explanation": "Round 3: optimal matching of 6 engineers x 7 open jobs chose E03 at cost -120.4; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J011",
+    "tech_id": "E03",
+    "sequence": 3,
+    "arrival": 412.0,
+    "start": 499.0,
+    "end": 619.0,
+    "travel_m": 60.6,
+    "cost": -92.6,
+    "cost_breakdown": {
+     "travel": 1.09,
+     "waiting": 73.31,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -180.0
+    },
+    "explanation": "Round 2: optimal matching of 6 engineers x 12 open jobs chose E03 at cost -92.6; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J013",
+    "tech_id": "E04",
+    "sequence": 1,
+    "arrival": 4.9,
+    "start": 46.0,
+    "end": 226.0,
+    "travel_m": 293.8,
+    "cost": -40.03,
+    "cost_breakdown": {
+     "travel": 11.75,
+     "waiting": 8.22,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -60.0
+    },
+    "explanation": "Round 1: locally cheapest was E06 (-50.6), but the globally optimal matching needed E06 elsewhere, so it chose E04 at cost -40.0; next best E06 at -50.6. Rejected: 2 lacks the skill, 1 certification too low.",
+    "alternatives": [
+     {
+      "tech_id": "E06",
+      "cost": -50.61
+     },
+     {
+      "tech_id": "E03",
+      "cost": -46.83
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J018",
+    "tech_id": "E05",
+    "sequence": 1,
+    "arrival": 1.0,
+    "start": 87.0,
+    "end": 207.0,
+    "travel_m": 57.2,
+    "cost": -67.76,
+    "cost_breakdown": {
+     "travel": 3.53,
+     "waiting": -24.29,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -60.0
+    },
+    "explanation": "Round 2: optimal matching of 6 engineers x 12 open jobs chose E05 at cost -67.8; next best E06 at -48.5. Rejected: 3 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E06",
+      "cost": -48.51
+     },
+     {
+      "tech_id": "E01",
+      "cost": -43.4
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3
+    }
+   },
+   {
+    "job_id": "J004",
+    "tech_id": "E05",
+    "sequence": 2,
+    "arrival": 213.8,
+    "start": 355.0,
+    "end": 415.0,
+    "travel_m": 410.6,
+    "cost": -35.09,
+    "cost_breakdown": {
+     "travel": 15.18,
+     "waiting": 69.73,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -120.0
+    },
+    "explanation": "Round 1: locally cheapest was E06 (-45.0), but the globally optimal matching needed E06 elsewhere, so it chose E05 at cost -35.1; next best E06 at -45.0. Rejected: 3 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E06",
+      "cost": -45.02
+     },
+     {
+      "tech_id": "E02",
+      "cost": -29.38
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3
+    }
+   },
+   {
+    "job_id": "J015",
+    "tech_id": "E06",
+    "sequence": 1,
+    "arrival": 2.3,
+    "start": 352.0,
+    "end": 472.0,
+    "travel_m": 140.4,
+    "cost": -104.45,
+    "cost_breakdown": {
+     "travel": 5.62,
+     "waiting": 69.93,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Round 1: optimal matching of 6 engineers x 18 open jobs chose E06 at cost -104.4; next best E05 at -94.3. Rejected: 3 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E05",
+      "cost": -94.34
+     },
+     {
+      "tech_id": "E02",
+      "cost": -91.12
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3
+    }
+   },
+   {
+    "job_id": "J010",
+    "tech_id": "E06",
+    "sequence": 2,
+    "arrival": 473.2,
+    "start": 473.2,
+    "end": 653.2,
+    "travel_m": 72.8,
+    "cost": -112.09,
+    "cost_breakdown": {
+     "travel": 2.91,
+     "waiting": 0.0,
+     "overqualification": 0.0,
+     "workload": 5.0,
+     "priority": -120.0
+    },
+    "explanation": "Round 2: optimal matching of 6 engineers x 12 open jobs chose E06 at cost -112.1; next best E05 at -110.8. Rejected: 3 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E05",
+      "cost": -110.83
+     },
+     {
+      "tech_id": "E02",
+      "cost": -90.95
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3
+    }
+   }
+  ],
+  "unassigned": [
+   {
+    "job_id": "J002",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 cannot arrive inside the time window.",
+    "rejections": {
+     "skill_missing": 5,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J005",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 cannot arrive inside the time window.",
+    "rejections": {
+     "skill_missing": 5,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J017",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 4 lacks the skill, 1 already at max jobs, 1 certification too low.",
+    "rejections": {
+     "at_capacity": 1,
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   }
+  ],
+  "routes": [
+   {
+    "tech_id": "E01",
+    "stops": [
+     {
+      "job_id": "J016",
+      "arrival": 0.1,
+      "start": 1.0,
+      "end": 76.0,
+      "locked": false
+     },
+     {
+      "job_id": "J012",
+      "arrival": 76.1,
+      "start": 82.0,
+      "end": 172.0,
+      "locked": false
+     },
+     {
+      "job_id": "J014",
+      "arrival": 172.6,
+      "start": 199.0,
+      "end": 304.0,
+      "locked": false
+     },
+     {
+      "job_id": "J006",
+      "arrival": 304.7,
+      "start": 304.7,
+      "end": 544.7,
+      "locked": false
+     },
+     {
+      "job_id": "J008",
+      "arrival": 545.2,
+      "start": 545.2,
+      "end": 710.2,
+      "locked": false
+     }
+    ],
+    "metres": 121.3,
+    "end_time": 710.2
+   },
+   {
+    "tech_id": "E02",
+    "stops": [
+     {
+      "job_id": "J009",
+      "arrival": 3.3,
+      "start": 410.0,
+      "end": 470.0,
+      "locked": false
+     },
+     {
+      "job_id": "J003",
+      "arrival": 470.6,
+      "start": 508.0,
+      "end": 598.0,
+      "locked": false
+     }
+    ],
+    "metres": 232.1,
+    "end_time": 598.0
+   },
+   {
+    "tech_id": "E03",
+    "stops": [
+     {
+      "job_id": "J007",
+      "arrival": 1.0,
+      "start": 12.0,
+      "end": 132.0,
+      "locked": false
+     },
+     {
+      "job_id": "J001",
+      "arrival": 132.6,
+      "start": 306.0,
+      "end": 411.0,
+      "locked": false
+     },
+     {
+      "job_id": "J011",
+      "arrival": 412.0,
+      "start": 499.0,
+      "end": 619.0,
+      "locked": false
+     }
+    ],
+    "metres": 159.4,
+    "end_time": 619.0
+   },
+   {
+    "tech_id": "E04",
+    "stops": [
+     {
+      "job_id": "J013",
+      "arrival": 4.9,
+      "start": 46.0,
+      "end": 226.0,
+      "locked": false
+     }
+    ],
+    "metres": 293.8,
+    "end_time": 226.0
+   },
+   {
+    "tech_id": "E05",
+    "stops": [
+     {
+      "job_id": "J018",
+      "arrival": 1.0,
+      "start": 87.0,
+      "end": 207.0,
+      "locked": false
+     },
+     {
+      "job_id": "J004",
+      "arrival": 213.8,
+      "start": 355.0,
+      "end": 415.0,
+      "locked": false
+     }
+    ],
+    "metres": 467.8,
+    "end_time": 415.0
+   },
+   {
+    "tech_id": "E06",
+    "stops": [
+     {
+      "job_id": "J015",
+      "arrival": 2.3,
+      "start": 352.0,
+      "end": 472.0,
+      "locked": false
+     },
+     {
+      "job_id": "J010",
+      "arrival": 473.2,
+      "start": 473.2,
+      "end": 653.2,
+      "locked": false
+     }
+    ],
+    "metres": 213.2,
+    "end_time": 653.2
+   }
+  ],
+  "metrics": {
+   "jobs": 18.0,
+   "assigned": 15.0,
+   "coverage_pct": 83.3,
+   "critical_coverage_pct": 85.7,
+   "priority_weighted_coverage_pct": 86.5,
+   "mean_response_min": 10.9,
+   "walk_m_total": 1488.0,
+   "walk_m_per_job": 99.2,
+   "wait_min_total": 1367.0,
+   "overqualification_levels": 8.0,
+   "utilization_pct": 42.4,
+   "engineers_used": 6.0,
+   "workload_std": 1.26,
+   "objective": 696.8,
+   "runtime_ms": 3
+  },
+  "solver": {}
+ },
+ "regret": {
+  "algorithm": "regret",
+  "label": "Regret-2 insertion",
+  "assignments": [
+   {
+    "job_id": "J016",
+    "tech_id": "E01",
+    "sequence": 1,
+    "arrival": 0.1,
+    "start": 1.0,
+    "end": 76.0,
+    "travel_m": 7.3,
+    "cost": -179.53,
+    "cost_breakdown": {
+     "travel": 0.29,
+     "waiting": 0.18,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Step 1: placed early because only one engineer could still do it; chose E01 at cost -179.5; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J012",
+    "tech_id": "E01",
+    "sequence": 2,
+    "arrival": 76.1,
+    "start": 82.0,
+    "end": 172.0,
+    "travel_m": 8.9,
+    "cost": -49.35,
+    "cost_breakdown": {
+     "travel": 0.71,
+     "waiting": -18.06,
+     "overqualification": 8.0,
+     "workload": 20.0,
+     "priority": -60.0
+    },
+    "explanation": "Step 8: placed early because only one engineer could still do it; chose E01 at cost -49.4; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J014",
+    "tech_id": "E01",
+    "sequence": 3,
+    "arrival": 172.6,
+    "start": 199.0,
+    "end": 304.0,
+    "travel_m": 35.8,
+    "cost": -141.41,
+    "cost_breakdown": {
+     "travel": 1.08,
+     "waiting": 24.51,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -180.0
+    },
+    "explanation": "Step 2: placed early because only one engineer could still do it; chose E01 at cost -141.4; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J006",
+    "tech_id": "E01",
+    "sequence": 4,
+    "arrival": 304.7,
+    "start": 304.7,
+    "end": 544.7,
+    "travel_m": 40.9,
+    "cost": -79.51,
+    "cost_breakdown": {
+     "travel": 2.03,
+     "waiting": -44.54,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -60.0
+    },
+    "explanation": "Step 7: placed early because only one engineer could still do it; chose E01 at cost -79.5; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J008",
+    "tech_id": "E01",
+    "sequence": 5,
+    "arrival": 545.2,
+    "start": 545.2,
+    "end": 710.2,
+    "travel_m": 28.4,
+    "cost": -116.72,
+    "cost_breakdown": {
+     "travel": 0.74,
+     "waiting": 44.54,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -180.0
+    },
+    "explanation": "Step 3: placed early because only one engineer could still do it; chose E01 at cost -116.7; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J007",
+    "tech_id": "E03",
+    "sequence": 1,
+    "arrival": 1.0,
+    "start": 12.0,
+    "end": 132.0,
+    "travel_m": 62.0,
+    "cost": -129.0,
+    "cost_breakdown": {
+     "travel": 2.18,
+     "waiting": -24.18,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -120.0
+    },
+    "explanation": "Step 5: placed early because only one engineer could still do it; chose E03 at cost -129.0; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J001",
+    "tech_id": "E03",
+    "sequence": 2,
+    "arrival": 132.6,
+    "start": 306.0,
+    "end": 411.0,
+    "travel_m": 36.8,
+    "cost": -120.42,
+    "cost_breakdown": {
+     "travel": 2.81,
+     "waiting": -21.23,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -120.0
+    },
+    "explanation": "Step 6: placed early because only one engineer could still do it; chose E03 at cost -120.4; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J009",
+    "tech_id": "E03",
+    "sequence": 3,
+    "arrival": 412.7,
+    "start": 412.7,
+    "end": 472.7,
+    "travel_m": 101.9,
+    "cost": -164.88,
+    "cost_breakdown": {
+     "travel": 4.49,
+     "waiting": -12.37,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -180.0
+    },
+    "explanation": "Step 9: highest regret 74.1 (best vs second-best engineer); chose E03 at cost -164.9; next best E02 at -90.8. Rejected: 2 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E02",
+      "cost": -90.79
+     },
+     {
+      "tech_id": "E06",
+      "cost": -88.04
+     },
+     {
+      "tech_id": "E04",
+      "cost": -79.46
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2
+    }
+   },
+   {
+    "job_id": "J011",
+    "tech_id": "E03",
+    "sequence": 4,
+    "arrival": 473.9,
+    "start": 499.0,
+    "end": 619.0,
+    "travel_m": 70.9,
+    "cost": -70.93,
+    "cost_breakdown": {
+     "travel": 1.39,
+     "waiting": 99.68,
+     "overqualification": 8.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Step 4: placed early because only one engineer could still do it; chose E03 at cost -70.9; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J003",
+    "tech_id": "E03",
+    "sequence": 5,
+    "arrival": 620.8,
+    "start": 620.8,
+    "end": 710.8,
+    "travel_m": 106.6,
+    "cost": -87.74,
+    "cost_breakdown": {
+     "travel": 4.26,
+     "waiting": 0.0,
+     "overqualification": 8.0,
+     "workload": 20.0,
+     "priority": -120.0
+    },
+    "explanation": "Step 10: highest regret 75.5 (best vs second-best engineer); chose E03 at cost -87.7; next best E02 at -12.2. Rejected: 2 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E02",
+      "cost": -12.25
+     },
+     {
+      "tech_id": "E06",
+      "cost": -8.67
+     },
+     {
+      "tech_id": "E04",
+      "cost": -1.17
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2
+    }
+   },
+   {
+    "job_id": "J018",
+    "tech_id": "E05",
+    "sequence": 1,
+    "arrival": 1.0,
+    "start": 87.0,
+    "end": 207.0,
+    "travel_m": 57.2,
+    "cost": -67.76,
+    "cost_breakdown": {
+     "travel": 3.53,
+     "waiting": -24.29,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -60.0
+    },
+    "explanation": "Step 15: highest regret 30.5 (best vs second-best engineer); chose E05 at cost -67.8; next best E06 at -37.3. Rejected: 3 lacks the skill, 1 already at max jobs.",
+    "alternatives": [
+     {
+      "tech_id": "E06",
+      "cost": -37.31
+     }
+    ],
+    "rejections": {
+     "at_capacity": 1,
+     "skill_missing": 3
+    }
+   },
+   {
+    "job_id": "J004",
+    "tech_id": "E05",
+    "sequence": 2,
+    "arrival": 213.8,
+    "start": 355.0,
+    "end": 415.0,
+    "travel_m": 410.6,
+    "cost": -35.09,
+    "cost_breakdown": {
+     "travel": 15.18,
+     "waiting": 69.73,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -120.0
+    },
+    "explanation": "Step 14: highest regret 5.7 (best vs second-best engineer); chose E05 at cost -35.1; next best E02 at -29.4. Rejected: 3 lacks the skill, 1 cannot arrive inside the time window.",
+    "alternatives": [
+     {
+      "tech_id": "E02",
+      "cost": -29.38
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J013",
+    "tech_id": "E06",
+    "sequence": 1,
+    "arrival": 0.1,
+    "start": 46.0,
+    "end": 226.0,
+    "travel_m": 5.2,
+    "cost": -85.75,
+    "cost_breakdown": {
+     "travel": 0.27,
+     "waiting": -36.02,
+     "overqualification": 0.0,
+     "workload": 10.0,
+     "priority": -60.0
+    },
+    "explanation": "Step 13: highest regret 45.7 (best vs second-best engineer); chose E06 at cost -85.8; next best E04 at -40.0. Rejected: 2 lacks the skill, 1 certification too low, 1 already at max jobs.",
+    "alternatives": [
+     {
+      "tech_id": "E04",
+      "cost": -40.03
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2,
+     "level_too_low": 1,
+     "at_capacity": 1
+    }
+   },
+   {
+    "job_id": "J015",
+    "tech_id": "E06",
+    "sequence": 2,
+    "arrival": 228.4,
+    "start": 352.0,
+    "end": 472.0,
+    "travel_m": 142.0,
+    "cost": -104.45,
+    "cost_breakdown": {
+     "travel": 5.62,
+     "waiting": 69.93,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Step 11: highest regret 10.1 (best vs second-best engineer); chose E06 at cost -104.4; next best E05 at -94.3. Rejected: 3 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E05",
+      "cost": -94.34
+     },
+     {
+      "tech_id": "E02",
+      "cost": -91.12
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3
+    }
+   },
+   {
+    "job_id": "J010",
+    "tech_id": "E06",
+    "sequence": 3,
+    "arrival": 473.2,
+    "start": 473.2,
+    "end": 653.2,
+    "travel_m": 72.8,
+    "cost": -112.09,
+    "cost_breakdown": {
+     "travel": 2.91,
+     "waiting": 0.0,
+     "overqualification": 0.0,
+     "workload": 5.0,
+     "priority": -120.0
+    },
+    "explanation": "Step 12: highest regret 81.1 (best vs second-best engineer); chose E06 at cost -112.1; next best E05 at -31.0. Rejected: 3 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E05",
+      "cost": -31.02
+     },
+     {
+      "tech_id": "E02",
+      "cost": -28.81
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3
+    }
+   }
+  ],
+  "unassigned": [
+   {
+    "job_id": "J002",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 already at max jobs.",
+    "rejections": {
+     "skill_missing": 5,
+     "at_capacity": 1
+    }
+   },
+   {
+    "job_id": "J005",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 already at max jobs.",
+    "rejections": {
+     "skill_missing": 5,
+     "at_capacity": 1
+    }
+   },
+   {
+    "job_id": "J017",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 4 lacks the skill, 1 already at max jobs, 1 certification too low.",
+    "rejections": {
+     "at_capacity": 1,
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   }
+  ],
+  "routes": [
+   {
+    "tech_id": "E01",
+    "stops": [
+     {
+      "job_id": "J016",
+      "arrival": 0.1,
+      "start": 1.0,
+      "end": 76.0,
+      "locked": false
+     },
+     {
+      "job_id": "J012",
+      "arrival": 76.1,
+      "start": 82.0,
+      "end": 172.0,
+      "locked": false
+     },
+     {
+      "job_id": "J014",
+      "arrival": 172.6,
+      "start": 199.0,
+      "end": 304.0,
+      "locked": false
+     },
+     {
+      "job_id": "J006",
+      "arrival": 304.7,
+      "start": 304.7,
+      "end": 544.7,
+      "locked": false
+     },
+     {
+      "job_id": "J008",
+      "arrival": 545.2,
+      "start": 545.2,
+      "end": 710.2,
+      "locked": false
+     }
+    ],
+    "metres": 121.3,
+    "end_time": 710.2
+   },
+   {
+    "tech_id": "E02",
+    "stops": [],
+    "metres": 0.0,
+    "end_time": 0.0
+   },
+   {
+    "tech_id": "E03",
+    "stops": [
+     {
+      "job_id": "J007",
+      "arrival": 1.0,
+      "start": 12.0,
+      "end": 132.0,
+      "locked": false
+     },
+     {
+      "job_id": "J001",
+      "arrival": 132.6,
+      "start": 306.0,
+      "end": 411.0,
+      "locked": false
+     },
+     {
+      "job_id": "J009",
+      "arrival": 412.7,
+      "start": 412.7,
+      "end": 472.7,
+      "locked": false
+     },
+     {
+      "job_id": "J011",
+      "arrival": 473.9,
+      "start": 499.0,
+      "end": 619.0,
+      "locked": false
+     },
+     {
+      "job_id": "J003",
+      "arrival": 620.8,
+      "start": 620.8,
+      "end": 710.8,
+      "locked": false
+     }
+    ],
+    "metres": 378.2,
+    "end_time": 710.8
+   },
+   {
+    "tech_id": "E04",
+    "stops": [],
+    "metres": 0.0,
+    "end_time": 0.0
+   },
+   {
+    "tech_id": "E05",
+    "stops": [
+     {
+      "job_id": "J018",
+      "arrival": 1.0,
+      "start": 87.0,
+      "end": 207.0,
+      "locked": false
+     },
+     {
+      "job_id": "J004",
+      "arrival": 213.8,
+      "start": 355.0,
+      "end": 415.0,
+      "locked": false
+     }
+    ],
+    "metres": 467.8,
+    "end_time": 415.0
+   },
+   {
+    "tech_id": "E06",
+    "stops": [
+     {
+      "job_id": "J013",
+      "arrival": 0.1,
+      "start": 46.0,
+      "end": 226.0,
+      "locked": false
+     },
+     {
+      "job_id": "J015",
+      "arrival": 228.4,
+      "start": 352.0,
+      "end": 472.0,
+      "locked": false
+     },
+     {
+      "job_id": "J010",
+      "arrival": 473.2,
+      "start": 473.2,
+      "end": 653.2,
+      "locked": false
+     }
+    ],
+    "metres": 220.0,
+    "end_time": 653.2
+   }
+  ],
+  "metrics": {
+   "jobs": 18.0,
+   "assigned": 15.0,
+   "coverage_pct": 83.3,
+   "critical_coverage_pct": 85.7,
+   "priority_weighted_coverage_pct": 86.5,
+   "mean_response_min": 21.3,
+   "walk_m_total": 1187.0,
+   "walk_m_per_job": 79.2,
+   "wait_min_total": 639.0,
+   "overqualification_levels": 10.0,
+   "utilization_pct": 42.4,
+   "engineers_used": 4.0,
+   "workload_std": 2.06,
+   "objective": 555.4,
+   "runtime_ms": 6
+  },
+  "solver": {}
+ },
+ "alns": {
+  "algorithm": "alns",
+  "label": "ALNS (adaptive large neighbourhood search)",
+  "assignments": [
+   {
+    "job_id": "J016",
+    "tech_id": "E01",
+    "sequence": 1,
+    "arrival": 0.1,
+    "start": 1.0,
+    "end": 76.0,
+    "travel_m": 7.3,
+    "cost": -175.0,
+    "cost_breakdown": {
+     "travel": 0.0,
+     "waiting": -15.0,
+     "overqualification": 0.0,
+     "workload": 20.0,
+     "priority": -180.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E01 at cost -175.0; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J012",
+    "tech_id": "E01",
+    "sequence": 2,
+    "arrival": 76.1,
+    "start": 82.0,
+    "end": 172.0,
+    "travel_m": 8.9,
+    "cost": -49.35,
+    "cost_breakdown": {
+     "travel": 0.71,
+     "waiting": -18.06,
+     "overqualification": 8.0,
+     "workload": 20.0,
+     "priority": -60.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E01 at cost -49.4; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J014",
+    "tech_id": "E01",
+    "sequence": 3,
+    "arrival": 172.6,
+    "start": 199.0,
+    "end": 304.0,
+    "travel_m": 35.8,
+    "cost": -168.23,
+    "cost_breakdown": {
+     "travel": 1.24,
+     "waiting": -17.47,
+     "overqualification": 8.0,
+     "workload": 20.0,
+     "priority": -180.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E01 at cost -168.2; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J006",
+    "tech_id": "E01",
+    "sequence": 4,
+    "arrival": 304.7,
+    "start": 304.7,
+    "end": 544.7,
+    "travel_m": 40.9,
+    "cost": -74.51,
+    "cost_breakdown": {
+     "travel": 2.03,
+     "waiting": -44.54,
+     "overqualification": 8.0,
+     "workload": 20.0,
+     "priority": -60.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E01 at cost -74.5; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J008",
+    "tech_id": "E01",
+    "sequence": 5,
+    "arrival": 545.2,
+    "start": 545.2,
+    "end": 710.2,
+    "travel_m": 28.4,
+    "cost": -150.86,
+    "cost_breakdown": {
+     "travel": 1.14,
+     "waiting": 0.0,
+     "overqualification": 8.0,
+     "workload": 20.0,
+     "priority": -180.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E01 at cost -150.9; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J007",
+    "tech_id": "E03",
+    "sequence": 1,
+    "arrival": 1.0,
+    "start": 12.0,
+    "end": 132.0,
+    "travel_m": 62.0,
+    "cost": -119.24,
+    "cost_breakdown": {
+     "travel": 1.92,
+     "waiting": -24.16,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -120.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E03 at cost -119.2; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J001",
+    "tech_id": "E03",
+    "sequence": 2,
+    "arrival": 132.6,
+    "start": 306.0,
+    "end": 411.0,
+    "travel_m": 36.8,
+    "cost": -116.52,
+    "cost_breakdown": {
+     "travel": 1.62,
+     "waiting": -21.14,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -120.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E03 at cost -116.5; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J009",
+    "tech_id": "E03",
+    "sequence": 3,
+    "arrival": 412.7,
+    "start": 412.7,
+    "end": 472.7,
+    "travel_m": 101.9,
+    "cost": -164.88,
+    "cost_breakdown": {
+     "travel": 4.49,
+     "waiting": -12.37,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -180.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E03 at cost -164.9; next best E02 at -90.8. Rejected: 2 lacks the skill, 1 cannot arrive inside the time window.",
+    "alternatives": [
+     {
+      "tech_id": "E02",
+      "cost": -90.79
+     },
+     {
+      "tech_id": "E04",
+      "cost": -79.46
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J011",
+    "tech_id": "E03",
+    "sequence": 4,
+    "arrival": 473.9,
+    "start": 499.0,
+    "end": 619.0,
+    "travel_m": 70.9,
+    "cost": -149.14,
+    "cost_breakdown": {
+     "travel": 2.84,
+     "waiting": 5.02,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -180.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E03 at cost -149.1; no other feasible engineer. Rejected: 5 lacks the skill.",
+    "alternatives": [],
+    "rejections": {
+     "skill_missing": 5
+    }
+   },
+   {
+    "job_id": "J018",
+    "tech_id": "E05",
+    "sequence": 1,
+    "arrival": 1.0,
+    "start": 87.0,
+    "end": 207.0,
+    "travel_m": 57.2,
+    "cost": -62.76,
+    "cost_breakdown": {
+     "travel": 3.53,
+     "waiting": -24.29,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -60.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E05 at cost -62.8; next best E06 at -41.7. Rejected: 3 lacks the skill, 1 already at max jobs.",
+    "alternatives": [
+     {
+      "tech_id": "E06",
+      "cost": -41.71
+     }
+    ],
+    "rejections": {
+     "at_capacity": 1,
+     "skill_missing": 3
+    }
+   },
+   {
+    "job_id": "J015",
+    "tech_id": "E05",
+    "sequence": 2,
+    "arrival": 214.5,
+    "start": 352.0,
+    "end": 472.0,
+    "travel_m": 447.2,
+    "cost": -167.79,
+    "cost_breakdown": {
+     "travel": 2.93,
+     "waiting": -0.72,
+     "overqualification": 0.0,
+     "workload": 10.0,
+     "priority": -180.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E05 at cost -167.8; next best E02 at -91.1. Rejected: 3 lacks the skill, 1 cannot arrive inside the time window.",
+    "alternatives": [
+     {
+      "tech_id": "E02",
+      "cost": -91.12
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J004",
+    "tech_id": "E05",
+    "sequence": 3,
+    "arrival": 472.6,
+    "start": 472.6,
+    "end": 532.6,
+    "travel_m": 36.6,
+    "cost": -108.54,
+    "cost_breakdown": {
+     "travel": 1.46,
+     "waiting": 0.0,
+     "overqualification": 0.0,
+     "workload": 10.0,
+     "priority": -120.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E05 at cost -108.5; next best E06 at -108.0. Rejected: 3 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E06",
+      "cost": -107.98
+     },
+     {
+      "tech_id": "E02",
+      "cost": -29.38
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3
+    }
+   },
+   {
+    "job_id": "J013",
+    "tech_id": "E06",
+    "sequence": 1,
+    "arrival": 0.1,
+    "start": 46.0,
+    "end": 226.0,
+    "travel_m": 5.2,
+    "cost": -86.0,
+    "cost_breakdown": {
+     "travel": 0.0,
+     "waiting": -36.0,
+     "overqualification": 0.0,
+     "workload": 10.0,
+     "priority": -60.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E06 at cost -86.0; next best E03 at -67.4. Rejected: 2 lacks the skill, 1 certification too low.",
+    "alternatives": [
+     {
+      "tech_id": "E03",
+      "cost": -67.43
+     },
+     {
+      "tech_id": "E04",
+      "cost": -40.03
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2,
+     "level_too_low": 1
+    }
+   },
+   {
+    "job_id": "J010",
+    "tech_id": "E06",
+    "sequence": 2,
+    "arrival": 229.5,
+    "start": 372.0,
+    "end": 552.0,
+    "travel_m": 207.6,
+    "cost": -124.51,
+    "cost_breakdown": {
+     "travel": 13.24,
+     "waiting": -27.75,
+     "overqualification": 0.0,
+     "workload": 10.0,
+     "priority": -120.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E06 at cost -124.5; next best E02 at -28.8. Rejected: 3 lacks the skill, 1 cannot arrive inside the time window.",
+    "alternatives": [
+     {
+      "tech_id": "E02",
+      "cost": -28.81
+     }
+    ],
+    "rejections": {
+     "skill_missing": 3,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J003",
+    "tech_id": "E06",
+    "sequence": 3,
+    "arrival": 554.8,
+    "start": 554.8,
+    "end": 644.8,
+    "travel_m": 165.5,
+    "cost": -95.38,
+    "cost_breakdown": {
+     "travel": 6.62,
+     "waiting": 0.0,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -120.0
+    },
+    "explanation": "ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E06 at cost -95.4; next best E03 at -87.7. Rejected: 2 lacks the skill.",
+    "alternatives": [
+     {
+      "tech_id": "E03",
+      "cost": -87.74
+     },
+     {
+      "tech_id": "E02",
+      "cost": -12.25
+     },
+     {
+      "tech_id": "E04",
+      "cost": -1.17
+     }
+    ],
+    "rejections": {
+     "skill_missing": 2
+    }
+   }
+  ],
+  "unassigned": [
+   {
+    "job_id": "J002",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 cannot arrive inside the time window.",
+    "rejections": {
+     "skill_missing": 5,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J005",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 cannot arrive inside the time window.",
+    "rejections": {
+     "skill_missing": 5,
+     "window_missed": 1
+    }
+   },
+   {
+    "job_id": "J017",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 4 lacks the skill, 1 already at max jobs, 1 certification too low.",
+    "rejections": {
+     "at_capacity": 1,
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   }
+  ],
+  "routes": [
+   {
+    "tech_id": "E01",
+    "stops": [
+     {
+      "job_id": "J016",
+      "arrival": 0.1,
+      "start": 1.0,
+      "end": 76.0,
+      "locked": false
+     },
+     {
+      "job_id": "J012",
+      "arrival": 76.1,
+      "start": 82.0,
+      "end": 172.0,
+      "locked": false
+     },
+     {
+      "job_id": "J014",
+      "arrival": 172.6,
+      "start": 199.0,
+      "end": 304.0,
+      "locked": false
+     },
+     {
+      "job_id": "J006",
+      "arrival": 304.7,
+      "start": 304.7,
+      "end": 544.7,
+      "locked": false
+     },
+     {
+      "job_id": "J008",
+      "arrival": 545.2,
+      "start": 545.2,
+      "end": 710.2,
+      "locked": false
+     }
+    ],
+    "metres": 121.3,
+    "end_time": 710.2
+   },
+   {
+    "tech_id": "E02",
+    "stops": [],
+    "metres": 0.0,
+    "end_time": 0.0
+   },
+   {
+    "tech_id": "E03",
+    "stops": [
+     {
+      "job_id": "J007",
+      "arrival": 1.0,
+      "start": 12.0,
+      "end": 132.0,
+      "locked": false
+     },
+     {
+      "job_id": "J001",
+      "arrival": 132.6,
+      "start": 306.0,
+      "end": 411.0,
+      "locked": false
+     },
+     {
+      "job_id": "J009",
+      "arrival": 412.7,
+      "start": 412.7,
+      "end": 472.7,
+      "locked": false
+     },
+     {
+      "job_id": "J011",
+      "arrival": 473.9,
+      "start": 499.0,
+      "end": 619.0,
+      "locked": false
+     }
+    ],
+    "metres": 271.6,
+    "end_time": 619.0
+   },
+   {
+    "tech_id": "E04",
+    "stops": [],
+    "metres": 0.0,
+    "end_time": 0.0
+   },
+   {
+    "tech_id": "E05",
+    "stops": [
+     {
+      "job_id": "J018",
+      "arrival": 1.0,
+      "start": 87.0,
+      "end": 207.0,
+      "locked": false
+     },
+     {
+      "job_id": "J015",
+      "arrival": 214.5,
+      "start": 352.0,
+      "end": 472.0,
+      "locked": false
+     },
+     {
+      "job_id": "J004",
+      "arrival": 472.6,
+      "start": 472.6,
+      "end": 532.6,
+      "locked": false
+     }
+    ],
+    "metres": 541.0,
+    "end_time": 532.6
+   },
+   {
+    "tech_id": "E06",
+    "stops": [
+     {
+      "job_id": "J013",
+      "arrival": 0.1,
+      "start": 46.0,
+      "end": 226.0,
+      "locked": false
+     },
+     {
+      "job_id": "J010",
+      "arrival": 229.5,
+      "start": 372.0,
+      "end": 552.0,
+      "locked": false
+     },
+     {
+      "job_id": "J003",
+      "arrival": 554.8,
+      "start": 554.8,
+      "end": 644.8,
+      "locked": false
+     }
+    ],
+    "metres": 378.3,
+    "end_time": 644.8
+   }
+  ],
+  "metrics": {
+   "jobs": 18.0,
+   "assigned": 15.0,
+   "coverage_pct": 83.3,
+   "critical_coverage_pct": 85.7,
+   "priority_weighted_coverage_pct": 86.5,
+   "mean_response_min": 16.8,
+   "walk_m_total": 1312.0,
+   "walk_m_per_job": 87.5,
+   "wait_min_total": 655.0,
+   "overqualification_levels": 10.0,
+   "utilization_pct": 42.4,
+   "engineers_used": 4.0,
+   "workload_std": 1.89,
+   "objective": 563.4,
+   "runtime_ms": 180
+  },
+  "solver": {
+   "iterations": 60,
+   "best_iteration": 9,
+   "hit_time_cap": false,
+   "operator_weights": {
+    "random": 1.52,
+    "worst": 1.39,
+    "related": 1.17,
+    "route": 1.28,
+    "greedy": 1.2,
+    "regret": 1.37
+   }
+  }
+ },
+ "pyvrp": {
+  "algorithm": "pyvrp",
+  "label": "PyVRP iterated local search",
+  "assignments": [
+   {
+    "job_id": "J016",
+    "tech_id": "E01",
+    "sequence": 1,
+    "arrival": 0.1,
+    "start": 1.0,
+    "end": 76.0,
+    "travel_m": 7.3,
+    "cost": -179.53,
+    "cost_breakdown": {
+     "travel": 0.29,
+     "waiting": 0.18,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -180.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E01's route, at marginal cost -179.5.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J012",
+    "tech_id": "E01",
+    "sequence": 2,
+    "arrival": 76.1,
+    "start": 82.0,
+    "end": 172.0,
+    "travel_m": 8.9,
+    "cost": -45.47,
+    "cost_breakdown": {
+     "travel": 0.36,
+     "waiting": 1.17,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -60.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 2 of E01's route, at marginal cost -45.5.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J014",
+    "tech_id": "E01",
+    "sequence": 3,
+    "arrival": 172.6,
+    "start": 199.0,
+    "end": 304.0,
+    "travel_m": 35.8,
+    "cost": -155.29,
+    "cost_breakdown": {
+     "travel": 1.43,
+     "waiting": 5.28,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -180.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 3 of E01's route, at marginal cost -155.3.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J006",
+    "tech_id": "E01",
+    "sequence": 4,
+    "arrival": 304.7,
+    "start": 304.7,
+    "end": 544.7,
+    "travel_m": 40.9,
+    "cost": -35.36,
+    "cost_breakdown": {
+     "travel": 1.64,
+     "waiting": 0.0,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -60.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 4 of E01's route, at marginal cost -35.4.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J008",
+    "tech_id": "E01",
+    "sequence": 5,
+    "arrival": 545.2,
+    "start": 545.2,
+    "end": 710.2,
+    "travel_m": 28.4,
+    "cost": -150.86,
+    "cost_breakdown": {
+     "travel": 1.14,
+     "waiting": 0.0,
+     "overqualification": 8.0,
+     "workload": 20.0,
+     "priority": -180.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 5 of E01's route, at marginal cost -150.9.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J007",
+    "tech_id": "E03",
+    "sequence": 1,
+    "arrival": 1.0,
+    "start": 12.0,
+    "end": 132.0,
+    "travel_m": 62.0,
+    "cost": -107.33,
+    "cost_breakdown": {
+     "travel": 2.48,
+     "waiting": 2.19,
+     "overqualification": 8.0,
+     "workload": 0.0,
+     "priority": -120.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E03's route, at marginal cost -107.3.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J001",
+    "tech_id": "E03",
+    "sequence": 2,
+    "arrival": 132.6,
+    "start": 306.0,
+    "end": 411.0,
+    "travel_m": 36.8,
+    "cost": -70.85,
+    "cost_breakdown": {
+     "travel": 1.47,
+     "waiting": 34.68,
+     "overqualification": 8.0,
+     "workload": 5.0,
+     "priority": -120.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 2 of E03's route, at marginal cost -70.8.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J009",
+    "tech_id": "E03",
+    "sequence": 3,
+    "arrival": 412.7,
+    "start": 412.7,
+    "end": 472.7,
+    "travel_m": 101.9,
+    "cost": -157.92,
+    "cost_breakdown": {
+     "travel": 4.08,
+     "waiting": 0.0,
+     "overqualification": 8.0,
+     "workload": 10.0,
+     "priority": -180.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 3 of E03's route, at marginal cost -157.9.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J011",
+    "tech_id": "E03",
+    "sequence": 4,
+    "arrival": 473.9,
+    "start": 499.0,
+    "end": 619.0,
+    "travel_m": 70.9,
+    "cost": -149.14,
+    "cost_breakdown": {
+     "travel": 2.84,
+     "waiting": 5.02,
+     "overqualification": 8.0,
+     "workload": 15.0,
+     "priority": -180.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 4 of E03's route, at marginal cost -149.1.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J003",
+    "tech_id": "E03",
+    "sequence": 5,
+    "arrival": 620.8,
+    "start": 620.8,
+    "end": 710.8,
+    "travel_m": 106.6,
+    "cost": -87.74,
+    "cost_breakdown": {
+     "travel": 4.26,
+     "waiting": 0.0,
+     "overqualification": 8.0,
+     "workload": 20.0,
+     "priority": -120.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 5 of E03's route, at marginal cost -87.7.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J018",
+    "tech_id": "E05",
+    "sequence": 1,
+    "arrival": 1.0,
+    "start": 87.0,
+    "end": 207.0,
+    "travel_m": 57.2,
+    "cost": -32.5,
+    "cost_breakdown": {
+     "travel": 2.29,
+     "waiting": 17.21,
+     "overqualification": 8.0,
+     "workload": 0.0,
+     "priority": -60.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E05's route, at marginal cost -32.5.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J015",
+    "tech_id": "E05",
+    "sequence": 2,
+    "arrival": 214.5,
+    "start": 352.0,
+    "end": 472.0,
+    "travel_m": 447.2,
+    "cost": -129.6,
+    "cost_breakdown": {
+     "travel": 17.89,
+     "waiting": 27.51,
+     "overqualification": 0.0,
+     "workload": 5.0,
+     "priority": -180.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 2 of E05's route, at marginal cost -129.6.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J010",
+    "tech_id": "E05",
+    "sequence": 3,
+    "arrival": 473.2,
+    "start": 473.2,
+    "end": 653.2,
+    "travel_m": 72.8,
+    "cost": -107.09,
+    "cost_breakdown": {
+     "travel": 2.91,
+     "waiting": 0.0,
+     "overqualification": 0.0,
+     "workload": 10.0,
+     "priority": -120.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 3 of E05's route, at marginal cost -107.1.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J013",
+    "tech_id": "E06",
+    "sequence": 1,
+    "arrival": 0.1,
+    "start": 46.0,
+    "end": 226.0,
+    "travel_m": 5.2,
+    "cost": -50.61,
+    "cost_breakdown": {
+     "travel": 0.21,
+     "waiting": 9.18,
+     "overqualification": 0.0,
+     "workload": 0.0,
+     "priority": -60.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E06's route, at marginal cost -50.6.",
+    "alternatives": [],
+    "rejections": {}
+   },
+   {
+    "job_id": "J004",
+    "tech_id": "E06",
+    "sequence": 2,
+    "arrival": 227.8,
+    "start": 355.0,
+    "end": 415.0,
+    "travel_m": 105.4,
+    "cost": -85.33,
+    "cost_breakdown": {
+     "travel": 4.22,
+     "waiting": 25.45,
+     "overqualification": 0.0,
+     "workload": 5.0,
+     "priority": -120.0
+    },
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 2 of E06's route, at marginal cost -85.3.",
+    "alternatives": [],
+    "rejections": {}
+   }
+  ],
+  "unassigned": [
+   {
+    "job_id": "J002",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 already at max jobs.",
+    "rejections": {
+     "skill_missing": 5,
+     "at_capacity": 1
+    }
+   },
+   {
+    "job_id": "J005",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 5 lacks the skill, 1 already at max jobs.",
+    "rejections": {
+     "skill_missing": 5,
+     "at_capacity": 1
+    }
+   },
+   {
+    "job_id": "J017",
+    "reason": "1 qualified engineer(s), but none had capacity: rejected: 4 lacks the skill, 1 already at max jobs, 1 certification too low.",
+    "rejections": {
+     "at_capacity": 1,
+     "skill_missing": 4,
+     "level_too_low": 1
+    }
+   }
+  ],
+  "routes": [
+   {
+    "tech_id": "E01",
+    "stops": [
+     {
+      "job_id": "J016",
+      "arrival": 0.1,
+      "start": 1.0,
+      "end": 76.0,
+      "locked": false
+     },
+     {
+      "job_id": "J012",
+      "arrival": 76.1,
+      "start": 82.0,
+      "end": 172.0,
+      "locked": false
+     },
+     {
+      "job_id": "J014",
+      "arrival": 172.6,
+      "start": 199.0,
+      "end": 304.0,
+      "locked": false
+     },
+     {
+      "job_id": "J006",
+      "arrival": 304.7,
+      "start": 304.7,
+      "end": 544.7,
+      "locked": false
+     },
+     {
+      "job_id": "J008",
+      "arrival": 545.2,
+      "start": 545.2,
+      "end": 710.2,
+      "locked": false
+     }
+    ],
+    "metres": 121.3,
+    "end_time": 710.2
+   },
+   {
+    "tech_id": "E02",
+    "stops": [],
+    "metres": 0.0,
+    "end_time": 0.0
+   },
+   {
+    "tech_id": "E03",
+    "stops": [
+     {
+      "job_id": "J007",
+      "arrival": 1.0,
+      "start": 12.0,
+      "end": 132.0,
+      "locked": false
+     },
+     {
+      "job_id": "J001",
+      "arrival": 132.6,
+      "start": 306.0,
+      "end": 411.0,
+      "locked": false
+     },
+     {
+      "job_id": "J009",
+      "arrival": 412.7,
+      "start": 412.7,
+      "end": 472.7,
+      "locked": false
+     },
+     {
+      "job_id": "J011",
+      "arrival": 473.9,
+      "start": 499.0,
+      "end": 619.0,
+      "locked": false
+     },
+     {
+      "job_id": "J003",
+      "arrival": 620.8,
+      "start": 620.8,
+      "end": 710.8,
+      "locked": false
+     }
+    ],
+    "metres": 378.2,
+    "end_time": 710.8
+   },
+   {
+    "tech_id": "E04",
+    "stops": [],
+    "metres": 0.0,
+    "end_time": 0.0
+   },
+   {
+    "tech_id": "E05",
+    "stops": [
+     {
+      "job_id": "J018",
+      "arrival": 1.0,
+      "start": 87.0,
+      "end": 207.0,
+      "locked": false
+     },
+     {
+      "job_id": "J015",
+      "arrival": 214.5,
+      "start": 352.0,
+      "end": 472.0,
+      "locked": false
+     },
+     {
+      "job_id": "J010",
+      "arrival": 473.2,
+      "start": 473.2,
+      "end": 653.2,
+      "locked": false
+     }
+    ],
+    "metres": 577.2,
+    "end_time": 653.2
+   },
+   {
+    "tech_id": "E06",
+    "stops": [
+     {
+      "job_id": "J013",
+      "arrival": 0.1,
+      "start": 46.0,
+      "end": 226.0,
+      "locked": false
+     },
+     {
+      "job_id": "J004",
+      "arrival": 227.8,
+      "start": 355.0,
+      "end": 415.0,
+      "locked": false
+     }
+    ],
+    "metres": 110.6,
+    "end_time": 415.0
+   }
+  ],
+  "metrics": {
+   "jobs": 18.0,
+   "assigned": 15.0,
+   "coverage_pct": 83.3,
+   "critical_coverage_pct": 85.7,
+   "priority_weighted_coverage_pct": 86.5,
+   "mean_response_min": 21.3,
+   "walk_m_total": 1187.0,
+   "walk_m_per_job": 79.2,
+   "wait_min_total": 639.0,
+   "overqualification_levels": 10.0,
+   "utilization_pct": 42.4,
+   "engineers_used": 4.0,
+   "workload_std": 2.06,
+   "objective": 555.4,
+   "runtime_ms": 390
+  },
+  "solver": {
+   "iterations": 300,
+   "hit_time_cap": false,
+   "runtime_ms": 24.5
+  }
+ }
+}

@@ -1,0 +1,7 @@
+{
+ "mode": "demo",
+ "demo_roles": [
+  "dispatcher",
+  "viewer"
+ ]
+}

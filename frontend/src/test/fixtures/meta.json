@@ -1,0 +1,47 @@
+{
+ "version": "2026.10.1",
+ "algorithms": {
+  "greedy": {
+   "label": "Greedy (priority, then deadline)",
+   "family": "constructive",
+   "speed": "instant"
+  },
+  "hungarian": {
+   "label": "Hungarian (batch rounds)",
+   "family": "assignment",
+   "speed": "instant"
+  },
+  "regret": {
+   "label": "Regret-2 insertion",
+   "family": "constructive",
+   "speed": "instant"
+  },
+  "alns": {
+   "label": "ALNS (adaptive large neighbourhood search)",
+   "family": "metaheuristic",
+   "speed": "~0.2 s"
+  },
+  "pyvrp": {
+   "label": "PyVRP iterated local search",
+   "family": "metaheuristic",
+   "speed": "~0.4 s"
+  }
+ },
+ "default_fab": "fab1-300mm-logic",
+ "auth_mode": "demo",
+ "default_weights": {
+  "travel_100m": 4.0,
+  "wait_min": 0.2,
+  "overqualification": 8.0,
+  "workload_balance": 5.0,
+  "priority_reward": 60.0,
+  "stability": 25.0
+ },
+ "store": "sqlite",
+ "vector_index": "qdrant-embedded",
+ "solver_budget": {
+  "alns_iterations": 60,
+  "pyvrp_iterations": 300,
+  "time_cap_s": 3.0
+ }
+}

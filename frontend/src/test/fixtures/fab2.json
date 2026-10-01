@@ -1,0 +1,86 @@
+{
+ "id": "fab2-200mm-analog",
+ "name": "Fab 2 \u00b7 200mm analog & power",
+ "description": "Illustrative 200mm analog/power fab with diffusion furnaces and wet benches; photo is the constraint. 8-hour shifts.",
+ "floor": {
+  "width": 300.0,
+  "height": 180.0
+ },
+ "shift": {
+  "start_hour": 6,
+  "length_min": 480
+ },
+ "walk_m_per_min": 55.0,
+ "constraint_family": "photo",
+ "families": [
+  {
+   "id": "photo",
+   "label": "Photolithography",
+   "prefix": "PHO",
+   "area": [
+    110.0,
+    60.0,
+    190.0,
+    120.0
+   ]
+  },
+  {
+   "id": "diffusion",
+   "label": "Diffusion & furnaces",
+   "prefix": "FUR",
+   "area": [
+    10.0,
+    10.0,
+    100.0,
+    80.0
+   ]
+  },
+  {
+   "id": "thinfilm",
+   "label": "Thin film",
+   "prefix": "TFM",
+   "area": [
+    200.0,
+    10.0,
+    290.0,
+    80.0
+   ]
+  },
+  {
+   "id": "wet",
+   "label": "Wet etch & clean",
+   "prefix": "WET",
+   "area": [
+    10.0,
+    100.0,
+    100.0,
+    170.0
+   ]
+  },
+  {
+   "id": "test",
+   "label": "Parametric test",
+   "prefix": "PTS",
+   "area": [
+    200.0,
+    100.0,
+    290.0,
+    170.0
+   ]
+  }
+ ],
+ "presets": {
+  "normal": {
+   "label": "Normal shift",
+   "description": "Typical mix of PMs and tool-downs; staffing roughly matches load."
+  },
+  "photo_crunch": {
+   "label": "Photo crunch",
+   "description": "Stepper problems pile up while few engineers are certified on photo."
+  },
+  "excursion": {
+   "label": "Excursion / surge",
+   "description": "Mostly unplanned downs with tight response targets."
+  }
+ }
+}
