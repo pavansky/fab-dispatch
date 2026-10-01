@@ -97,6 +97,11 @@
      "slug": "faq",
      "title": "FAQ and troubleshooting",
      "summary": "Common questions and what to do when something looks wrong."
+    },
+    {
+     "slug": "support",
+     "title": "Support and feedback",
+     "summary": "Where to get help, report a problem, rate an answer, and read the full documentation."
     }
    ]
   }

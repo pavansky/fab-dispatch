@@ -19,7 +19,7 @@ beforeEach(() => setActiveFab(fab1))
 describe('FloorPlan', () => {
   it('draws every job and engineer as a labelled, focusable control', () => {
     renderFloor()
-    expect(screen.getByRole('img', { name: `Fab floor plan, ${plans.pyvrp.label}` })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: `Fab floor plan, ${plans.pyvrp.label}` })).toBeInTheDocument()
     const jobs = screen.getAllByRole('button', { name: /^J\d+,/ })
     const engineers = screen.getAllByRole('button', { name: /^Engineer / })
     expect(jobs).toHaveLength(scenario.jobs.length)

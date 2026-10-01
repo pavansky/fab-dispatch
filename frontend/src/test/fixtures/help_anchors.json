@@ -87,6 +87,14 @@
   "exact-solver",
   "when-each-one-wins"
  ],
+ "support": [
+  "about-support",
+  "report-a-problem",
+  "ask-a-question",
+  "rate-an-answer",
+  "documentation",
+  "security-and-privacy"
+ ],
  "views": [
   "",
   "overview",

@@ -22,10 +22,11 @@ import helpAnchors from './fixtures/help_anchors.json'
 import askJob from './fixtures/ask_job.json'
 import askDocs from './fixtures/ask_docs.json'
 import askUnknown from './fixtures/ask_unknown.json'
+import health from './fixtures/health.json'
 
 export const fixtures = {
   authConfig, me, meta, fabs, fab1, fab2, scenario, scenarioFab2, plans, benchmark, shift, shiftAdvanced, shiftEvents, shifts,
-  helpIndex, helpArticles, helpSearch, helpAnchors, askJob, askDocs, askUnknown,
+  helpIndex, helpArticles, helpSearch, helpAnchors, askJob, askDocs, askUnknown, health,
 }
 
 export const json = (status, body, headers = {}) =>
@@ -55,6 +56,8 @@ export function workspaceRoutes({ role = 'dispatcher' } = {}) {
     'POST /plan': ({ body }) => (body.scenario.fab_id === fab1.id ? plans[body.algorithm] : never()),
     'POST /benchmark': ({ body }) => ({ ...benchmark, preset: body.preset, runs: benchmark.runs.map((r) => ({ ...r, preset: body.preset })) }),
     'GET /shifts': [],
+    'GET /health': health,
+    'POST /assistant/feedback': () => new Response(null, { status: 204 }),
     'GET /help': helpIndex,
     'GET /help/search': ({ url }) => ({ ...helpSearch, query: new URL(url, 'http://x').searchParams.get('q') }),
     ...Object.fromEntries(Object.entries(helpArticles).map(([slug, a]) => [`GET /help/${slug}`, a])),

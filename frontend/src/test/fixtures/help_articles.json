@@ -4,7 +4,7 @@
   "title": "The assistant",
   "summary": "What the assistant can answer, where its answers come from, and its limits.",
   "section": "Get started",
-  "body": "# The assistant\n\n**Ask** (bottom right, or press **/**) answers questions about this app and the shift on your screen.\n\n## What it can answer\n\n- **About your shift:** *Why is J006 unassigned?* \u00b7 *What is E03 doing?* \u00b7 *Why is PyVRP\n  recommended?* \u00b7 *Compare Greedy and Hungarian.*\n- **About the app:** *How do I report a tool-down?* \u00b7 *What does idle wait mean?* \u00b7 *Who can run\n  benchmarks?*\n\nAnswers come with **sources** (help articles) and **actions**, such as opening a job on the floor plan.\n\n## Where answers come from\n\nThe assistant only answers from two things: these help articles, and the plans computed for the\nshift you're looking at. It reads the same constraint engine and results you see on screen. If it\ncan't find support for an answer, it says so and suggests related articles, rather than guessing.\n\n## Limits\n\nIt doesn't change anything: it won't start shifts or move people. It doesn't know about other fabs'\nprivate data or anything outside this app.\n",
+  "body": "# The assistant\n\n**Ask** (bottom right, or press **/**) answers questions about this app and the shift on your screen.\n\n## What it can answer\n\n- **About your shift:** *Why is J006 unassigned?* \u00b7 *What is E03 doing?* \u00b7 *Why is PyVRP\n  recommended?* \u00b7 *Compare Greedy and Hungarian.*\n- **About the app:** *How do I report a tool-down?* \u00b7 *What does idle wait mean?* \u00b7 *Who can run\n  benchmarks?*\n\nAnswers come with **sources** (help articles) and **actions**, such as opening a job on the floor plan.\nRate any answer with \ud83d\udc4d or \ud83d\udc4e; a \ud83d\udc4e lets you say what was wrong, and that's how answers improve.\n\n## Where answers come from\n\nThe assistant only answers from two things: these help articles, and the plans computed for the\nshift you're looking at. It reads the same constraint engine and results you see on screen. If it\ncan't find support for an answer, it says so and suggests related articles, rather than guessing.\n\n## Limits\n\nIt doesn't change anything: it won't start shifts or move people. It doesn't know about other fabs'\nprivate data or anything outside this app.\n",
   "sections": [
    {
     "heading": "What it can answer",
@@ -324,6 +324,39 @@
    {
     "heading": "When each one wins",
     "anchor": "when-each-one-wins"
+   }
+  ]
+ },
+ "support": {
+  "slug": "support",
+  "title": "Support and feedback",
+  "summary": "Where to get help, report a problem, rate an answer, and read the full documentation.",
+  "section": "Reference",
+  "body": "# Support and feedback\n\n## About & support\n\nOpen the user menu (your initial, top right) and choose **About & support**. It shows which version\nyou're running (the release and build), whether every system is operational, and every link below.\n\n## Report a problem\n\n**About & support \u2192 Report a problem** opens a GitHub issue already filled in with your release,\nbuild, page and browser. Add what you did and what you expected. If an error showed a **request id**,\ninclude it.\n\n## Ask a question\n\nAsk the assistant first (**/**). For anything else, use GitHub Discussions, linked from\n**About & support**.\n\n## Rate an answer\n\nEvery assistant answer has \ud83d\udc4d and \ud83d\udc4e. A \ud83d\udc4e lets you say what was wrong. Ratings are kept for 180\ndays with your user id (not your email) and are how the assistant's answers get better.\n\n## Documentation\n\nThe documentation site has this user guide, plus the architecture, the algorithms and their\nanalysis, design decisions, operations and an interactive API reference. It's linked from\n**About & support**, and the API reference is also at `/api/docs` on the app.\n\n## Security and privacy\n\nReport security issues privately through the security policy, never in a public issue. The privacy\npage lists what's stored and for how long; to delete your account, ask through support.\n",
+  "sections": [
+   {
+    "heading": "About & support",
+    "anchor": "about-support"
+   },
+   {
+    "heading": "Report a problem",
+    "anchor": "report-a-problem"
+   },
+   {
+    "heading": "Ask a question",
+    "anchor": "ask-a-question"
+   },
+   {
+    "heading": "Rate an answer",
+    "anchor": "rate-an-answer"
+   },
+   {
+    "heading": "Documentation",
+    "anchor": "documentation"
+   },
+   {
+    "heading": "Security and privacy",
+    "anchor": "security-and-privacy"
    }
   ]
  },

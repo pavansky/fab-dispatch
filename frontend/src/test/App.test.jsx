@@ -87,7 +87,7 @@ describe('planning workspace', () => {
     await user.click(screen.getByRole('tab', { name: /Floor plan/ }))
     expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
     expect(new URL(location.href).searchParams.get('tab')).toBe('floor')
-    expect(await screen.findByRole('img', { name: /Fab floor plan/ })).toBeInTheDocument()
+    expect(await screen.findByRole('group', { name: /Fab floor plan/ })).toBeInTheDocument()
   })
 
   it('explains a job picked on the floor plan, per strategy', async () => {
@@ -166,7 +166,7 @@ describe('views', () => {
     const { user } = await signInAs('dispatcher')
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'View on floor plan' })).toHaveLength(5))
     await user.click(screen.getAllByRole('button', { name: 'View on floor plan' })[1]) // Hungarian
-    expect(screen.getByRole('img', { name: `Fab floor plan, ${fixtures.plans.hungarian.label}` })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: `Fab floor plan, ${fixtures.plans.hungarian.label}` })).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Strategy' })).getByRole('button', { name: /Hungarian/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
