@@ -22,6 +22,9 @@ class Settings(BaseSettings):
 
     env: str = Field("local", description="local | test | production")
     database_url: str = Field("sqlite:///./data/fab.db", description="sqlite:///path or postgresql://...")
+    db_schema: str = Field(
+        "public", pattern=r"^[a-z_][a-z0-9_]{0,62}$", description="Postgres schema; lets UAT share a database safely"
+    )
     qdrant_url: str | None = Field(None, description="Qdrant server URL; unset = embedded local mode")
     qdrant_api_key: str | None = None
     qdrant_path: str | None = Field(

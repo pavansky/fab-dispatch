@@ -23,8 +23,10 @@ What is stored:
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
+import zlib
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -306,18 +308,33 @@ class SQLiteStore(Store):
 
 
 # ----------------------------------------------------------------------------- Postgres
+_TABLES = re.compile(r"\b(shifts|shift_events|plan_cache|idempotency_keys|shift_presence|schema_migrations)\b")
+
+
 class PostgresStore(Store):
     """psycopg 3, one short connection per call. That suits serverless functions sitting
-    behind Supabase's transaction pooler, where prepared statements must be off."""
+    behind Supabase's transaction pooler, where prepared statements must be off.
+
+    Every table is qualified with ``schema`` (``FAB_DB_SCHEMA``), so environments can share
+    one database without seeing each other's data (e.g. UAT in schema ``uat``). Qualifying
+    names, rather than ``SET search_path``, is safe behind a transaction pooler, where a
+    session setting could leak onto another client's connection."""
 
     kind = "postgres"
-    MIGRATION_LOCK = 724_311  # stable advisory-lock id for this app's migrations
+    MIGRATION_LOCK = 724_311  # base advisory-lock id; offset per schema
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, schema: str = "public"):
         import psycopg  # imported lazily: local SQLite runs never need the driver
         from psycopg.rows import dict_row
 
+        if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", schema):
+            raise ValueError(f"invalid schema name {schema!r}")
         self._psycopg, self._dict_row, self._url = psycopg, dict_row, url
+        self.schema = schema
+        self._lock_id = self.MIGRATION_LOCK + zlib.crc32(schema.encode()) % 1_000_000
+
+    def _sql(self, sql: str) -> str:
+        return _TABLES.sub(lambda m: f'"{self.schema}".{m.group(1)}', sql)
 
     def _conn(self, autocommit: bool = True):
         return self._psycopg.connect(
@@ -326,23 +343,26 @@ class PostgresStore(Store):
 
     def _q(self, sql: str, args: tuple = ()) -> list[dict]:
         with self._conn() as c, c.cursor() as cur:
-            cur.execute(sql, args)
+            cur.execute(self._sql(sql), args)
             return cur.fetchall() if cur.description else []
 
     def migrate(self) -> list[int]:
         applied = []
         with self._conn(autocommit=False) as c, c.cursor() as cur:
-            cur.execute("SELECT pg_advisory_xact_lock(%s)", (self.MIGRATION_LOCK,))
-            cur.execute("""CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY,
+            cur.execute("SELECT pg_advisory_xact_lock(%s)", (self._lock_id,))
+            cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.schema}"')
+            cur.execute(
+                self._sql("""CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY,
                            name TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
-            cur.execute("SELECT version FROM schema_migrations")
+            )
+            cur.execute(self._sql("SELECT version FROM schema_migrations"))
             done = {r["version"] for r in cur.fetchall()}
             for version, name, sql in MIGRATIONS:
                 if version in done:
                     continue
                 for stmt in sql["postgres"]:
-                    cur.execute(stmt)
-                cur.execute("INSERT INTO schema_migrations (version, name) VALUES (%s, %s)", (version, name))
+                    cur.execute(self._sql(stmt))
+                cur.execute(self._sql("INSERT INTO schema_migrations (version, name) VALUES (%s, %s)"), (version, name))
                 applied.append(version)
             c.commit()
         return applied
@@ -391,7 +411,7 @@ class PostgresStore(Store):
         with self._conn() as c, c.cursor() as cur:
             for e in events:
                 cur.execute(
-                    "INSERT INTO shift_events (shift_id, kind, payload) VALUES (%s, %s, %s) RETURNING id",
+                    self._sql("INSERT INTO shift_events (shift_id, kind, payload) VALUES (%s, %s, %s) RETURNING id"),
                     (shift_id, e["kind"], json.dumps(e)),
                 )
                 ids.append(cur.fetchone()["id"])
@@ -455,14 +475,14 @@ class PostgresStore(Store):
                 ("shifts", "DELETE FROM shifts WHERE updated_at < now() - make_interval(days => %s)", shift_days),
                 ("shift_presence", "DELETE FROM shift_presence WHERE last_seen < now() - make_interval(days => %s)", 1),
             ):
-                cur.execute(sql, (arg,))
+                cur.execute(self._sql(sql), (arg,))
                 out[table] = cur.rowcount
         return out
 
 
 def create_store(settings: Settings) -> Store:
     if settings.is_postgres:
-        store: Store = PostgresStore(settings.database_url)
+        store: Store = PostgresStore(settings.database_url, settings.db_schema)
     else:
         store = SQLiteStore(settings.database_url.removeprefix("sqlite:///"))
     store.migrate()

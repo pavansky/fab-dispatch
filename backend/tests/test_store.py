@@ -60,3 +60,21 @@ def test_plan_cache_is_write_once(store):
     store.put_cached_plan(key, {"v": 2})  # content-addressed: first write wins
     assert store.get_cached_plan(key) == {"v": 1}
     assert store.ping()
+
+
+@pytest.mark.skipif(not PG_URL, reason="FAB_TEST_PG_URL not set")
+def test_environments_in_separate_schemas_never_see_each_other():
+    prod, uat = PostgresStore(PG_URL, "public"), PostgresStore(PG_URL, "uat_test")
+    prod.migrate()
+    uat.migrate()
+    sid = uuid.uuid4().hex[:12]
+    uat.create_shift(sid, {"env": "uat"}, "fab1-300mm-logic", "tester@x")
+    assert uat.get_shift(sid)[0] == {"env": "uat"}
+    with pytest.raises(NotFound):
+        prod.get_shift(sid)
+    assert uat.schema_version() == prod.schema_version()
+
+
+def test_schema_names_are_validated():
+    with pytest.raises(ValueError):
+        PostgresStore("postgresql://x", 'uat"; drop table shifts; --')
