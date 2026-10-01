@@ -42,7 +42,7 @@ class User(BaseModel):
     email: str
     role: Role
     fabs: list[str]
-    provider: Literal["demo", "supabase", "guest"]
+    provider: Literal["demo", "supabase", "guest", "integration"]
 
     def can_access(self, fab_id: str) -> bool:
         return "*" in self.fabs or fab_id in self.fabs
