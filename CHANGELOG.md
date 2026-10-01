@@ -2,6 +2,14 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.5.1] - 2026-10-02
+
+### Changed
+- **Sign-in is passwordless.** Email sign-in is one step for new and returning users: enter your
+  email and type the one-time code that arrives (or open the link in the same email). The
+  "Use a password instead" option is gone: there is no sign-up, so nobody had a password to use.
+  After a code is sent, the button offers to send a new one.
+
 ## [2.5.0] - 2026-10-01
 
 ### Added
