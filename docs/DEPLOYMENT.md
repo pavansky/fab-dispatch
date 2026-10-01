@@ -52,7 +52,8 @@ receives the original `/api/...` path, so routes need no changes.
 | Variable | Value |
 |---|---|
 | `FAB_DATABASE_URL` | Supabase pooled URL. Or skip it and connect Supabase through Vercel's Storage integration: the app also reads the `POSTGRES_URL` it injects, and strips the `supa=` parameter libpq rejects |
-| `FAB_QDRANT_URL`, `FAB_QDRANT_API_KEY` | optional |
+| `FAB_QDRANT_URL`, `FAB_QDRANT_API_KEY` | optional: repair search on a Qdrant server (exact NumPy search otherwise) |
+| `FAB_INGEST_TOKENS` | optional: `{"<fab id>": "<sha256 of token>"}` enables equipment ingestion for that fab |
 | `FAB_CORS_ORIGINS` | not needed: same origin |
 
 4. Deploy and check `https://<app>/api/health` → `{"status":"ok","db_ok":true}`.

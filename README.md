@@ -17,7 +17,7 @@ greedy to a state-of-the-art vehicle-routing solver, compared live, with every d
 [![Docs](https://github.com/pavansky/fab-dispatch/actions/workflows/docs.yml/badge.svg?branch=main)](https://pavansky.github.io/fab-dispatch/)
 [![Uptime](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml)
 [![Release](https://img.shields.io/github/v/release/pavansky/fab-dispatch?color=020202)](CHANGELOG.md)
-[![Tests](https://img.shields.io/badge/tests-425-ef6f2e)](#testing)
+[![Tests](https://img.shields.io/badge/tests-446-ef6f2e)](#testing)
 [![License: MIT](https://img.shields.io/badge/license-MIT-020202)](LICENSE)
 
 [**Quick start**](#quick-start) · [**Review in 10 minutes**](https://pavansky.github.io/fab-dispatch/reviewers/) · [Requirements map](#requirements-map) · [Results](#results) ·
@@ -73,7 +73,7 @@ Where each part of a resource-allocation brief lives, in the app and in the code
 
 | Requirement | In the app | In the code |
 |---|---|---|
-| Data model: resources, requests, assignments | Left panel and every view | `backend/app/models.py` (`Engineer`, `Job`, `Assignment`, `Route`, `AllocationResult`) |
+| Data model: resources, requests, assignments | Left panel and every view | `backend/app/models.py` (`Engineer`, `Job`, `Assignment`, `Route`, `AllocationResult`); persisted as an event log plus a queryable `assignments` table (`backend/app/store.py`) |
 | At least two allocation algorithms | Five, side by side on **Overview** | `backend/app/algorithms/` (greedy, hungarian, regret, alns, pyvrp_ils, plus an exact MILP) |
 | Hard and soft constraints | **Cost weights** sliders; rejections on **Floor plan** | `backend/app/planner.py` (one constraint engine for every strategy) |
 | Decision explanations | Click any job on **Floor plan** | `backend/app/engine.py`, `algorithms/alns.py` |
@@ -226,7 +226,7 @@ user menu for the version, live status, docs and support links.
   Runs locally with no key; an LLM can optionally reword answers, never add facts.
 - **Works on a phone.** The controls become a drawer, the tabs scroll, the floor plan works by touch,
   and the light theme is the default.
-- **Tested at every layer.** 291 backend tests, 101 frontend component tests rendered against real API
+- **Tested at every layer.** 311 backend tests, 102 frontend component tests rendered against real API
   responses, and 33 Playwright end-to-end tests that drive the real app on desktop and on a phone,
   including WCAG 2.1 AA accessibility checks on every screen.
 - **Engineered for change.** Versioned database migrations, CI with coverage, security audits and a
@@ -290,8 +290,8 @@ Three layers, all run in CI on every pull request:
 
 | Layer | Tool | Count | What it proves |
 |---|---|---|---|
-| Backend | pytest | **291** (6 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency |
-| Frontend components | Vitest + Testing Library | **101** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, the crash screen, against **real API responses** |
+| Backend | pytest | **311** (10 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency |
+| Frontend components | Vitest + Testing Library | **102** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, account deletion, the crash screen, against **real API responses** |
 | End-to-end | Playwright | **33** (28 desktop, 5 phone) | The real API and UI together in Chromium: two browsers on one live shift, and axe-core WCAG 2.1 AA checks on every screen and panel |
 
 Coverage: **94%** of the API (with Postgres, as CI measures it) and **88%** of the UI. CI fails below
@@ -441,7 +441,7 @@ backend/
     routes/                system · auth · fabs · planning · live (SSE) · repairs
   scripts/benchmark.py     reproduces every table in docs/ANALYSIS.md
   scripts/export_ui_fixtures.py   real API responses for the UI tests
-  tests/                   291 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval)
+  tests/                   311 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval)
 frontend/src/
   App.jsx auth.jsx api.js  workspace, sign-in, API client
   lib/                     fab context, recommendation logic, statistics, progressive planning
@@ -461,7 +461,7 @@ docs/                      the documentation site: quick start, reviewers' tour,
 |---|---|
 | [ANALYSIS.md](docs/ANALYSIS.md) | Benchmark, optimality gaps, budget sizing, when each strategy wins |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, auth and tenancy, live dispatch, repair history, migrations, performance |
-| [DECISIONS.md](docs/DECISIONS.md) | 27 design decisions with context and trade-offs |
+| [DECISIONS.md](docs/DECISIONS.md) | 32 design decisions with context and trade-offs |
 | [ENVIRONMENTS.md](docs/ENVIRONMENTS.md) | Dev → UAT → production, releases, rollback, per-environment config |
 | [ONBOARDING_A_FAB.md](docs/ONBOARDING_A_FAB.md) | Adding a new fab: profile, validation, access, release |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Local, Docker and Vercel + Supabase hosting |

@@ -205,3 +205,39 @@ opened). In the app: a tour, contextual help, About & support, and a crash scree
 report.
 **Why.** A product is judged in its first minutes. Every extra step between "curious" and "using it"
 loses people, and a confusing failure loses them for good.
+
+### D28. Exact vector search until the data needs a vector database
+**Decision.** Repair-history k-NN runs as an exact NumPy dot product by default; Qdrant is used only
+when `FAB_QDRANT_URL` (or `FAB_QDRANT_PATH`) is set.
+**Why.** 1,800 repairs per fab is a 0.1 ms matrix product. A vector database added a dependency and
+~0.6 s to every cold start for no accuracy gain (exact search is *more* accurate than approximate).
+The interface is unchanged, so real history at millions of repairs moves to Qdrant with one setting.
+
+### D29. A relational read model beside the shift document
+**Decision.** Each write to a shift also replaces its rows in `assignments`, in the same transaction.
+**Why.** The JSON document is the right write model: one atomic, version-checked re-plan. But the
+domain must be queryable: "what did E03 work on this week?" shouldn't parse documents. Writing both
+in one transaction means the read model can never disagree with the truth.
+
+### D30. Rate limits in two layers
+**Decision.** An in-memory token bucket per instance absorbs bursts with no I/O; a per-minute counter
+in the database enforces the quota across instances. If the database is unreachable, requests pass.
+**Why.** On serverless every instance counts alone, so an in-memory limit alone barely limits. The
+shared counter costs one upsert, only on the endpoints that need it. Failing open keeps a database
+blip from taking the whole API down with it.
+
+### D31. An ingestion API for equipment systems
+**Decision.** `POST /api/ingest/tool-downs`, authenticated by a per-fab token stored as a SHA-256
+hash, with a mandatory `Idempotency-Key`; the tool-down joins the fab's live shift.
+**Why.** In a fab, tools and the MES detect faults, not dispatchers. Integrations retry, so
+idempotency is required, not optional. A token scoped to one fab and one action limits what a leaked
+token can do.
+
+### D32. Self-serve account deletion that keeps the audit trail
+**Decision.** `DELETE /api/auth/me` deletes a user's feedback, presence and pending replays, replaces
+their email in shared shift history with "a deleted user", and on Supabase removes the sign-in
+account.
+**Why.** Privacy law gives users the right to erasure without having to ask. Shift history belongs to
+the fab, so it's anonymised rather than deleted: the record of what happened stays intact without
+identifying anyone.
+
