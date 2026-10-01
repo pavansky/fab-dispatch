@@ -23,7 +23,7 @@ jobs:
         id: health
         continue-on-error: true
         run: |
-          for i in 1 2 3; do
+          for _ in 1 2 3; do
             body=$(curl -s --max-time 20 "$URL/api/health") && echo "$body" | python3 -c "import json,sys; h=json.load(sys.stdin); assert h['status']=='ok' and h['schema_ok'], h" && { echo "$body"; exit 0; }
             sleep 20
           done
