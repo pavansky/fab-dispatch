@@ -95,6 +95,7 @@ body { background: var(--page); color: var(--ink); font: 14px/1.5 Geist, system-
 body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1; background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 48px 48px; }
 button, input, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button, svg.floor g { -webkit-tap-highlight-color: transparent; }
 .num, table { font-variant-numeric: tabular-nums; }
 .muted { color: var(--ink-3); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -244,6 +245,9 @@ svg.floor.adding { cursor: crosshair; }
 .f-route.hi { stroke: var(--ink); stroke-width: 1.8; }
 .f-route.dim { opacity: .35; }
 .f-job { cursor: pointer; }
+/* SVG groups can't show an outline: keyboard focus rings the mark instead. */
+.f-job:focus-visible, .f-eng:focus-visible { outline: none; }
+.f-job:focus-visible .mark, .f-eng:focus-visible rect { stroke: var(--focus); stroke-width: 2; }
 .f-job .mark { stroke: var(--surface); stroke-width: 1; }
 .f-job.p1 .mark { fill: var(--o-1); }
 .f-job.p2 .mark { fill: var(--o-2); }
@@ -425,7 +429,9 @@ svg.floor.adding { cursor: crosshair; }
 .toast.alert { border-left: 3px solid var(--signal); }
 .toast .btn { color: inherit; border-color: transparent; background: none; padding: 2px 8px; }
 .fab-select { width: auto; flex: 0 1 240px; min-width: 150px; max-width: 260px; padding: 5px 8px; font-size: 13px; }
-.menu-btn, .drawer-h, .backdrop { display: none; }
+.menu-btn, .drawer-h, .backdrop, .menu-theme { display: none; }
+.menu-theme { align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
+.menu-theme .help { margin: 0; }
 .live-clock .spacer { flex: 1; }
 
 /* ---------------------------------------------------------------- responsive: laptop → tablet → phone */
@@ -456,8 +462,9 @@ svg.floor { touch-action: manipulation; }
 @media (max-width: 640px) {
   body { font-size: 13.5px; }
   .brand-name, .solve-text { display: none; }
-  .fab-select { max-width: 150px; }
-  .theme-seg button { padding: 5px 7px; }
+  .fab-select { max-width: none; min-width: 0; flex: 1 1 auto; }
+  .topbar .bar-theme { display: none; }
+  .menu-theme { display: flex; }
   .layout { padding: 10px; }
   .card-h { padding: 12px 12px 0; flex-wrap: wrap; }
   .card-b { padding: 12px; }
@@ -479,7 +486,6 @@ svg.floor { touch-action: manipulation; }
 
 @media (max-width: 380px) {
   .cards.algos { grid-template-columns: 1fr; }
-  .theme-seg { display: none; }
 }
 .g-head-track .g-tick:first-child { transform: none; }
 .g-head-track .g-tick:last-child { transform: translateX(-100%); }

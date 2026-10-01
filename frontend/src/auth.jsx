@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { authConfig, demoSignIn, getMe, setTokenProvider } from './api.js'
+import { authConfig, clearPlanCache, demoSignIn, getMe, setTokenProvider } from './api.js'
 
 // Two sign-in modes behind one context:
 //  - supabase (UAT/prod): Supabase Auth in the browser (magic link or password); the API
@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
 
   const adopt = useCallback(async (accessToken) => {
     token.current = accessToken
-    if (!accessToken) { setState((s) => ({ ...s, status: 'signedOut', user: null })); return }
+    if (!accessToken) { clearPlanCache(); setState((s) => ({ ...s, status: 'signedOut', user: null })); return }
     try {
       const user = await getMe()
       setState((s) => ({ ...s, status: 'signedIn', user, error: null }))

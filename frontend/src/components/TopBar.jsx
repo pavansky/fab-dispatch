@@ -4,7 +4,15 @@ import { useAuth } from '../auth.jsx'
 
 const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['system', 'Auto']]
 
-function UserMenu() {
+function ThemeSwitch({ theme, onTheme, className = '' }) {
+  return (
+    <div className={`seg theme-seg ${className}`} role="group" aria-label="Theme">
+      {THEMES.map(([m, label]) => <button key={m} aria-pressed={theme === m} onClick={() => onTheme(m)}>{label}</button>)}
+    </div>
+  )
+}
+
+function UserMenu({ theme, onTheme }) {
   const { user, signOut } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -27,6 +35,8 @@ function UserMenu() {
             {user.role === 'dispatcher' ? 'You can drive live shifts, report tool-downs and run benchmarks.'
               : 'You can plan and watch. Ask an admin for the dispatcher role to drive live shifts.'}
           </p>
+          {/* On phones the theme switch lives here, where there's room for it. */}
+          <div className="menu-theme"><span className="help">Theme</span><ThemeSwitch theme={theme} onTheme={onTheme} /></div>
           <button className="btn block" role="menuitem" onClick={signOut}>Sign out</button>
         </div>
       )}
@@ -48,10 +58,8 @@ export default function TopBar({ fabs, fabId, onFab, chips, busy, pending, solve
       <span className="spacer" />
       <span className="solve-state" aria-live="polite"><span className={`dot ${busy ? 'busy' : ''}`} />
         <span className="solve-text">{busy ? `Solving ${[...pending].map((a) => ALGO_SHORT[a]).join(', ')}…` : solvedNote}</span></span>
-      <div className="seg theme-seg" role="group" aria-label="Theme">
-        {THEMES.map(([m, label]) => <button key={m} aria-pressed={theme === m} onClick={() => onTheme(m)}>{label}</button>)}
-      </div>
-      <UserMenu />
+      <ThemeSwitch theme={theme} onTheme={onTheme} className="bar-theme" />
+      <UserMenu theme={theme} onTheme={onTheme} />
     </header>
   )
 }

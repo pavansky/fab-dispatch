@@ -59,6 +59,13 @@ export default function FloorPlan({
     onFloorClick({ x: Math.round(p.x * 10) / 10, y: Math.round((H - p.y) * 10) / 10 })
   }
 
+  // Jobs and engineers are buttons for keyboard and screen-reader users too.
+  const activate = (e, sel) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    onSelect?.(sel)
+  }
+
   const jobTip = (j) => {
     const a = owner[j.id]
     return (
@@ -127,8 +134,11 @@ export default function FloorPlan({
           const cls = ['f-job', `p${j.priority}`, a ? '' : 'un', changed ? 'changed' : '', selected ? 'sel' : '', dim ? 'dim' : '',
             st === 'done' ? 'done' : '', st === 'in_progress' ? 'active' : ''].join(' ')
           return (
-            <g key={j.id} className={cls}
+            <g key={j.id} className={cls} role="button" tabIndex={0}
+              aria-label={`${j.id}, ${PRIORITY[j.priority].long}, ${a ? `assigned to ${a.tech_id}` : 'unassigned'}`}
+              aria-pressed={selected}
               onClick={(e) => { e.stopPropagation(); onSelect?.({ type: 'job', id: j.id }) }}
+              onKeyDown={(e) => activate(e, { type: 'job', id: j.id })}
               onMouseMove={(e) => { show(e, jobTip(j)); setHover({ type: 'job', id: j.id }) }}
               onMouseLeave={() => { hide(); setHover(null) }}>
               <circle cx={j.x} cy={H - j.y} r={9} fill="transparent" />
@@ -149,8 +159,10 @@ export default function FloorPlan({
           const sel = selection?.type === 'engineer' && selection.id === e.id
           const dim = focusEng && focusEng !== e.id
           return (
-            <g key={e.id} className={`f-eng ${off ? 'off' : ''} ${sel ? 'sel' : ''} ${dim ? 'dim' : ''}`}
+            <g key={e.id} className={`f-eng ${off ? 'off' : ''} ${sel ? 'sel' : ''} ${dim ? 'dim' : ''}`} role="button" tabIndex={0}
+              aria-label={`Engineer ${e.id}, ${e.name}${off ? ', off shift' : ''}`} aria-pressed={sel}
               onClick={(ev) => { ev.stopPropagation(); onSelect?.({ type: 'engineer', id: e.id }) }}
+              onKeyDown={(ev) => activate(ev, { type: 'engineer', id: e.id })}
               onMouseMove={(ev) => { show(ev, engTip(e)); setHover({ type: 'engineer', id: e.id }) }}
               onMouseLeave={() => { hide(); setHover(null) }}>
               <rect x={e.x - 5.5} y={H - e.y - 5.5} width={11} height={11} rx={2.2} />
