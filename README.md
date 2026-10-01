@@ -20,7 +20,7 @@ Supabase Postgres ([fab-dispatch.vercel.app](https://fab-dispatch.vercel.app)), 
 
 ## Quick start (local, no keys)
 
-Requires **Python 3.12+** and **Node 20+**.
+Requires **Python 3.11+** (tested on 3.11, 3.12 and 3.14) and **Node 20+**.
 
 ```bash
 # 1. API on http://127.0.0.1:8000 (OpenAPI docs at /docs)

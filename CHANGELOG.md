@@ -2,6 +2,14 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [1.1.1] - 2026-10-01
+
+### Fixed
+- Installs and runs on Python 3.11 (numpy/scipy use compatible ranges); CI tests 3.11, 3.12 and 3.14.
+- Recommendation panel stacks on narrower screens instead of squeezing text.
+- Opening the API root shows where the docs and UI are instead of a 404.
+- Removed a stray build binary from the repository and its history.
+
 ## [1.1.0] - 2026-10-01
 
 ### Added
@@ -37,3 +45,10 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
   live dispatch, benchmark; light and dark themes.
 - Docker images, compose stack, Vercel config, CI workflow, Makefile.
 - Docs: analysis, architecture, decisions, deployment, security.
+
+## Pre-releases
+
+- **0.4.0**: progressive per-strategy solving, live dispatch over SSE, repair-history insights in the UI.
+- **0.3.0**: PyVRP and ALNS solvers, exact MILP baseline, live re-dispatch, SQLite/Postgres store, plan cache.
+- **0.2.0**: dispatch console UI with light/dark themes, goal-based recommendation, benchmark view.
+- **0.1.0**: allocation engine with greedy, Hungarian and regret-2 strategies; React floor-plan UI; tests.

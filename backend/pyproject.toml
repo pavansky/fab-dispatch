@@ -2,7 +2,7 @@
 name = "fab-dispatch"
 version = "1.0.0"
 description = "Resource allocation engine: equipment engineers to tool-downs and PMs in a semiconductor fab"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 readme = "../README.md"
 license = { text = "MIT" }
 dependencies = [
@@ -10,8 +10,8 @@ dependencies = [
     "uvicorn[standard]==0.54.0",
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
-    "numpy==2.5.3",
-    "scipy==1.18.1",
+    "numpy>=2.3,<3",
+    "scipy>=1.16,<2",
     "pyvrp==0.14.0",
     "qdrant-client==1.19.1",
     "psycopg[binary]==3.3.6",
@@ -22,7 +22,7 @@ entrypoint = "app.main:app"
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]

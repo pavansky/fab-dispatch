@@ -14,6 +14,11 @@ def scenario():
     return client.post("/api/scenario", json={"seed": 1, "n_engineers": 6, "n_jobs": 18}).json()
 
 
+def test_api_root_points_to_docs_and_ui():
+    body = client.get("/").json()
+    assert body["docs"] == "/docs" and "5173" in body["ui"]
+
+
 def test_health_and_liveness():
     assert client.get("/api/livez").json() == {"status": "ok"}
     body = client.get("/api/health").json()

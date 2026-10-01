@@ -19,6 +19,16 @@ ALGO_INFO = {
 }
 
 
+root = APIRouter(include_in_schema=False)
+
+
+@root.get("/")
+def index() -> dict:
+    """Someone opening the API port in a browser gets directions, not a 404."""
+    return {"service": "fab-dispatch API", "version": ENGINE_VERSION, "docs": "/docs",
+            "health": "/api/health", "ui": "run `npm run dev` in frontend/ and open http://localhost:5173"}
+
+
 @router.get("/livez", include_in_schema=False)
 def livez() -> dict:
     """Process is up. Cheap: no dependencies touched."""

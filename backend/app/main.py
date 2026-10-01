@@ -47,7 +47,7 @@ def create_app() -> FastAPI:
         details = [{k: v for k, v in e.items() if k in ("loc", "msg", "type")} for e in exc.errors()]
         return JSONResponse({**error_body("invalid", msg, request_id.get()), "details": details}, status_code=422)
 
-    for r in (system.router, planning.router, live.router, repairs.router):
+    for r in (system.root, system.router, planning.router, live.router, repairs.router):
         app.include_router(r)
     log.info("fab-dispatch %s ready (env=%s)", ENGINE_VERSION, settings.env)
     return app
