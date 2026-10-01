@@ -6,14 +6,15 @@
 Assigns equipment engineers to tool-downs and preventive maintenance in real time, across any number
 of fabs, comparing five strategies from a one-pass greedy to a state-of-the-art vehicle-routing solver.
 
+[![CI](https://github.com/pavansky/fab-dispatch/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pavansky/fab-dispatch/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.14-020202?logo=python&logoColor=white)](#quick-start)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.142-020202?logo=fastapi&logoColor=white)](backend/)
 [![React](https://img.shields.io/badge/React-19-020202?logo=react&logoColor=white)](frontend/)
-[![Tests](https://img.shields.io/badge/tests-212-ef6f2e)](#testing)
+[![Tests](https://img.shields.io/badge/tests-214-ef6f2e)](#testing)
 [![Coverage](https://img.shields.io/badge/coverage-92%25-ef6f2e)](#testing)
 [![Runs locally](https://img.shields.io/badge/runs%20locally-no%20API%20keys-ef6f2e)](#quick-start)
 
-[**Live app**](https://fab-dispatch.vercel.app) · [Quick start](#quick-start) · [Results](#results) ·
+[**Quick start**](#quick-start) · [**Live app**](https://fab-dispatch.vercel.app) · [5-minute tour](#a-5-minute-tour) · [Results](#results) ·
 [Architecture](docs/ARCHITECTURE.md) · [Environments](docs/ENVIRONMENTS.md) · [Onboard a fab](docs/ONBOARDING_A_FAB.md) · [Analysis](docs/ANALYSIS.md)
 
 <img src="docs/assets/overview.png" alt="Fab Dispatch overview: recommended plan, cost × latency frontier and strategy scorecards" width="100%" />
@@ -24,10 +25,11 @@ of fabs, comparing five strategies from a one-pass greedy to a state-of-the-art 
 
 ## Contents
 
+- [Quick start](#quick-start) · [A 5-minute tour](#a-5-minute-tour) · [Troubleshooting](#troubleshooting)
 - [Why this exists](#why-this-exists)
+- [Requirements map](#requirements-map)
 - [Highlights](#highlights)
 - [Results](#results)
-- [Quick start](#quick-start)
 - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Multi-fab and access control](#multi-fab-and-access-control)
@@ -38,6 +40,117 @@ of fabs, comparing five strategies from a one-pass greedy to a state-of-the-art 
 - [Project structure](#project-structure)
 - [Documentation](#documentation)
 - [Limitations and roadmap](#limitations-and-roadmap)
+
+## Quick start
+
+Runs entirely on your machine: no accounts, API keys, Docker or paid services. About three minutes
+from clone to a working app, most of it package downloads.
+
+**You need** Python **3.11–3.14** and Node.js **20.19+** (22 LTS recommended). Check with:
+
+```bash
+python3 --version && node --version
+```
+
+**1. Get the code**
+
+```bash
+git clone https://github.com/pavansky/fab-dispatch.git
+cd fab-dispatch
+```
+
+**2. Start the API** (terminal 1, from the `fab-dispatch` folder)
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --port 8000
+```
+
+<details>
+<summary>Windows (PowerShell)</summary>
+
+```powershell
+cd backend
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --port 8000
+```
+
+</details>
+
+Wait for `Uvicorn running on http://127.0.0.1:8000`. Optional check, from another terminal:
+`curl http://127.0.0.1:8000/api/health` returns `{"status":"ok","db_ok":true,"schema_ok":true,...}`.
+
+**3. Start the UI** (terminal 2, from the `fab-dispatch` folder)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**4. Open http://localhost:5173** and click **Continue as Dispatcher**. That's a local one-click
+sign-in; the server refuses it in production. The first plan appears in about a second.
+
+Locally the app stores data in SQLite (`backend/data/`, created on first run) and keeps the
+repair-history index in memory. Interactive API docs are at http://127.0.0.1:8000/docs.
+
+<details>
+<summary><b>Other ways to run it</b></summary>
+
+```bash
+make setup && make dev           # both apps with one command (macOS / Linux)
+make check                       # everything CI checks, locally
+docker compose up --build        # production-like: Postgres + Qdrant + API + nginx on :8080
+```
+
+</details>
+
+### Live app
+
+https://fab-dispatch.vercel.app runs the same build on Vercel with Supabase (Postgres and Auth). Sign in
+with your email (magic link or password). New accounts are **viewers**: they can generate shifts,
+compare all five strategies, explore the floor plan and watch live shifts. Running benchmarks and
+driving a live shift need the **dispatcher** role. For the full experience with no sign-up, run it
+locally.
+
+## A 5-minute tour
+
+1. **Overview.** The five strategies solve the same shift in parallel. The top card names the
+   recommended plan and says why. The chart plots cost against solve time; the line is the efficient
+   frontier. The scorecards below compare jobs served, bottleneck coverage, response, idle time and
+   workload.
+2. **Change the problem.** In the left panel, pick a preset (for example *Lithography crunch*), change
+   engineers or jobs, and click **Generate shift**. Drag a **Cost weights** slider and every strategy
+   re-solves.
+3. **Floor plan** (the spatial view). Engineers, jobs and routes on the fab floor. Click a job to see
+   who was assigned and why, the runner-up, why other engineers were rejected, and how each strategy
+   handled it.
+4. **Schedule** and **Workforce.** A timeline per engineer, and certified supply against demand per
+   tool family. Workforce shows when the limit is staffing, not the algorithm.
+5. **Benchmark.** Click **Run benchmark** to compare strategies over many seeded shifts, with 95%
+   confidence intervals. **Measure gaps** solves small shifts exactly and shows each heuristic's
+   distance from the proven optimum.
+6. **Live dispatch.** Click **Start live shift**, then **Play** or **+1 h**. Turn on *Tap floor to
+   report a bottleneck down* and click the floor: the plan re-optimises in under a second without
+   reshuffling people. **Copy link** and open it in a second browser window: both update live.
+7. **Another fab.** Switch to *Fab 2 · 200mm analog & power* in the top bar: a different floor, tool families
+   and 8-hour shifts, all from a JSON profile.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `npm run dev` fails with a syntax or engine error | Node is too old. Install Node 22 LTS. |
+| `pip install` tries to compile numpy, scipy or pyvrp | Your Python is outside 3.11–3.14, or pip is old: `python -m pip install --upgrade pip` and retry. |
+| *Can't reach the API. Is the backend running?* | Start the API (step 2). The UI proxies `/api` to port 8000. |
+| `address already in use` on 8000 or 5173 | Another process holds the port. Stop it (`lsof -i :8000` on macOS/Linux), then restart. |
+| **Run benchmark** or **Start live shift** is disabled | You're signed in as a viewer. Use the avatar menu to sign out, then **Continue as Dispatcher**. |
+| You want a clean slate | Stop the API, delete `backend/data/`, start it again. |
 
 ## Why this exists
 
@@ -50,6 +163,25 @@ Fab Dispatch models that decision as what it really is: a **technician routing a
 with skills, time windows and priorities. It solves it with five strategies, explains every
 assignment, and recommends a plan using an explicit, statistically honest rule. Every fab is
 described by a data profile, so the same product serves any site.
+
+## Requirements map
+
+Where each part of a resource-allocation brief lives, in the app and in the code.
+
+| Requirement | In the app | In the code |
+|---|---|---|
+| Data model: resources, requests, assignments | Left panel and every view | `backend/app/models.py` (`Engineer`, `Job`, `Assignment`, `Route`, `AllocationResult`) |
+| At least two allocation algorithms | Five, side by side on **Overview** | `backend/app/algorithms/` (greedy, hungarian, regret, alns, pyvrp_ils, plus an exact MILP) |
+| Hard and soft constraints | **Cost weights** sliders; rejections on **Floor plan** | `backend/app/planner.py` (one constraint engine for every strategy) |
+| Decision explanations | Click any job on **Floor plan** | `backend/app/engine.py`, `algorithms/alns.py` |
+| Meaningful metrics | Scorecards on **Overview**, tables on **Benchmark** | `backend/app/engine.py` (`_metrics`) |
+| Tests and comparisons | (not in the UI) | `backend/tests/` (constraints, algorithms, optimality, API) and `frontend/src/lib/__tests__/` |
+| Map / spatial view | **Floor plan** (SVG, no map service or keys) | `frontend/src/components/FloorPlan.jsx` |
+| Algorithm comparison | **Overview** and **Benchmark** | `frontend/src/components/Overview.jsx`, `Benchmark.jsx` |
+| Metrics display | **Overview**, **Benchmark**, **Workforce** | `frontend/src/components/MetricBars.jsx` |
+| Interactive features (a plus) | Generate shifts, weights, what-if tool-downs, live dispatch, second fab | `frontend/src/components/Sidebar.jsx`, `LiveShift.jsx` |
+| README and analysis | This file | [docs/ANALYSIS.md](docs/ANALYSIS.md) |
+| React + FastAPI; free libraries only; runs locally without keys | Everything above | `frontend/package.json`, `backend/requirements.txt` |
 
 ## Highlights
 
@@ -99,46 +231,6 @@ A repeated plan is served from cache in under 1 ms of server time.
   but builds up the most idle time.
 - When certified engineers run out, every strategy hits the same ceiling. The workforce view says so:
   it's a staffing problem, not an algorithm one.
-
-## Quick start
-
-**Requirements:** Python 3.11+ and Node 20+. No accounts, API keys or Docker needed.
-
-```bash
-git clone https://github.com/pavansky/fab-dispatch.git
-cd fab-dispatch
-```
-
-```bash
-# Terminal 1: API on http://127.0.0.1:8000 (interactive docs at /docs)
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --port 8000
-```
-
-```bash
-# Terminal 2: UI on http://localhost:5173 (proxies /api to :8000)
-cd frontend
-npm install
-npm run dev
-```
-
-Open **http://localhost:5173** and choose **Continue as Dispatcher** (or Viewer). Locally the app
-uses SQLite (`backend/data/`, created on first run), an in-memory repair-history index, and a demo
-sign-in that the server refuses in production.
-
-<details>
-<summary><b>Other ways to run it</b></summary>
-
-```bash
-make setup && make dev           # both apps with one command
-make check                       # everything CI checks, locally
-docker compose up --build        # production-like: Postgres + Qdrant + API + nginx on :8080
-```
-
-</details>
 
 ## Screenshots
 
@@ -231,17 +323,30 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
 ## Testing
 
 ```bash
-make check     # lint + format + tests with coverage floor + audits + frontend build
+# Backend: 200 tests (4 of them need Postgres and skip without it)
+cd backend
+pip install -r requirements-dev.txt
+pytest
+
+# Frontend: 14 tests
+cd frontend
+npm test
 ```
 
-**198 backend tests** (92% coverage) and **14 frontend tests**:
+`make check` runs everything CI runs: lint, format, tests with an 85% coverage floor, dependency
+audits and the frontend build. To include the Postgres tests, point `FAB_TEST_PG_URL` at any
+Postgres database. To reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.md), run
+`python -m scripts.benchmark --seeds 20` from `backend/` (a few minutes).
+
+What the tests cover (92% line coverage):
 - **Hard constraints** re-derived from scratch for every strategy, on every preset of **every fab**.
 - **Fab 1 golden test:** converting the hard-coded fab into a profile reproduces its scenarios byte for byte.
 - **Optimality:** heuristics checked against the exact MILP optimum, and never allowed to beat it.
 - **Auth:** 401 without a token, forged and expired tokens rejected, 403 for viewers on dispatcher
   actions, 404 across fabs, Supabase role mapping, demo mode refused in production.
 - **Real-time:** idempotent retries, clock lease conflicts, presence, actor audit, retention auth.
-- **Migrations and store** on SQLite and real Postgres, including upgrading a pre-versioning database.
+- **Migrations and store** on SQLite and real Postgres, including upgrading a pre-versioning database
+  and environment isolation by schema.
 - **Frontend:** recommendation rules, frontier detection and bootstrap statistics.
 
 ## Delivery: dev → UAT → production
@@ -249,8 +354,11 @@ make check     # lint + format + tests with coverage floor + audits + frontend b
 | | Dev | UAT | Production |
 |---|---|---|---|
 | Deploys | locally / every pull request (preview) | every merge to `main` | a release tag `vX.Y.Z` |
+| Access | demo sign-in | Vercel login + Supabase Auth | Supabase Auth |
 | Database | SQLite / schema `uat` | Supabase, schema `uat` | Supabase, schema `public` |
 
+- **Branch protection:** `main` only accepts changes that pass CI; `production` can't be force-pushed
+  or deleted, and only moves forward through a release.
 - **CI** on every push and PR: ruff lint and format, tests with an 85% coverage floor, Python
   3.11/3.12/3.14, Postgres migrations, ESLint, Vitest, build, `pip-audit` + `npm audit`, Docker images.
 - **Release:** pushing a tag re-runs CI on that exact commit, requires it to be on `main` (UAT-tested),
@@ -276,7 +384,7 @@ backend/
     store.py               SQLite / Postgres repository + versioned migrations
     routes/                system · auth · fabs · planning · live (SSE) · repairs
   scripts/benchmark.py     reproduces every table in docs/ANALYSIS.md
-  tests/                   198 tests (incl. golden fab fingerprints)
+  tests/                   200 tests (incl. golden fab fingerprints)
 frontend/src/
   App.jsx auth.jsx api.js  workspace, sign-in, API client
   lib/                     fab context, recommendation logic, statistics, progressive planning
@@ -297,7 +405,7 @@ docs/                      ANALYSIS · ARCHITECTURE · DECISIONS · DEPLOYMENT �
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Local, Docker and Vercel + Supabase hosting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, conventions, migrations, releasing |
 | [SECURITY.md](SECURITY.md) | Threat model and mitigations |
-| [CHANGELOG.md](CHANGELOG.md) | Release history (v0.1.0 → v2.0.0) |
+| [CHANGELOG.md](CHANGELOG.md) | Release history (v0.1.0 → v2.0.1) |
 
 ## Limitations and roadmap
 

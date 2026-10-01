@@ -2,6 +2,15 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.0.2] - 2026-10-01
+
+### Changed
+- README: quick start first, tested on macOS/Linux and Windows; a 5-minute tour of the app; a
+  requirements map from the brief to the app and code; troubleshooting; how to run every test suite;
+  live-app access by role.
+- Frontend declares its Node requirement (`>=20.19`, from Vite 7).
+- Repository is public, with branch protection on `main` (CI must pass) and `production`.
+
 ## [2.0.1] - 2026-10-01
 
 ### Fixed
