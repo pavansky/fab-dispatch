@@ -16,6 +16,7 @@ from .help import load_articles
 from .http import error_body
 from .observability import RequestContext, configure_logging, request_id
 from .routes import auth, fabs, help, live, planning, repairs, system
+from .version import APP_VERSION
 
 log = logging.getLogger("fab")
 
@@ -25,9 +26,14 @@ def create_app() -> FastAPI:
     configure_logging(settings.log_level, settings.log_json)
     app = FastAPI(
         title="Fab Dispatch API",
-        version=ENGINE_VERSION,
+        version=APP_VERSION,
         description="Allocates equipment engineers to tool-downs and PMs in a semiconductor fab. "
-        "Five strategies, from greedy to PyVRP, plus live re-dispatch.",
+        "Five strategies, from greedy to PyVRP, plus live re-dispatch and a grounded assistant. "
+        f"Engine {ENGINE_VERSION}. Sign in at the app, then call the API with the session's bearer token.",
+        # Under /api so the same paths work locally and behind Vercel's /api rewrite.
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+        openapi_url="/api/openapi.json",
     )
     app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(

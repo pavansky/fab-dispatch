@@ -120,9 +120,52 @@ MIGRATIONS: list[tuple[int, str, dict[str, list[str]]]] = [
             ],
         },
     ),
+    (
+        4,
+        "assistant answer feedback",
+        {
+            # Thumbs up/down on assistant answers: the evaluation loop for answers in production.
+            # Stores the user id, never the email; closed to the Supabase API like every app table.
+            "sqlite": [
+                """CREATE TABLE IF NOT EXISTS assistant_feedback (id INTEGER PRIMARY KEY AUTOINCREMENT,
+               created_at TEXT NOT NULL, user_id TEXT NOT NULL, intent TEXT NOT NULL, helpful INTEGER NOT NULL,
+               question TEXT NOT NULL, comment TEXT NOT NULL DEFAULT '', citations TEXT NOT NULL DEFAULT '[]',
+               provider TEXT NOT NULL DEFAULT 'local')""",
+                "CREATE INDEX IF NOT EXISTS assistant_feedback_by_time ON assistant_feedback (created_at)",
+            ],
+            "postgres": [
+                """CREATE TABLE IF NOT EXISTS assistant_feedback (id BIGSERIAL PRIMARY KEY,
+               created_at TIMESTAMPTZ NOT NULL DEFAULT now(), user_id TEXT NOT NULL, intent TEXT NOT NULL,
+               helpful BOOLEAN NOT NULL, question TEXT NOT NULL, comment TEXT NOT NULL DEFAULT '',
+               citations JSONB NOT NULL DEFAULT '[]', provider TEXT NOT NULL DEFAULT 'local')""",
+                "CREATE INDEX IF NOT EXISTS assistant_feedback_by_time ON assistant_feedback (created_at)",
+                "ALTER TABLE assistant_feedback ENABLE ROW LEVEL SECURITY",
+                """DO $$
+                BEGIN
+                  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')
+                     AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    REVOKE ALL ON assistant_feedback FROM anon, authenticated;
+                    EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM anon, authenticated',
+                                   pg_get_serial_sequence('assistant_feedback', 'id'));
+                  END IF;
+                END $$""",
+            ],
+        },
+    ),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
+# Every table the app owns: schema-qualified on Postgres, and closed to the Supabase Data API.
+APP_TABLES = (
+    "shifts",
+    "shift_events",
+    "plan_cache",
+    "idempotency_keys",
+    "shift_presence",
+    "assistant_feedback",
+    "schema_migrations",
+)
 PRESENCE_WINDOW_S = 30
+FEEDBACK_DAYS = 180  # assistant feedback retention
 
 
 class VersionConflict(Exception):
@@ -176,6 +219,12 @@ class Store(ABC):
     def presence(self, shift_id: str) -> list[str]: ...
     @abstractmethod
     def prune(self, plan_days: int = 7, shift_days: int = 30, idempotency_hours: int = 24) -> dict[str, int]: ...
+
+    @abstractmethod
+    def add_feedback(self, record: dict) -> None: ...
+
+    @abstractmethod
+    def feedback_stats(self, days: int = 30) -> list[dict]: ...
 
     def init_schema(self) -> None:
         """Alias kept for call sites written before versioned migrations."""
@@ -338,11 +387,38 @@ class SQLiteStore(Store):
             out["shift_presence"] = self._conn.execute(
                 "DELETE FROM shift_presence WHERE last_seen < ?", (_ago(86400),)
             ).rowcount
+            out["assistant_feedback"] = self._conn.execute(
+                "DELETE FROM assistant_feedback WHERE created_at < ?", (_ago(FEEDBACK_DAYS * 86400),)
+            ).rowcount
         return out
+
+    def add_feedback(self, record: dict) -> None:
+        self._q(
+            """INSERT INTO assistant_feedback (created_at, user_id, intent, helpful, question, comment, citations,
+               provider) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                _now(),
+                record["user_id"],
+                record["intent"],
+                int(record["helpful"]),
+                record["question"],
+                record.get("comment", ""),
+                json.dumps(record.get("citations", [])),
+                record.get("provider", "local"),
+            ),
+        )
+
+    def feedback_stats(self, days: int = 30) -> list[dict]:
+        rows = self._q(
+            """SELECT intent, COUNT(*) AS total, SUM(helpful) AS helpful FROM assistant_feedback
+               WHERE created_at >= ? GROUP BY intent ORDER BY total DESC""",
+            (_ago(days * 86400),),
+        )
+        return [{"intent": r["intent"], "total": r["total"], "helpful": r["helpful"] or 0} for r in rows]
 
 
 # ----------------------------------------------------------------------------- Postgres
-_TABLES = re.compile(r"\b(shifts|shift_events|plan_cache|idempotency_keys|shift_presence|schema_migrations)\b")
+_TABLES = re.compile(r"\b(" + "|".join(APP_TABLES) + r")\b")
 
 
 class PostgresStore(Store):
@@ -508,10 +584,39 @@ class PostgresStore(Store):
                 ),
                 ("shifts", "DELETE FROM shifts WHERE updated_at < now() - make_interval(days => %s)", shift_days),
                 ("shift_presence", "DELETE FROM shift_presence WHERE last_seen < now() - make_interval(days => %s)", 1),
+                (
+                    "assistant_feedback",
+                    "DELETE FROM assistant_feedback WHERE created_at < now() - make_interval(days => %s)",
+                    FEEDBACK_DAYS,
+                ),
             ):
                 cur.execute(self._sql(sql), (arg,))
                 out[table] = cur.rowcount
         return out
+
+    def add_feedback(self, record: dict) -> None:
+        self._q(
+            """INSERT INTO assistant_feedback (user_id, intent, helpful, question, comment, citations, provider)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (
+                record["user_id"],
+                record["intent"],
+                bool(record["helpful"]),
+                record["question"],
+                record.get("comment", ""),
+                json.dumps(record.get("citations", [])),
+                record.get("provider", "local"),
+            ),
+        )
+
+    def feedback_stats(self, days: int = 30) -> list[dict]:
+        rows = self._q(
+            """SELECT intent, COUNT(*) AS total, COUNT(*) FILTER (WHERE helpful) AS helpful
+               FROM assistant_feedback WHERE created_at >= now() - make_interval(days => %s)
+               GROUP BY intent ORDER BY total DESC""",
+            (days,),
+        )
+        return [{"intent": r["intent"], "total": r["total"], "helpful": r["helpful"]} for r in rows]
 
 
 def create_store(settings: Settings) -> Store:

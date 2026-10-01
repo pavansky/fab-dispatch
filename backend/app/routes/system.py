@@ -12,6 +12,7 @@ from ..config import get_settings
 from ..deps import get_planning, get_store
 from ..http import etag_json
 from ..models import Weights
+from ..version import APP_VERSION, COMMIT
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -32,8 +33,9 @@ def index() -> dict:
     """Someone opening the API port in a browser gets directions, not a 404."""
     return {
         "service": "fab-dispatch API",
+        "release": APP_VERSION,
         "version": ENGINE_VERSION,
-        "docs": "/docs",
+        "docs": "/api/docs",
         "health": "/api/health",
         "ui": "run `npm run dev` in frontend/ and open http://localhost:5173",
     }
@@ -61,6 +63,8 @@ def health() -> dict:
         "db_ok": db_ok,
         "schema_ok": schema_ok,
         "version": ENGINE_VERSION,
+        "release": APP_VERSION,
+        "commit": COMMIT,
         "env": get_settings().env,
     }
 
@@ -80,6 +84,8 @@ def meta(request: Request):
     s = get_settings()
     payload = {
         "version": ENGINE_VERSION,
+        "release": APP_VERSION,
+        "commit": COMMIT,
         "algorithms": {k: {"label": label, **ALGO_INFO.get(k, {})} for k, (label, _) in ALGORITHMS.items()},
         "default_fab": s.default_fab,
         "auth_mode": s.auth_mode,
