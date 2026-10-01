@@ -1,0 +1,106 @@
+{
+ "assistant": [
+  "",
+  "what-it-can-answer",
+  "where-answers-come-from",
+  "limits"
+ ],
+ "benchmark": [
+  "",
+  "run-a-benchmark",
+  "reading-the-verdicts",
+  "distance-from-the-proven-optimum"
+ ],
+ "constraints-and-weights": [
+  "hard-constraints",
+  "soft-constraints-the-cost-weights",
+  "tuning-tips"
+ ],
+ "fabs": [
+  "switching-fab",
+  "what-a-fab-profile-holds",
+  "adding-a-fab"
+ ],
+ "faq": [
+  "why-are-some-jobs-unassigned",
+  "why-do-strategies-give-different-plans-for-the-same-shift",
+  "why-is-a-slower-strategy-recommended",
+  "results-look-identical-after-i-changed-something",
+  "solving-doesn-t-finish",
+  "a-button-is-greyed-out",
+  "live-view-says-reconnecting",
+  "is-this-real-fab-data"
+ ],
+ "floor-plan": [
+  "the-map",
+  "the-inspector",
+  "keyboard"
+ ],
+ "getting-started": [
+  "",
+  "what-you-see-first",
+  "your-first-five-minutes",
+  "getting-help"
+ ],
+ "glossary": [
+  ""
+ ],
+ "keyboard-shortcuts": [
+  ""
+ ],
+ "live-dispatch": [
+  "",
+  "start-a-shift",
+  "drive-the-clock",
+  "report-a-bottleneck-down",
+  "take-an-engineer-off-shift",
+  "re-plans-don-t-reshuffle-people",
+  "share-and-rejoin",
+  "connection"
+ ],
+ "metrics": [
+  "",
+  "coverage",
+  "speed-and-effort",
+  "cost-and-speed-of-the-solver",
+  "on-the-scorecards"
+ ],
+ "recommendation": [
+  "",
+  "planning-goals",
+  "the-noise-margin",
+  "best-value-step-by-step",
+  "the-cost-latency-chart"
+ ],
+ "roles-and-access": [
+  "signing-in",
+  "roles",
+  "fab-access"
+ ],
+ "strategies": [
+  "",
+  "greedy",
+  "hungarian",
+  "regret-2",
+  "alns",
+  "pyvrp",
+  "exact-solver",
+  "when-each-one-wins"
+ ],
+ "views": [
+  "",
+  "overview",
+  "floor-plan",
+  "schedule",
+  "workforce",
+  "live-dispatch",
+  "benchmark",
+  "on-a-phone-or-tablet"
+ ],
+ "what-ifs": [
+  "generate-a-shift",
+  "report-a-job-by-tapping-the-floor",
+  "take-an-engineer-off-shift",
+  "plan-with-history-predicted-durations"
+ ]
+}

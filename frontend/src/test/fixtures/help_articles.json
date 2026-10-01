@@ -1,0 +1,392 @@
+{
+ "assistant": {
+  "slug": "assistant",
+  "title": "The assistant",
+  "summary": "What the assistant can answer, where its answers come from, and its limits.",
+  "section": "Get started",
+  "body": "# The assistant\n\n**Ask** (bottom right, or press **/**) answers questions about this app and the shift on your screen.\n\n## What it can answer\n\n- **About your shift:** *Why is J006 unassigned?* \u00b7 *What is E03 doing?* \u00b7 *Why is PyVRP\n  recommended?* \u00b7 *Compare Greedy and Hungarian.*\n- **About the app:** *How do I report a tool-down?* \u00b7 *What does idle wait mean?* \u00b7 *Who can run\n  benchmarks?*\n\nAnswers come with **sources** (help articles) and **actions**, such as opening a job on the floor plan.\n\n## Where answers come from\n\nThe assistant only answers from two things: these help articles, and the plans computed for the\nshift you're looking at. It reads the same constraint engine and results you see on screen. If it\ncan't find support for an answer, it says so and suggests related articles, rather than guessing.\n\n## Limits\n\nIt doesn't change anything: it won't start shifts or move people. It doesn't know about other fabs'\nprivate data or anything outside this app.\n",
+  "sections": [
+   {
+    "heading": "What it can answer",
+    "anchor": "what-it-can-answer"
+   },
+   {
+    "heading": "Where answers come from",
+    "anchor": "where-answers-come-from"
+   },
+   {
+    "heading": "Limits",
+    "anchor": "limits"
+   }
+  ]
+ },
+ "benchmark": {
+  "slug": "benchmark",
+  "title": "Benchmark and optimality",
+  "summary": "Compare strategies over many shifts with confidence intervals, and measure the gap to the optimum.",
+  "section": "Planning",
+  "body": "# Benchmark and optimality\n\nOne shift can be luck. The **Benchmark** view answers \"which strategy is better in general?\"\nRunning it needs the **dispatcher** role, because it's compute-heavy.\n\n## Run a benchmark\n\nChoose **Seeds per preset** (5, 10 or 20) and click **Run benchmark**. All five strategies solve that\nmany seeded shifts for every preset of your fab, at the engineer and job counts set in the left\npanel. Results appear preset by preset, and repeat runs come from cache.\n\nFor each preset you get:\n\n- A cost \u00d7 latency chart of the **mean** result, with **95% confidence whiskers** on cost,\n- The distribution of a metric you choose, one dot per shift,\n- A table of means, and the **cost difference against the best strategy with its 95% interval**.\n\n## Reading the verdicts\n\nThe differences are **paired**: strategies are compared on the same shifts, using a bootstrap.\n\n- **Lowest cost:** the best mean cost.\n- **Tied:** the interval includes zero, so the difference may be noise.\n- **Worse:** the whole interval is above zero; a real difference.\n\n**Best value** is the fastest strategy that's tied with the cheapest.\n\n## Distance from the proven optimum\n\n**Measure gaps** solves small shifts (4 engineers, 12 jobs) exactly, by enumerating every feasible\nroute and solving a set-partitioning problem, then shows each heuristic's mean gap. 0% means optimal.\n",
+  "sections": [
+   {
+    "heading": "Run a benchmark",
+    "anchor": "run-a-benchmark"
+   },
+   {
+    "heading": "Reading the verdicts",
+    "anchor": "reading-the-verdicts"
+   },
+   {
+    "heading": "Distance from the proven optimum",
+    "anchor": "distance-from-the-proven-optimum"
+   }
+  ]
+ },
+ "constraints-and-weights": {
+  "slug": "constraints-and-weights",
+  "title": "Constraints and cost weights",
+  "summary": "The rules no plan may break, and the soft costs you can tune.",
+  "section": "Planning",
+  "body": "# Constraints and cost weights\n\n## Hard constraints\n\nA plan never breaks these. Every strategy is tested against them, on every fab:\n\n- **Certification:** the engineer is certified for the job's tool family,\n- **Level:** at or above the level the job needs (1\u20133),\n- **Max jobs:** no engineer takes more jobs than their limit,\n- **Start window:** work starts inside the job's window (a tool-down's response time),\n- **Shift end:** all work finishes before the engineer's shift ends.\n\nA job no engineer can do within these rules is **unassigned**, with the reason (for example\n*4 not certified, 1 at max jobs*).\n\n## Soft constraints: the cost weights\n\nEverything else is a cost, in points. The **Cost weights** sliders set how much each one matters,\nand every strategy re-solves as you drag.\n\n| Weight | Default | Charged |\n|---|---|---|\n| Priority reward | 60 | A reward per priority point served (unserved work costs this much) |\n| Walking | 4 | Per 100 m walked on the floor |\n| Idle wait | 0.2 | Per minute an engineer waits for a job's window to open |\n| Over-qualification | 8 | Per certification level above what the job needs |\n| Workload balance | 5 | Per job the engineer already holds, so work spreads out |\n\nIn **live dispatch**, a sixth weight, **stability** (25), charges for moving a job to a different\nengineer when re-planning, so people aren't reshuffled for tiny gains.\n\n**Reset to defaults** restores every slider.\n\n## Tuning tips\n\n- Raise **Walking** on a large floor or when engineers wear heavy cleanroom garb.\n- Raise **Over-qualification** to keep senior engineers free for hard faults.\n- Raise **Priority reward** when unserved work is unacceptable, even at higher cost.\n",
+  "sections": [
+   {
+    "heading": "Hard constraints",
+    "anchor": "hard-constraints"
+   },
+   {
+    "heading": "Soft constraints: the cost weights",
+    "anchor": "soft-constraints-the-cost-weights"
+   },
+   {
+    "heading": "Tuning tips",
+    "anchor": "tuning-tips"
+   }
+  ]
+ },
+ "fabs": {
+  "slug": "fabs",
+  "title": "Fabs and profiles",
+  "summary": "Switching fabs, what a fab profile contains, and adding a new fab.",
+  "section": "Reference",
+  "body": "# Fabs and profiles\n\n## Switching fab\n\nChoose a fab in the **picker in the top bar**. Everything site-specific switches with it: the floor,\ntool families, fault catalogue, shift times and presets. The app remembers your last fab.\n\nTwo fabs ship today:\n\n- **Fab 1 \u00b7 300mm logic:** 12-hour shifts from 07:00, lithography as the bottleneck.\n- **Fab 2 \u00b7 200mm analog & power:** 8-hour shifts from 06:00, photolithography as the bottleneck.\n\n## What a fab profile holds\n\nA fab is described by a validated JSON profile: the floor size, each tool family's area and tool-ID\nprefix, its fault catalogue (symptoms, causes, repair times), the shift pattern, which family is\nthe bottleneck, and the planning presets. The engine and the UI read everything from it.\n\n## Adding a fab\n\nAdding a fab is a new profile file, not code. The project's onboarding guide walks through writing,\nvalidating and releasing one, and granting users access to it.\n",
+  "sections": [
+   {
+    "heading": "Switching fab",
+    "anchor": "switching-fab"
+   },
+   {
+    "heading": "What a fab profile holds",
+    "anchor": "what-a-fab-profile-holds"
+   },
+   {
+    "heading": "Adding a fab",
+    "anchor": "adding-a-fab"
+   }
+  ]
+ },
+ "faq": {
+  "slug": "faq",
+  "title": "FAQ and troubleshooting",
+  "summary": "Common questions and what to do when something looks wrong.",
+  "section": "Reference",
+  "body": "# FAQ and troubleshooting\n\n## Why are some jobs unassigned?\n\nNo engineer could do them within the hard rules: not certified, level too low, at max jobs, can't\narrive in the window, or would overrun the shift. Click the job on the floor plan to see the reason\nfor each strategy. If every strategy leaves the same work unserved, check **Workforce**: you're\nshort of certified engineers.\n\n## Why do strategies give different plans for the same shift?\n\nThey decide in different orders and search to different depths. They all obey the same constraints\nand share one cost function, so their costs are directly comparable.\n\n## Why is a slower strategy recommended?\n\nOnly when its plan is cheaper by more than the noise margin. See\n[How the recommendation works](help:recommendation).\n\n## Results look identical after I changed something\n\nPlans are cached by their exact inputs, so returning to an earlier setting is instant. Changing any\nweight, engineer or job always re-solves.\n\n## \"Solving\u2026\" doesn't finish\n\nThe search strategies stop within a few seconds. If a strategy reports an error, check your\nconnection; the other strategies' results stay on screen.\n\n## A button is greyed out\n\nStarting live shifts and running benchmarks need the **dispatcher** role. See\n[Accounts, roles and access](help:roles-and-access).\n\n## Live view says \"reconnecting\"\n\nThe connection dropped. It catches up automatically, without missing events, once you're back online.\n\n## Is this real fab data?\n\nNo. Floors, faults, skills and repair histories are synthetic but realistic, and seeded so results\nare reproducible.\n",
+  "sections": [
+   {
+    "heading": "Why are some jobs unassigned?",
+    "anchor": "why-are-some-jobs-unassigned"
+   },
+   {
+    "heading": "Why do strategies give different plans for the same shift?",
+    "anchor": "why-do-strategies-give-different-plans-for-the-same-shift"
+   },
+   {
+    "heading": "Why is a slower strategy recommended?",
+    "anchor": "why-is-a-slower-strategy-recommended"
+   },
+   {
+    "heading": "Results look identical after I changed something",
+    "anchor": "results-look-identical-after-i-changed-something"
+   },
+   {
+    "heading": "\"Solving\u2026\" doesn't finish",
+    "anchor": "solving-doesn-t-finish"
+   },
+   {
+    "heading": "A button is greyed out",
+    "anchor": "a-button-is-greyed-out"
+   },
+   {
+    "heading": "Live view says \"reconnecting\"",
+    "anchor": "live-view-says-reconnecting"
+   },
+   {
+    "heading": "Is this real fab data?",
+    "anchor": "is-this-real-fab-data"
+   }
+  ]
+ },
+ "floor-plan": {
+  "slug": "floor-plan",
+  "title": "Reading the floor plan",
+  "summary": "Marks, routes, coverage changes and the inspector's explanations.",
+  "section": "Planning",
+  "body": "# Reading the floor plan\n\n## The map\n\n- **Squares** are engineers at their home bays, numbered by engineer id.\n- **Large circles** are bottleneck tool-downs, **smaller circles** other tool-downs, and **small\n  squares** PMs; the legend under the map shows their colours.\n- A **\u00d7** marks a job the chosen strategy left unassigned.\n- **Routes** follow the fab's aisles (along, then across), because bays sit on a grid.\n- Hover any job to see its route in focus and the stop order.\n\nUse the buttons above the map to switch strategies, or **Side by side** for all five at once.\n**Coverage changes vs Greedy** rings jobs served by this strategy but not by Greedy, or the reverse.\n\n## The inspector\n\nClick a job to open it on the right. For **every strategy** you see:\n\n- **Who was chosen**, and when they start,\n- **Why:** the decision rule, the cost, and the **next-best engineer** (or that there was none),\n- **Who was rejected and why:** counted reasons such as *not certified*, *certification too low*,\n  *at max jobs*, *can't arrive in window*, *would overrun shift*,\n- The **cost breakdown:** walking, waiting, over-qualification, workload and priority.\n\nFor tool-downs, **Repair history** predicts how long the repair will take from similar past faults,\nthe likely cause, and who has fixed it before.\n\nClick an engineer to see their route in order, their certifications and how busy they are.\n\n## Keyboard\n\nJobs and engineers are buttons: **Tab** to them and press **Enter** to inspect.\n",
+  "sections": [
+   {
+    "heading": "The map",
+    "anchor": "the-map"
+   },
+   {
+    "heading": "The inspector",
+    "anchor": "the-inspector"
+   },
+   {
+    "heading": "Keyboard",
+    "anchor": "keyboard"
+   }
+  ]
+ },
+ "getting-started": {
+  "slug": "getting-started",
+  "title": "Getting started",
+  "summary": "What Fab Dispatch does, and your first five minutes with it.",
+  "section": "Get started",
+  "body": "# Getting started\n\nFab Dispatch decides **which equipment engineer goes to which tool-down or preventive maintenance\n(PM) job** during a shift, and shows you why. It solves the same shift with five strategies side by\nside and recommends one.\n\n## What you see first\n\nThe **Overview** opens on a generated shift for your fab: engineers with certifications, and the\njobs that will arrive over the shift. All five strategies solve it in parallel, and the top card\nnames the **recommended plan** with the reason in one sentence.\n\n## Your first five minutes\n\n1. Read the recommendation card, then look at the **cost \u00d7 latency** chart beneath it. The orange\n   point is the recommended plan.\n2. Open **Floor plan** and click any job to see who each strategy sent, and why.\n3. In the left panel, drag a **cost weight** (for example *Walking*). Every strategy re-solves.\n4. Pick another **preset** (for example *Lithography crunch*) and click **Generate shift**.\n5. If you're a dispatcher, open **Live dispatch** and click **Start live shift** to run it in real time.\n\n## Getting help\n\n- Press **?** anywhere to open this help center, or **/** to ask the assistant.\n- Look for the **\u24d8** next to a control for help on just that control.\n- **Take the tour** in the help menu replays the first-run walkthrough.\n",
+  "sections": [
+   {
+    "heading": "What you see first",
+    "anchor": "what-you-see-first"
+   },
+   {
+    "heading": "Your first five minutes",
+    "anchor": "your-first-five-minutes"
+   },
+   {
+    "heading": "Getting help",
+    "anchor": "getting-help"
+   }
+  ]
+ },
+ "glossary": {
+  "slug": "glossary",
+  "title": "Glossary",
+  "summary": "Fab and dispatch terms used in the app.",
+  "section": "Reference",
+  "body": "# Glossary\n\n**Tool-down.** An unplanned failure that stops a process tool. It has a response window: the\nengineer must start within it.\n\n**Bottleneck down.** A tool-down on the fab's bottleneck (constraint) tool family, usually\nlithography. Priority 3. Every minute it's down costs wafer moves for the whole fab.\n\n**PM (preventive maintenance).** Planned work with a wider window. Priority 1.\n\n**Priority.** 3 = bottleneck down, 2 = other tool-down, 1 = PM.\n\n**Response window.** When work may start: from when the job is reported to its latest start (45 min\nfor a bottleneck down, 120 for a tool-down, 240 for a PM, by default).\n\n**Certification and level.** An engineer is certified per tool family at level 1 (basic) to 3\n(expert). A job needs a minimum level.\n\n**Home bay.** Where an engineer starts the shift.\n\n**Aisle distance.** Walking along the fab's grid of aisles (along, then across), not in a straight\nline.\n\n**Tool family.** A group of tools of one kind, such as Etch or CMP, in its own area of the floor.\n\n**Excursion.** A process problem that triggers a surge of tool-downs.\n\n**Wafer moves.** Wafers processed through a step; the fab's output measure.\n\n**Fab profile.** The data describing one fab: floor, tool families, faults, shift pattern and\npresets. See [Fabs and profiles](help:fabs).\n",
+  "sections": []
+ },
+ "keyboard-shortcuts": {
+  "slug": "keyboard-shortcuts",
+  "title": "Keyboard shortcuts",
+  "summary": "Move around the app without the mouse.",
+  "section": "Reference",
+  "body": "# Keyboard shortcuts\n\nShortcuts work anywhere except while you're typing in a field.\n\n| Key | Action |\n|---|---|\n| **?** | Open help |\n| **/** | Ask the assistant |\n| **1** \u2013 **6** | Overview, Floor plan, Schedule, Workforce, Live dispatch, Benchmark |\n| **Esc** | Close help, the assistant, menus or the controls drawer |\n| **Tab**, **Enter** | Move to a job or engineer on the floor plan and inspect it |\n",
+  "sections": []
+ },
+ "live-dispatch": {
+  "slug": "live-dispatch",
+  "title": "Live dispatch",
+  "summary": "Run a shift in real time with your team: the clock, tool-downs, re-plans and sharing.",
+  "section": "Live dispatch",
+  "body": "# Live dispatch\n\nLive dispatch runs the shift as it happens. Tool-downs are revealed only when they occur (no peeking\nahead), work that has started is **locked**, and the chosen strategy **re-plans the open work on\nevery event**. Everyone watching the shift sees each change as it happens.\n\n## Start a shift\n\nChoose a **Re-dispatch strategy** (ALNS by default) and click **Start live shift**. You need the\n**dispatcher** role to start or drive a shift; viewers can join and watch.\n\n## Drive the clock\n\n- **Play** advances the clock continuously at the chosen **speed** (5, 15 or 30 shift-minutes per\n  second); **Pause** stops it.\n- **+1 h** jumps an hour.\n- Only **one dispatcher drives the clock at a time**. The driver holds it for 20 seconds after their\n  last tick, and pausing hands it back straight away. The bar shows who is driving.\n\n## Report a bottleneck down\n\nTurn on **Tap floor to report a bottleneck down** and click inside a tool area. The job enters the\nshift with a 45-minute response window, the plan re-optimises, and everyone gets an alert.\n\n## Take an engineer off shift\n\nSelect an engineer on the floor and click **Take off shift now**. Their open work is re-planned to\nothers; locked work stays as it is.\n\n## Re-plans don't reshuffle people\n\nMoving a job to a different engineer costs **stability** points, so a re-plan only reassigns work\nwhen it's clearly better. The dispatch log lists what moved.\n\n## Share and rejoin\n\n**Copy link** shares the shift; anyone with access to the fab can open it. **Recent shifts** lists the\nfab's shifts so you can **Join** one after closing the tab, and **Leave** returns to the list.\n\n## Connection\n\nThe dot next to the clock shows **live** while updates stream in. If the connection drops, the view\nsays **reconnecting** and catches up automatically, without missing events. While you're offline the\nshift keeps its state on the server.\n",
+  "sections": [
+   {
+    "heading": "Start a shift",
+    "anchor": "start-a-shift"
+   },
+   {
+    "heading": "Drive the clock",
+    "anchor": "drive-the-clock"
+   },
+   {
+    "heading": "Report a bottleneck down",
+    "anchor": "report-a-bottleneck-down"
+   },
+   {
+    "heading": "Take an engineer off shift",
+    "anchor": "take-an-engineer-off-shift"
+   },
+   {
+    "heading": "Re-plans don't reshuffle people",
+    "anchor": "re-plans-don-t-reshuffle-people"
+   },
+   {
+    "heading": "Share and rejoin",
+    "anchor": "share-and-rejoin"
+   },
+   {
+    "heading": "Connection",
+    "anchor": "connection"
+   }
+  ]
+ },
+ "metrics": {
+  "slug": "metrics",
+  "title": "Metrics reference",
+  "summary": "Every metric on the scorecards and in the benchmark, and which direction is better.",
+  "section": "Reference",
+  "body": "# Metrics reference\n\nEvery view uses the same definitions. **\u2191** means higher is better, **\u2193** lower is better.\n\n## Coverage\n\n- **Jobs covered** (\u2191, %): share of known jobs assigned to someone.\n- **Bottleneck downs covered** (\u2191, %): share of priority-3 tool-downs (bottleneck tools) assigned.\n- **Priority-weighted coverage** (\u2191, %): coverage where each job counts by its priority (3, 2 or 1).\n\n## Speed and effort\n\n- **Response to tool-downs** (\u2193, min): mean time from a tool-down's window opening to an engineer\n  starting work on it.\n- **Walking per job** (\u2193, m): metres walked per job served.\n- **Idle wait, all engineers** (\u2193, min): total minutes engineers wait for a job's window to open.\n- **Over-qualification** (\u2193, levels): total certification levels above what jobs needed.\n- **Engineer utilisation** (\u2191, %): hands-on work as a share of total shift time.\n- **Workload spread** (\u2193, jobs): standard deviation of jobs per engineer. Lower is more even.\n\n## Cost and speed of the solver\n\n- **Operating cost** (\u2193, pts): the objective every strategy minimises: walking, idle wait,\n  over-qualification and workload costs, plus the priority reward of any **unserved** work. See\n  [Constraints and cost weights](help:constraints-and-weights).\n- **Solve time** (\u2193, ms): how long the strategy took. Repeat plans come from cache.\n\n## On the scorecards\n\n**\u25b2 / \u25bc vs Greedy** shows each strategy's difference from the Greedy baseline, coloured by whether\nit's better or worse.\n",
+  "sections": [
+   {
+    "heading": "Coverage",
+    "anchor": "coverage"
+   },
+   {
+    "heading": "Speed and effort",
+    "anchor": "speed-and-effort"
+   },
+   {
+    "heading": "Cost and speed of the solver",
+    "anchor": "cost-and-speed-of-the-solver"
+   },
+   {
+    "heading": "On the scorecards",
+    "anchor": "on-the-scorecards"
+   }
+  ]
+ },
+ "recommendation": {
+  "slug": "recommendation",
+  "title": "How the recommendation works",
+  "summary": "Planning goals, the noise margin, and why a slower solver has to earn its latency.",
+  "section": "Planning",
+  "body": "# How the recommendation works\n\nThe recommendation card picks one plan using an explicit rule for the **planning goal** you choose.\nIt never declares a winner on a difference that could be noise.\n\n## Planning goals\n\n- **Best value: cost \u00d7 latency** (default). Never gives up bottleneck coverage. Among plans whose\n  cost is within the noise margin of the cheapest, it picks the **fastest to compute**.\n- **Protect bottleneck tools.** Most bottleneck tool-downs covered, then the fastest response.\n- **Maximise coverage.** The most priority-weighted work served, then the lowest cost.\n- **Lowest operating cost.** The lowest total cost, whatever the solve time.\n\n## The noise margin\n\nOn a single shift, re-sequencing one job can move the cost by a few points. So a cost difference\nsmaller than **2% of the cheapest plan, or 5 points, whichever is larger**, counts as a tie, not a\nwin. Calling a 1% difference a win would be a false positive. The shaded band on the chart shows\nthis margin.\n\n## Best value, step by step\n\n1. **Coverage guard:** drop any plan that covers fewer bottleneck tool-downs, or noticeably less\n   priority-weighted work, than the best plan.\n2. **Cheapest:** find the lowest-cost plan that's left.\n3. **Ties:** every remaining plan within the noise margin of it is equivalent.\n4. **Fastest:** of those, the one with the shortest solve time wins.\n\nThe card states which case applied, and the **trade-off** line names what you'd give up by picking\nsomething else.\n\n## The cost \u00d7 latency chart\n\nEach point is a strategy: operating cost (down is better) against solve time (left is better, on a\nlog scale). The line joins the **efficient frontier**: strategies no other strategy beats on both\ncost and speed. A strategy off the frontier is dominated.\n",
+  "sections": [
+   {
+    "heading": "Planning goals",
+    "anchor": "planning-goals"
+   },
+   {
+    "heading": "The noise margin",
+    "anchor": "the-noise-margin"
+   },
+   {
+    "heading": "Best value, step by step",
+    "anchor": "best-value-step-by-step"
+   },
+   {
+    "heading": "The cost \u00d7 latency chart",
+    "anchor": "the-cost-latency-chart"
+   }
+  ]
+ },
+ "roles-and-access": {
+  "slug": "roles-and-access",
+  "title": "Accounts, roles and access",
+  "summary": "Signing in, what viewers and dispatchers can do, and access to fabs.",
+  "section": "Reference",
+  "body": "# Accounts, roles and access\n\n## Signing in\n\nOn the hosted app, sign in with your work email: a **magic link** by email, or a **password**. Running\nlocally, choose **Continue as Dispatcher** or **Continue as Viewer** (local demo only; the hosted app\nrefuses it).\n\n**Sign out** is in the user menu (your initial, top right). On phones, the theme switch is there too.\n\n## Roles\n\n| | Viewer | Dispatcher |\n|---|---|---|\n| Generate shifts, compare strategies, explore every view | \u2713 | \u2713 |\n| What-ifs (weights, report a job, off shift) | \u2713 | \u2713 |\n| Watch and join live shifts | \u2713 | \u2713 |\n| Start and drive live shifts, report tool-downs | | \u2713 |\n| Run benchmarks and optimality gaps | | \u2713 |\n\nIf a button is greyed out with a note about the dispatcher role, ask your administrator for it.\nThe server enforces roles too, not just the screen.\n\n## Fab access\n\nEach account can see specific fabs. The fab picker in the top bar lists only yours. A link to a fab\nor shift you can't access behaves as if it doesn't exist.\n",
+  "sections": [
+   {
+    "heading": "Signing in",
+    "anchor": "signing-in"
+   },
+   {
+    "heading": "Roles",
+    "anchor": "roles"
+   },
+   {
+    "heading": "Fab access",
+    "anchor": "fab-access"
+   }
+  ]
+ },
+ "strategies": {
+  "slug": "strategies",
+  "title": "The five strategies",
+  "summary": "Greedy, Hungarian, Regret-2, ALNS and PyVRP, and when each one wins.",
+  "section": "Planning",
+  "body": "# The five strategies\n\nAll five strategies share one constraint engine and one cost function. They differ only in **how\nthey decide the order and scope of assignments**, which is what makes the comparison fair.\n\n## Greedy\n\nTakes jobs in priority, then deadline, order, and gives each to the cheapest feasible engineer.\nNever revisits a choice. Instant and the easiest to explain, but an early choice can block a later,\ntighter job.\n\n## Hungarian\n\nFinds the optimal engineer-to-job matching for one round (Kuhn\u2013Munkres), commits it, and repeats\nuntil no feasible pair is left. The **fastest response to tool-downs** and the most even workload,\nbut it builds up idle time because it plans one round at a time.\n\n## Regret-2\n\nPlaces first the job with the most to lose: the largest gap between its best and second-best\nengineer. That **protects scarce certifications**, so a job only one person can do isn't left\nstranded.\n\n## ALNS\n\nAdaptive large neighbourhood search: repeatedly removes part of the plan and repairs it, keeping\nchanges that lower the cost. It optimises the exact objective, including workload balance. Closest\nto optimal on small shifts.\n\n## PyVRP\n\nA state-of-the-art vehicle-routing solver (iterated local search, C++ core), warm-started from\nRegret-2. The **lowest operating cost at full scale**, mostly by cutting idle wait.\n\n## Exact solver\n\nNot a dispatch option: on small shifts it enumerates every feasible route and solves a\nset-partitioning problem to find the **proven optimum**, so the Benchmark view can show how far each\nheuristic is from it.\n\n## When each one wins\n\n| Situation | Best choice |\n|---|---|\n| You need an answer instantly | Greedy or Hungarian |\n| Tool-downs must be answered fastest | Hungarian |\n| Scarce certifications | Regret-2 |\n| Lowest cost on a normal shift | PyVRP |\n| Small shift, closest to optimal | ALNS |\n| Certified engineers have run out | None: every strategy hits the same ceiling. It's a staffing problem. |\n",
+  "sections": [
+   {
+    "heading": "Greedy",
+    "anchor": "greedy"
+   },
+   {
+    "heading": "Hungarian",
+    "anchor": "hungarian"
+   },
+   {
+    "heading": "Regret-2",
+    "anchor": "regret-2"
+   },
+   {
+    "heading": "ALNS",
+    "anchor": "alns"
+   },
+   {
+    "heading": "PyVRP",
+    "anchor": "pyvrp"
+   },
+   {
+    "heading": "Exact solver",
+    "anchor": "exact-solver"
+   },
+   {
+    "heading": "When each one wins",
+    "anchor": "when-each-one-wins"
+   }
+  ]
+ },
+ "views": {
+  "slug": "views",
+  "title": "The six views",
+  "summary": "What each tab shows and when to use it.",
+  "section": "Get started",
+  "body": "# The six views\n\nThe tabs across the top all show the **same shift**. Your selection (a job or an engineer) carries\nacross views, and the URL always reflects what you're looking at, so you can share it.\n\n## Overview\n\nThe recommendation, the cost \u00d7 latency chart, a scorecard per strategy, key findings, the jobs the\nstrategies disagree on, and a full metric comparison. Start here.\n\n## Floor plan\n\nThe fab floor with tool areas, engineers at their home bays and every job. Click a job or an\nengineer to inspect it on the right. Switch strategies with the buttons above the map, or choose\n**Side by side** to see all five at once. See [Reading the floor plan](help:floor-plan).\n\n## Schedule\n\nA timeline per engineer for the chosen strategy: walking, idle waiting and hands-on work, in time\norder. Useful for spotting idle gaps and overloaded engineers.\n\n## Workforce\n\nDemand against certified supply per tool family, the certification matrix, and every job left\nunserved with the reason. When a family has unserved work and few top-level engineers, the limit is\n**staffing, not the algorithm**.\n\n## Live dispatch\n\nRun the shift in real time: tool-downs arrive as the clock moves, work in progress is locked, and\nthe plan re-optimises on every event. See [Live dispatch](help:live-dispatch).\n\n## Benchmark\n\nCompare the strategies over many seeded shifts with confidence intervals, and measure each\nheuristic's distance from the proven optimum. See [Benchmark and optimality](help:benchmark).\n\n## On a phone or tablet\n\nEverything works by touch. The left panel becomes a **drawer**: tap **\u2630** (top left) to open the\ncontrols and tap outside to close it. The tabs scroll sideways, the floor plan responds to taps, and\nthe theme switch moves into the user menu.\n",
+  "sections": [
+   {
+    "heading": "Overview",
+    "anchor": "overview"
+   },
+   {
+    "heading": "Floor plan",
+    "anchor": "floor-plan"
+   },
+   {
+    "heading": "Schedule",
+    "anchor": "schedule"
+   },
+   {
+    "heading": "Workforce",
+    "anchor": "workforce"
+   },
+   {
+    "heading": "Live dispatch",
+    "anchor": "live-dispatch"
+   },
+   {
+    "heading": "Benchmark",
+    "anchor": "benchmark"
+   },
+   {
+    "heading": "On a phone or tablet",
+    "anchor": "on-a-phone-or-tablet"
+   }
+  ]
+ },
+ "what-ifs": {
+  "slug": "what-ifs",
+  "title": "What-if scenarios",
+  "summary": "Generate shifts, report a job, take an engineer off shift, and plan with predicted durations.",
+  "section": "Planning",
+  "body": "# What-if scenarios\n\n## Generate a shift\n\nIn **Shift scenario**, choose a **preset**, a **seed**, and how many engineers and jobs, then click\n**Generate shift**. The same seed always produces the same shift, so you can share and reproduce\nit. Presets come from your fab's profile, for example *Normal shift*, *Lithography crunch* or\n*Excursion / surge*.\n\n## Report a job by tapping the floor\n\nTurn on **Report a job by tapping the floor**, choose its type and when it's reported, then click\ninside a tool area. A new job appears there, every strategy re-plans, and the new job opens in the\ninspector. Response windows: bottleneck down 45 min, tool down 120 min, PM 240 min.\n\n## Take an engineer off shift\n\nClick an engineer (on the floor plan, schedule or workforce view), then **Take off shift\n(what-if)**. Every strategy re-plans without them, so you can see who absorbs their work.\n**Restore all** brings everyone back.\n\n## Plan with history-predicted durations\n\n**Plan with history-predicted durations** replaces each tool-down's standard estimate with what\nsimilar past repairs actually took (from repair history), and re-plans. The panel tells you how\nmany durations changed.\n",
+  "sections": [
+   {
+    "heading": "Generate a shift",
+    "anchor": "generate-a-shift"
+   },
+   {
+    "heading": "Report a job by tapping the floor",
+    "anchor": "report-a-job-by-tapping-the-floor"
+   },
+   {
+    "heading": "Take an engineer off shift",
+    "anchor": "take-an-engineer-off-shift"
+   },
+   {
+    "heading": "Plan with history-predicted durations",
+    "anchor": "plan-with-history-predicted-durations"
+   }
+  ]
+ }
+}

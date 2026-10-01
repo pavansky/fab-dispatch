@@ -15,8 +15,18 @@ import shift from './fixtures/shift.json'
 import shiftAdvanced from './fixtures/shift_advanced.json'
 import shiftEvents from './fixtures/shift_events.json'
 import shifts from './fixtures/shifts.json'
+import helpIndex from './fixtures/help_index.json'
+import helpArticles from './fixtures/help_articles.json'
+import helpSearch from './fixtures/help_search.json'
+import helpAnchors from './fixtures/help_anchors.json'
+import askJob from './fixtures/ask_job.json'
+import askDocs from './fixtures/ask_docs.json'
+import askUnknown from './fixtures/ask_unknown.json'
 
-export const fixtures = { authConfig, me, meta, fabs, fab1, fab2, scenario, scenarioFab2, plans, benchmark, shift, shiftAdvanced, shiftEvents, shifts }
+export const fixtures = {
+  authConfig, me, meta, fabs, fab1, fab2, scenario, scenarioFab2, plans, benchmark, shift, shiftAdvanced, shiftEvents, shifts,
+  helpIndex, helpArticles, helpSearch, helpAnchors, askJob, askDocs, askUnknown,
+}
 
 export const json = (status, body, headers = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } })
@@ -45,6 +55,11 @@ export function workspaceRoutes({ role = 'dispatcher' } = {}) {
     'POST /plan': ({ body }) => (body.scenario.fab_id === fab1.id ? plans[body.algorithm] : never()),
     'POST /benchmark': ({ body }) => ({ ...benchmark, preset: body.preset, runs: benchmark.runs.map((r) => ({ ...r, preset: body.preset })) }),
     'GET /shifts': [],
+    'GET /help': helpIndex,
+    'GET /help/search': ({ url }) => ({ ...helpSearch, query: new URL(url, 'http://x').searchParams.get('q') }),
+    ...Object.fromEntries(Object.entries(helpArticles).map(([slug, a]) => [`GET /help/${slug}`, a])),
+    // The assistant's real answers for three kinds of question.
+    'POST /assistant/ask': ({ body }) => (/J006/.test(body.question) ? askJob : /joke/i.test(body.question) ? askUnknown : askDocs),
   }
 }
 

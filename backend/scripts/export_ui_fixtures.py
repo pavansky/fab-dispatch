@@ -36,6 +36,7 @@ def export() -> dict[str, object]:
     from app.algorithms import ALGORITHMS
     from app.auth import issue_demo_token
     from app.config import get_settings
+    from app.help import load_articles
     from app.main import app
 
     token = issue_demo_token("dispatcher", get_settings())
@@ -60,10 +61,25 @@ def export() -> dict[str, object]:
     advanced = ok(c.post(f"/api/shifts/{sid}/advance", json={"minutes": 60}))
     events = ok(c.get(f"/api/shifts/{sid}/events"))
     recent = ok(c.get("/api/shifts", params={"fab_id": SCENARIO["fab_id"]}))
-    for p in plans.values():  # wall-clock time differs run to run; pin it so fixtures are stable
-        p["metrics"]["runtime_ms"] = {"greedy": 2, "hungarian": 3, "regret": 6, "alns": 180, "pyvrp": 390}[
-            p["algorithm"]
-        ]
+    ask = {
+        "job": ok(
+            c.post(
+                "/api/assistant/ask",
+                json={"question": "Why is J006 assigned this way?", "context": {"scenario": scenario}},
+            )
+        ),
+        "docs": ok(c.post("/api/assistant/ask", json={"question": "How do I report a tool-down during a live shift?"})),
+        "unknown": ok(c.post("/api/assistant/ask", json={"question": "Tell me a joke"})),
+    }
+    benchmark = ok(c.post("/api/benchmark", json=BENCHMARK))
+    # Wall-clock times differ run to run; pin them so regenerating doesn't churn the diff.
+    pinned = {"greedy": 2, "hungarian": 3, "regret": 6, "alns": 180, "pyvrp": 390}
+    for p in plans.values():
+        p["metrics"]["runtime_ms"] = pinned[p["algorithm"]]
+        if "runtime_ms" in p["solver"]:
+            p["solver"]["runtime_ms"] = pinned[p["algorithm"]]
+    for run in benchmark["runs"]:
+        run["metrics"]["runtime_ms"] = pinned[run["algorithm"]]
     return {
         "auth_config": ok(c.get("/api/auth/config")),
         "me": ok(c.get("/api/auth/me")),
@@ -76,11 +92,19 @@ def export() -> dict[str, object]:
             c.post("/api/scenario", json={**SCENARIO, "fab_id": "fab2-200mm-analog", "preset": "normal"})
         ),
         "plans": plans,
-        "benchmark": ok(c.post("/api/benchmark", json=BENCHMARK)),
+        "benchmark": benchmark,
         "shift": shift,
         "shift_advanced": advanced,
         "shift_events": events,
         "shifts": recent,
+        "help_index": ok(c.get("/api/help")),
+        "help_articles": {slug: ok(c.get(f"/api/help/{slug}")) for slug in load_articles()},
+        "help_search": ok(c.get("/api/help/search", params={"q": "idle wait"})),
+        # Every article's section anchors, so UI tests can check each in-app help link resolves.
+        "help_anchors": {a.slug: [s.anchor for s in a.sections] for a in load_articles().values()},
+        "ask_job": ask["job"],
+        "ask_docs": ask["docs"],
+        "ask_unknown": ask["unknown"],
     }
 
 

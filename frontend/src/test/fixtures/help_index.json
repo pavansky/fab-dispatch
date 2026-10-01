@@ -1,0 +1,104 @@
+{
+ "sections": [
+  {
+   "name": "Get started",
+   "articles": [
+    {
+     "slug": "getting-started",
+     "title": "Getting started",
+     "summary": "What Fab Dispatch does, and your first five minutes with it."
+    },
+    {
+     "slug": "views",
+     "title": "The six views",
+     "summary": "What each tab shows and when to use it."
+    },
+    {
+     "slug": "assistant",
+     "title": "The assistant",
+     "summary": "What the assistant can answer, where its answers come from, and its limits."
+    }
+   ]
+  },
+  {
+   "name": "Planning",
+   "articles": [
+    {
+     "slug": "recommendation",
+     "title": "How the recommendation works",
+     "summary": "Planning goals, the noise margin, and why a slower solver has to earn its latency."
+    },
+    {
+     "slug": "strategies",
+     "title": "The five strategies",
+     "summary": "Greedy, Hungarian, Regret-2, ALNS and PyVRP, and when each one wins."
+    },
+    {
+     "slug": "constraints-and-weights",
+     "title": "Constraints and cost weights",
+     "summary": "The rules no plan may break, and the soft costs you can tune."
+    },
+    {
+     "slug": "floor-plan",
+     "title": "Reading the floor plan",
+     "summary": "Marks, routes, coverage changes and the inspector's explanations."
+    },
+    {
+     "slug": "what-ifs",
+     "title": "What-if scenarios",
+     "summary": "Generate shifts, report a job, take an engineer off shift, and plan with predicted durations."
+    },
+    {
+     "slug": "benchmark",
+     "title": "Benchmark and optimality",
+     "summary": "Compare strategies over many shifts with confidence intervals, and measure the gap to the optimum."
+    }
+   ]
+  },
+  {
+   "name": "Live dispatch",
+   "articles": [
+    {
+     "slug": "live-dispatch",
+     "title": "Live dispatch",
+     "summary": "Run a shift in real time with your team: the clock, tool-downs, re-plans and sharing."
+    }
+   ]
+  },
+  {
+   "name": "Reference",
+   "articles": [
+    {
+     "slug": "metrics",
+     "title": "Metrics reference",
+     "summary": "Every metric on the scorecards and in the benchmark, and which direction is better."
+    },
+    {
+     "slug": "glossary",
+     "title": "Glossary",
+     "summary": "Fab and dispatch terms used in the app."
+    },
+    {
+     "slug": "roles-and-access",
+     "title": "Accounts, roles and access",
+     "summary": "Signing in, what viewers and dispatchers can do, and access to fabs."
+    },
+    {
+     "slug": "fabs",
+     "title": "Fabs and profiles",
+     "summary": "Switching fabs, what a fab profile contains, and adding a new fab."
+    },
+    {
+     "slug": "keyboard-shortcuts",
+     "title": "Keyboard shortcuts",
+     "summary": "Move around the app without the mouse."
+    },
+    {
+     "slug": "faq",
+     "title": "FAQ and troubleshooting",
+     "summary": "Common questions and what to do when something looks wrong."
+    }
+   ]
+  }
+ ]
+}

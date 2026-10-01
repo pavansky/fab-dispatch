@@ -1,0 +1,28 @@
+{
+ "answer": "**J006** \u00b7 LIT-02D \u00b7 PM, needs Lithography level 2+ \u00b7 start window 09:22\u201313:22 \u00b7 240 min\n\nLeft unassigned by Greedy; the others serve it.\n\n- **Greedy:** unassigned. 1 qualified engineer(s), but none had capacity: rejected: 4 lacks the skill, 1 already at max jobs, 1 certification too low.\n- **Hungarian:** E01, starting 12:05. Round 4: optimal matching of 6 engineers x 5 open jobs chose E01 at cost -79.5; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.\n- **Regret-2:** E01, starting 12:05. Step 7: placed early because only one engineer could still do it; chose E01 at cost -79.5; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.\n- **ALNS:** E01, starting 12:05. ALNS kept this assignment: best plan found at iteration 9 of 60. Re-inserting it alone would cost E01 at cost -74.5; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.\n- **PyVRP:** E01, starting 12:05. Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 4 of E01's route, at marginal cost -35.4.",
+ "intent": "job",
+ "citations": [
+  {
+   "slug": "floor-plan",
+   "title": "Reading the floor plan",
+   "heading": "The inspector",
+   "anchor": "the-inspector"
+  },
+  {
+   "slug": "constraints-and-weights",
+   "title": "Constraints and cost weights",
+   "heading": "Hard constraints",
+   "anchor": "hard-constraints"
+  }
+ ],
+ "actions": [
+  {
+   "label": "Open J006 on the floor plan",
+   "kind": "job",
+   "target": "J006"
+  }
+ ],
+ "suggestions": [],
+ "grounded": true,
+ "provider": "local"
+}

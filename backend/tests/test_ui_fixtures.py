@@ -30,31 +30,18 @@ def fresh():
     return export()
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "auth_config",
-        "me",
-        "meta",
-        "fabs",
-        "fab1",
-        "fab2",
-        "scenario",
-        "scenario_fab2",
-        "plans",
-        "benchmark",
-        "shift",
-        "shift_advanced",
-        "shift_events",
-        "shifts",
-    ],
-)
+@pytest.mark.parametrize("name", sorted(p.stem for p in OUT.glob("*.json")))
 def test_ui_fixtures_match_the_api(fresh, name):
+    assert name in fresh, f"{name}.json is committed but no longer exported"
     committed = json.loads((OUT / f"{name}.json").read_text())
     assert shape(committed) == shape(fresh[name]), (
         f"frontend fixture {name}.json no longer matches the API. "
         "Refresh with: cd backend && python -m scripts.export_ui_fixtures"
     )
+
+
+def test_every_exported_fixture_is_committed(fresh):
+    assert sorted(fresh) == sorted(p.stem for p in OUT.glob("*.json"))
 
 
 def test_fixtures_cover_assigned_and_unassigned_work(fresh):

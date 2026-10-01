@@ -3,6 +3,12 @@
 import { test as base, expect } from '@playwright/test'
 
 export const test = base.extend({
+  // The first-run tour is tested on its own (tour.spec.js); everywhere else it's already been seen.
+  page: async ({ page }, use) => {
+    await page.addInitScript(() => { try { localStorage.setItem('fab-dispatch-tour', 'done') } catch { /* ignore */ } })
+    await use(page)
+  },
+
   consoleErrors: [async ({ page }, use) => {
     const errors = []
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
