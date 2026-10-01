@@ -47,7 +47,7 @@ jobs:
           import json, os, urllib.error, urllib.request
           cfg = json.load(urllib.request.urlopen(os.environ["URL"] + "/api/auth/config"))
           if cfg.get("mode") == "supabase":
-              for table in ("shifts", "shift_events", "shift_presence", "plan_cache", "assistant_feedback"):
+              for table in ("shifts", "shift_events", "shift_presence", "plan_cache", "assistant_feedback", "assignments", "rate_limits"):
                   req = urllib.request.Request(f"{cfg['supabase_url']}/rest/v1/{table}?select=*&limit=1",
                                                headers={"apikey": cfg["supabase_publishable_key"]})
                   try:
