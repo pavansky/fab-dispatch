@@ -55,7 +55,7 @@ MILP (HiGHS). Gap = (strategy cost − optimum) / optimum.
 | **ALNS** | **0.9%** | **6.7%** | 13/20 |
 | PyVRP | 1.8% | 11.2% | **14/20** |
 
-### Solve time (ms, one shift, this laptop)
+### Solve time (ms, one shift, an Apple M5 Pro laptop)
 
 | Size | Greedy | Hungarian | Regret-2 | ALNS | PyVRP |
 |---|---|---|---|---|---|

@@ -16,13 +16,7 @@ greedy to a state-of-the-art vehicle-routing solver, compared live, with every d
 [![Docs](https://github.com/pavansky/fab-dispatch/actions/workflows/docs.yml/badge.svg?branch=main)](https://pavansky.github.io/fab-dispatch/)
 [![Uptime](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml)
 [![Release](https://img.shields.io/github/v/release/pavansky/fab-dispatch?color=020202)](CHANGELOG.md)
-[![Tests](https://img.shields.io/badge/tests-423-ef6f2e)](#testing)
-[![Coverage](https://img.shields.io/badge/coverage-API%2094%25%20%C2%B7%20UI%2088%25-ef6f2e)](#testing)
-[![Accessibility](https://img.shields.io/badge/a11y-WCAG%202.1%20AA%20checked-ef6f2e)](#testing)
-[![Assistant eval](https://img.shields.io/badge/assistant%20eval-42%2F42-ef6f2e)](https://pavansky.github.io/fab-dispatch/ai/)
-[![Python](https://img.shields.io/badge/python-3.11–3.14-020202?logo=python&logoColor=white)](#quick-start)
-[![React](https://img.shields.io/badge/React-19-020202?logo=react&logoColor=white)](frontend/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.142-020202?logo=fastapi&logoColor=white)](backend/)
+[![Tests](https://img.shields.io/badge/tests-425-ef6f2e)](#testing)
 [![License: MIT](https://img.shields.io/badge/license-MIT-020202)](LICENSE)
 
 [**Quick start**](#quick-start) · [**Review in 10 minutes**](https://pavansky.github.io/fab-dispatch/reviewers/) · [Requirements map](#requirements-map) · [Results](#results) ·
@@ -36,23 +30,84 @@ greedy to a state-of-the-art vehicle-routing solver, compared live, with every d
 
 ## Contents
 
-- [Quick start](#quick-start) · [A 5-minute tour](#a-5-minute-tour) · [Troubleshooting](#troubleshooting)
-- [Production readiness](#production-readiness)
 - [Why this exists](#why-this-exists)
 - [Requirements map](#requirements-map)
-- [Highlights](#highlights)
 - [Results](#results)
+- [Quick start](#quick-start)
+- [A 5-minute tour](#a-5-minute-tour)
+- [Troubleshooting](#troubleshooting)
+- [Highlights](#highlights)
 - [Screenshots](#screenshots)
 - [How it works](#how-it-works)
+- [Testing](#testing)
+- [Production readiness](#production-readiness)
 - [Multi-fab and access control](#multi-fab-and-access-control)
 - [API](#api)
 - [Configuration](#configuration)
-- [Testing](#testing)
 - [Delivery: dev → UAT → production](#delivery-dev--uat--production)
 - [Project structure](#project-structure)
 - [Documentation](#documentation)
 - [Support](#support)
 - [Limitations and roadmap](#limitations-and-roadmap)
+
+> **Evaluating the assignment?** The first three sections answer the brief: the problem, where every
+> requirement lives, and what comparing the algorithms showed. Everything after *Highlights* is
+> production engineering beyond the brief: optional reading.
+
+## Why this exists
+
+When a lithography scanner goes down, every minute costs wafer moves. A shift lead has to decide,
+right now, which engineer goes. That engineer has to be certified on the tool at the right level,
+able to start within the response window, and not needed more urgently somewhere else, and the whole
+floor has to stay covered for the rest of the shift.
+
+Fab Dispatch models that decision as what it really is: a **technician routing and scheduling problem**
+with skills, time windows and priorities. It solves it with five strategies, explains every
+assignment, and recommends a plan using an explicit, statistically honest rule. Every fab is
+described by a data profile, so the same product serves any site.
+
+## Requirements map
+
+Where each part of a resource-allocation brief lives, in the app and in the code.
+
+| Requirement | In the app | In the code |
+|---|---|---|
+| Data model: resources, requests, assignments | Left panel and every view | `backend/app/models.py` (`Engineer`, `Job`, `Assignment`, `Route`, `AllocationResult`) |
+| At least two allocation algorithms | Five, side by side on **Overview** | `backend/app/algorithms/` (greedy, hungarian, regret, alns, pyvrp_ils, plus an exact MILP) |
+| Hard and soft constraints | **Cost weights** sliders; rejections on **Floor plan** | `backend/app/planner.py` (one constraint engine for every strategy) |
+| Decision explanations | Click any job on **Floor plan** | `backend/app/engine.py`, `algorithms/alns.py` |
+| Meaningful metrics | Scorecards on **Overview**, tables on **Benchmark** | `backend/app/engine.py` (`_metrics`) |
+| Tests and comparisons | (not in the UI) | `backend/tests/` (constraints, algorithms, optimality, API), `frontend/src/**/*.test.*` (components) and `frontend/e2e/` (Playwright) |
+| Map / spatial view | **Floor plan** (SVG, no map service or keys) | `frontend/src/components/FloorPlan.jsx` |
+| Algorithm comparison | **Overview** and **Benchmark** | `frontend/src/components/Overview.jsx`, `Benchmark.jsx` |
+| Metrics display | **Overview**, **Benchmark**, **Workforce** | `frontend/src/components/MetricBars.jsx` |
+| Interactive features (a plus) | Generate shifts, weights, what-if tool-downs, live dispatch, second fab | `frontend/src/components/Sidebar.jsx`, `LiveShift.jsx` |
+| README and analysis | This file | [docs/ANALYSIS.md](docs/ANALYSIS.md) |
+| React + FastAPI; free libraries only; runs locally without keys | Everything above | `frontend/package.json`, `backend/requirements.txt` |
+
+## Results
+
+80 seeded shifts (4 scenario types × 20) of 14 engineers and 45 jobs, plus 20 small shifts solved to
+proven optimality. Full tables and method in [docs/ANALYSIS.md](docs/ANALYSIS.md).
+
+| Strategy | Kind | Solve time* | Lowest cost in | Mean gap to optimum | Strength |
+|---|---|---|---|---|---|
+| Greedy | constructive | ~2 ms | 0 / 80 | 10.5% | Instant, simplest to explain |
+| Hungarian | assignment | ~3 ms | 0 / 80 | 7.2% | Fastest response to tool-downs, most even workload |
+| Regret-2 | constructive | ~6 ms | 0 / 80 | 4.7% | Protects scarce certifications |
+| ALNS | metaheuristic | ~0.2 s | 2 / 80 | **0.9%** | Optimises the exact objective, including balance |
+| PyVRP | metaheuristic | ~0.4 s | **78 / 80** | 1.8% | Lowest operating cost at full scale |
+
+\*Laptop, 14 engineers × 45 jobs. On Vercel's serverless CPU, ALNS and PyVRP take about 0.7–1.3 s.
+A repeated plan is served from cache in under 1 ms of server time.
+
+**What the comparison shows**
+- Search beats one-pass rules: PyVRP is **23–30% cheaper** than the best constructive method in three of
+  four scenario types, mostly by cutting idle wait by a third.
+- Hungarian is the right choice when time-to-respond matters most. It is fastest to every tool-down,
+  but builds up the most idle time.
+- When certified engineers run out, every strategy hits the same ceiling. The workforce view says so:
+  it's a staffing problem, not an algorithm one.
 
 ## Quick start
 
@@ -144,53 +199,6 @@ user menu for the version, live status, docs and support links.
 | **Run benchmark** or **Start live shift** is disabled | You're signed in as a viewer. Use the avatar menu to sign out, then **Continue as Dispatcher**. |
 | You want a clean slate | Stop the API, delete `backend/data/`, start it again. |
 
-## Production readiness
-
-What a production AI application needs, and where to see it here.
-
-| Area | In place |
-|---|---|
-| **Access** | Supabase Auth (email link, code or password), one-click guest access, `viewer` / `dispatcher` roles, per-user fab access, Cloudflare Turnstile CAPTCHA |
-| **Data security** | Row-level security on every app table (closed to the public API), strict CSP, HSTS, rate limits, request size limits, secrets only in the platform |
-| **Reliability** | Versioned migrations under a lock, optimistic concurrency, idempotent live actions, a clock lease, an SSE stream that resumes, cached plans |
-| **Operations** | Health and liveness endpoints, request ids, structured logs, daily data retention, post-deploy smoke tests, an [uptime check every 30 minutes](.github/workflows/uptime.yml) that opens an incident issue |
-| **Delivery** | CI on every PR (lint, 3 test layers, coverage floors, audits, accessibility, images), branch protection, tagged releases promoted UAT → production, Dependabot |
-| **AI quality** | A grounded assistant with sources and honest refusals, an [evaluation set](backend/tests/eval/assistant_eval.json) in CI (42/42), 👍/👎 feedback with stats, an [AI transparency page](https://pavansky.github.io/fab-dispatch/ai/), an optional LLM that can only reword |
-| **Experience** | Light/dark themes, phone layouts, keyboard shortcuts, a first-run tour, contextual help, WCAG 2.1 AA checks, a crash screen with a prefilled report, link previews |
-| **Documentation** | [Docs site](https://pavansky.github.io/fab-dispatch/) (guide, architecture, decisions, operations), [interactive API reference](https://fab-dispatch.vercel.app/api/docs), in-app help center |
-| **Support** | In-app **About & support**, [Discussions](https://github.com/pavansky/fab-dispatch/discussions), issue templates, a [security policy](SECURITY.md), a [privacy page](https://pavansky.github.io/fab-dispatch/privacy/) |
-
-## Why this exists
-
-When a lithography scanner goes down, every minute costs wafer moves. A shift lead has to decide,
-right now, which engineer goes. That engineer has to be certified on the tool at the right level,
-able to start within the response window, and not needed more urgently somewhere else, and the whole
-floor has to stay covered for the rest of the shift.
-
-Fab Dispatch models that decision as what it really is: a **technician routing and scheduling problem**
-with skills, time windows and priorities. It solves it with five strategies, explains every
-assignment, and recommends a plan using an explicit, statistically honest rule. Every fab is
-described by a data profile, so the same product serves any site.
-
-## Requirements map
-
-Where each part of a resource-allocation brief lives, in the app and in the code.
-
-| Requirement | In the app | In the code |
-|---|---|---|
-| Data model: resources, requests, assignments | Left panel and every view | `backend/app/models.py` (`Engineer`, `Job`, `Assignment`, `Route`, `AllocationResult`) |
-| At least two allocation algorithms | Five, side by side on **Overview** | `backend/app/algorithms/` (greedy, hungarian, regret, alns, pyvrp_ils, plus an exact MILP) |
-| Hard and soft constraints | **Cost weights** sliders; rejections on **Floor plan** | `backend/app/planner.py` (one constraint engine for every strategy) |
-| Decision explanations | Click any job on **Floor plan** | `backend/app/engine.py`, `algorithms/alns.py` |
-| Meaningful metrics | Scorecards on **Overview**, tables on **Benchmark** | `backend/app/engine.py` (`_metrics`) |
-| Tests and comparisons | (not in the UI) | `backend/tests/` (constraints, algorithms, optimality, API), `frontend/src/**/*.test.*` (components) and `frontend/e2e/` (Playwright) |
-| Map / spatial view | **Floor plan** (SVG, no map service or keys) | `frontend/src/components/FloorPlan.jsx` |
-| Algorithm comparison | **Overview** and **Benchmark** | `frontend/src/components/Overview.jsx`, `Benchmark.jsx` |
-| Metrics display | **Overview**, **Benchmark**, **Workforce** | `frontend/src/components/MetricBars.jsx` |
-| Interactive features (a plus) | Generate shifts, weights, what-if tool-downs, live dispatch, second fab | `frontend/src/components/Sidebar.jsx`, `LiveShift.jsx` |
-| README and analysis | This file | [docs/ANALYSIS.md](docs/ANALYSIS.md) |
-| React + FastAPI; free libraries only; runs locally without keys | Everything above | `frontend/package.json`, `backend/requirements.txt` |
-
 ## Highlights
 
 - **Five strategies, one engine.** Greedy, Hungarian (Kuhn-Munkres in rounds), regret-2 insertion,
@@ -217,36 +225,12 @@ Where each part of a resource-allocation brief lives, in the app and in the code
   Runs locally with no key; an LLM can optionally reword answers, never add facts.
 - **Works on a phone.** The controls become a drawer, the tabs scroll, the floor plan works by touch,
   and the light theme is the default.
-- **Tested at every layer.** 289 backend tests, 101 frontend component tests rendered against real API
+- **Tested at every layer.** 291 backend tests, 101 frontend component tests rendered against real API
   responses, and 33 Playwright end-to-end tests that drive the real app on desktop and on a phone,
   including WCAG 2.1 AA accessibility checks on every screen.
 - **Engineered for change.** Versioned database migrations, CI with coverage, security audits and a
   Postgres matrix, a release pipeline that promotes UAT-tested commits to production, and
   post-deploy smoke tests.
-
-## Results
-
-80 seeded shifts (4 scenario types × 20) of 14 engineers and 45 jobs, plus 20 small shifts solved to
-proven optimality. Full tables and method in [docs/ANALYSIS.md](docs/ANALYSIS.md).
-
-| Strategy | Kind | Solve time* | Lowest cost in | Mean gap to optimum | Strength |
-|---|---|---|---|---|---|
-| Greedy | constructive | ~2 ms | 0 / 80 | 10.5% | Instant, simplest to explain |
-| Hungarian | assignment | ~3 ms | 0 / 80 | 7.2% | Fastest response to tool-downs, most even workload |
-| Regret-2 | constructive | ~6 ms | 0 / 80 | 4.7% | Protects scarce certifications |
-| ALNS | metaheuristic | ~0.2 s | 2 / 80 | **0.9%** | Optimises the exact objective, including balance |
-| PyVRP | metaheuristic | ~0.4 s | **78 / 80** | 1.8% | Lowest operating cost at full scale |
-
-\*Laptop, 14 engineers × 45 jobs. On Vercel's serverless CPU, ALNS and PyVRP take about 0.7–1.3 s.
-A repeated plan is served from cache in under 1 ms of server time.
-
-**What the comparison shows**
-- Search beats one-pass rules: PyVRP is **23–30% cheaper** than the best constructive method in three of
-  four scenario types, mostly by cutting idle wait by a third.
-- Hungarian is the right choice when time-to-respond matters most. It is fastest to every tool-down,
-  but builds up the most idle time.
-- When certified engineers run out, every strategy hits the same ceiling. The workforce view says so:
-  it's a staffing problem, not an algorithm one.
 
 ## Screenshots
 
@@ -299,6 +283,71 @@ because fab bays sit on a grid of aisles.
 **The strategies** only decide *order and scope*; the engine scores everything. That's what makes the
 comparison fair. Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Testing
+
+Three layers, all run in CI on every pull request:
+
+| Layer | Tool | Count | What it proves |
+|---|---|---|---|
+| Backend | pytest | **291** (6 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency |
+| Frontend components | Vitest + Testing Library | **101** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, the crash screen, against **real API responses** |
+| End-to-end | Playwright | **33** (28 desktop, 5 phone) | The real API and UI together in Chromium: two browsers on one live shift, and axe-core WCAG 2.1 AA checks on every screen and panel |
+
+Coverage: **94%** of the API (with Postgres, as CI measures it) and **88%** of the UI. CI fails below
+90% for the API, or below the UI floors in `frontend/vite.config.js`.
+
+```bash
+# Backend (from backend/, with the virtualenv active)
+pip install -r requirements-dev.txt
+pytest
+
+# Frontend unit and component tests (from frontend/)
+npm test                      # or: npm run test:coverage
+
+# End-to-end (from frontend/). Starts the API and UI by itself.
+npx playwright install chromium   # once
+npm run test:e2e
+```
+
+`make check` runs everything CI runs: lint, format, all three layers with coverage floors, dependency
+audits and the frontend build. To include the Postgres tests locally, point `FAB_TEST_PG_URL` at any
+Postgres database. To reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.md), run
+`python -m scripts.benchmark --seeds 20` from `backend/` (a few minutes).
+
+**What the tests cover**
+- **Hard constraints** re-derived from scratch for every strategy, on every preset of **every fab**.
+- **Optimality:** heuristics checked against the exact MILP optimum, and never allowed to beat it.
+- **Fab 1 golden test:** converting the hard-coded fab into a profile reproduces its scenarios byte for byte.
+- **Auth:** 401 without a token, forged and expired tokens rejected, 403 for viewers on dispatcher
+  actions (in the API and in the browser), 404 across fabs, demo mode refused in production.
+- **Real-time:** idempotent retries, clock lease conflicts, presence, audit trail; in the browser, a
+  viewer in a second window watching a dispatcher's changes arrive over Server-Sent Events.
+- **UI against real data:** components render JSON captured from the API
+  (`backend/scripts/export_ui_fixtures.py`). A backend test fails if the API's response shape drifts
+  from those fixtures, so the UI tests can't pass against stale data (`make fixtures` refreshes them).
+- **Phone layout:** the drawer, touch selection, no sideways scrolling on any view, and the user menu
+  staying reachable.
+- **Assistant quality:** an evaluation set of real questions must cite the right article (≥ 90%; 100%
+  today), and every off-topic question must get "I don't know". Answers about a job match the plans
+  exactly. The optional LLM is tested to fall back to the grounded answer on any failure.
+- **Every end-to-end test fails on any browser console error.**
+
+## Production readiness
+
+What a production AI application needs, and where to see it here.
+
+| Area | In place |
+|---|---|
+| **Access** | Supabase Auth (email link, code or password), one-click guest access, `viewer` / `dispatcher` roles, per-user fab access, Cloudflare Turnstile CAPTCHA |
+| **Data security** | Row-level security on every app table (closed to the public API), strict CSP, HSTS, rate limits, request size limits, secrets only in the platform |
+| **Reliability** | Versioned migrations under a lock, optimistic concurrency, idempotent live actions, a clock lease, an SSE stream that resumes, cached plans |
+| **Operations** | Health and liveness endpoints, request ids, structured logs, daily data retention, post-deploy smoke tests, an [uptime check every 30 minutes](.github/workflows/uptime.yml) that opens an incident issue |
+| **Delivery** | CI on every PR (lint, 3 test layers, coverage floors, audits, accessibility, images), branch protection, tagged releases promoted UAT → production, Dependabot |
+| **AI quality** | A grounded assistant with sources and honest refusals, an [evaluation set](backend/tests/eval/assistant_eval.json) in CI (42/42), 👍/👎 feedback with stats, an [AI transparency page](https://pavansky.github.io/fab-dispatch/ai/), an optional LLM that can only reword |
+| **Experience** | Light/dark themes, phone layouts, keyboard shortcuts, a first-run tour, contextual help, WCAG 2.1 AA checks, a crash screen with a prefilled report, link previews |
+| **Documentation** | [Docs site](https://pavansky.github.io/fab-dispatch/) (guide, architecture, decisions, operations), [interactive API reference](https://fab-dispatch.vercel.app/api/docs), in-app help center |
+| **Support** | In-app **About & support**, [Discussions](https://github.com/pavansky/fab-dispatch/discussions), issue templates, a [security policy](SECURITY.md), a [privacy page](https://pavansky.github.io/fab-dispatch/privacy/) |
+
 ## Multi-fab and access control
 
 - **Fab profiles** (`backend/app/fabs/profiles/*.json`) describe a site: floor, tool families with bay
@@ -346,55 +395,6 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
 | `FAB_ASSISTANT_LLM` | `none` | Optional model to reword assistant answers: `anthropic` (`ANTHROPIC_API_KEY`) or `ollama` (local) |
 | `CRON_SECRET` | unset | Protects the daily data-retention endpoint |
 
-## Testing
-
-Three layers, all run in CI on every pull request:
-
-| Layer | Tool | Count | What it proves |
-|---|---|---|---|
-| Backend | pytest | **289** (5 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency |
-| Frontend components | Vitest + Testing Library | **101** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, the crash screen, against **real API responses** |
-| End-to-end | Playwright | **33** (28 desktop, 5 phone) | The real API and UI together in Chromium: two browsers on one live shift, and axe-core WCAG 2.1 AA checks on every screen and panel |
-
-Coverage: **94%** of the API (with Postgres, as CI measures it) and **88%** of the UI. CI fails below
-90% for the API, or below the UI floors in `frontend/vite.config.js`.
-
-```bash
-# Backend (from backend/, with the virtualenv active)
-pip install -r requirements-dev.txt
-pytest
-
-# Frontend unit and component tests (from frontend/)
-npm test                      # or: npm run test:coverage
-
-# End-to-end (from frontend/). Starts the API and UI by itself.
-npx playwright install chromium   # once
-npm run test:e2e
-```
-
-`make check` runs everything CI runs: lint, format, all three layers with coverage floors, dependency
-audits and the frontend build. To include the Postgres tests locally, point `FAB_TEST_PG_URL` at any
-Postgres database. To reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.md), run
-`python -m scripts.benchmark --seeds 20` from `backend/` (a few minutes).
-
-**What the tests cover**
-- **Hard constraints** re-derived from scratch for every strategy, on every preset of **every fab**.
-- **Optimality:** heuristics checked against the exact MILP optimum, and never allowed to beat it.
-- **Fab 1 golden test:** converting the hard-coded fab into a profile reproduces its scenarios byte for byte.
-- **Auth:** 401 without a token, forged and expired tokens rejected, 403 for viewers on dispatcher
-  actions (in the API and in the browser), 404 across fabs, demo mode refused in production.
-- **Real-time:** idempotent retries, clock lease conflicts, presence, audit trail; in the browser, a
-  viewer in a second window watching a dispatcher's changes arrive over Server-Sent Events.
-- **UI against real data:** components render JSON captured from the API
-  (`backend/scripts/export_ui_fixtures.py`). A backend test fails if the API's response shape drifts
-  from those fixtures, so the UI tests can't pass against stale data (`make fixtures` refreshes them).
-- **Phone layout:** the drawer, touch selection, no sideways scrolling on any view, and the user menu
-  staying reachable.
-- **Assistant quality:** an evaluation set of real questions must cite the right article (≥ 90%; 100%
-  today), and every off-topic question must get "I don't know". Answers about a job match the plans
-  exactly. The optional LLM is tested to fall back to the grounded answer on any failure.
-- **Every end-to-end test fails on any browser console error.**
-
 ## Delivery: dev → UAT → production
 
 | | Dev | UAT | Production |
@@ -437,7 +437,7 @@ backend/
     routes/                system · auth · fabs · planning · live (SSE) · repairs
   scripts/benchmark.py     reproduces every table in docs/ANALYSIS.md
   scripts/export_ui_fixtures.py   real API responses for the UI tests
-  tests/                   289 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval)
+  tests/                   291 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval)
 frontend/src/
   App.jsx auth.jsx api.js  workspace, sign-in, API client
   lib/                     fab context, recommendation logic, statistics, progressive planning
