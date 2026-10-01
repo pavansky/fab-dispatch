@@ -78,3 +78,39 @@ def test_environments_in_separate_schemas_never_see_each_other():
 def test_schema_names_are_validated():
     with pytest.raises(ValueError):
         PostgresStore("postgresql://x", 'uat"; drop table shifts; --')
+
+
+@pytest.mark.skipif(not PG_URL, reason="FAB_TEST_PG_URL not set")
+def test_app_tables_are_closed_to_the_supabase_api_roles():
+    """Supabase grants its public API roles access to new tables by default; migration 3 must
+    take that away (RLS on, grants revoked) while the service itself keeps working."""
+    import psycopg
+
+    schema = f"rls_{uuid.uuid4().hex[:8]}"
+    with psycopg.connect(PG_URL, autocommit=True) as c:
+        for role in ("anon", "authenticated"):
+            c.execute(f"DO $$ BEGIN CREATE ROLE {role} NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$")
+        c.execute(f'CREATE SCHEMA "{schema}"')
+        c.execute(f'GRANT USAGE ON SCHEMA "{schema}" TO anon, authenticated')
+        c.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema}" GRANT ALL ON TABLES TO anon, authenticated')
+        c.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema}" GRANT ALL ON SEQUENCES TO anon, authenticated')
+
+    store = PostgresStore(PG_URL, schema)
+    store.migrate()
+    tables = ["shifts", "shift_events", "plan_cache", "idempotency_keys", "shift_presence", "schema_migrations"]
+    with psycopg.connect(PG_URL) as c:
+        for t in tables:
+            rls = c.execute(
+                "SELECT relrowsecurity FROM pg_class WHERE oid = %s::regclass", (f'"{schema}".{t}',)
+            ).fetchone()[0]
+            assert rls, f"{t}: row-level security is off"
+            for role in ("anon", "authenticated"):
+                for priv in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+                    has = c.execute(
+                        "SELECT has_table_privilege(%s, %s, %s)", (role, f'"{schema}".{t}', priv)
+                    ).fetchone()[0]
+                    assert not has, f"{role} can {priv} {t}"
+    sid = uuid.uuid4().hex[:12]
+    store.create_shift(sid, {"ok": True}, "fab1-300mm-logic", "svc@x")  # the service still reads and writes
+    assert store.get_shift(sid)[0] == {"ok": True}
+    assert store.schema_version() == 3

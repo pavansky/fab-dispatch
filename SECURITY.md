@@ -17,6 +17,7 @@ dispatcher actions) and user email addresses; no financial data. Engineer names 
 | Container hardening | Non-root user (uid 10001), slim base, no build tools in the runtime image. |
 | Unauthenticated access | Every endpoint except health, liveness, metadata and auth config requires a bearer token. Supabase tokens are verified against the project's JWKS (or legacy HS256 secret) with issuer and audience checks; demo tokens are refused in production by configuration. |
 | Privilege escalation | Roles and fab access come from Supabase `app_metadata` (admin-only), not user-editable claims. Dispatcher-only actions return 403. |
+| Bypassing the API through Supabase | App tables have row-level security on with no policies, and the public `anon`/`authenticated` roles have no grants (migration 3), so the publishable key can't reach app data through Supabase's Data API. Only this service, as table owner, can. Checked after every production deploy. |
 | Cross-tenant data access | Every fab-scoped request and live shift is checked against the user's fabs, and returns 404 (not 403) outside them. |
 | Replay / double-apply | `Idempotency-Key` on mutating live calls; optimistic versioning on shift writes. |
 | XSS, clickjacking | Strict Content-Security-Policy (`script-src 'self'`, `frame-ancestors 'none'`), HSTS and Permissions-Policy on the web app (Vercel and nginx). |

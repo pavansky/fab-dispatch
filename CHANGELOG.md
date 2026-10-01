@@ -2,6 +2,15 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.0.3] - 2026-10-01
+
+### Security
+- App tables were readable (and possibly writable) through Supabase's public Data API with the
+  publishable key, because Supabase grants its API roles access to new tables in `public` by
+  default. Migration 3 enables row-level security on every app table and revokes the `anon` and
+  `authenticated` roles' access; the service connects as the table owner and is unaffected. The
+  post-deploy smoke test now fails if any app table is readable with the public key.
+
 ## [2.0.2] - 2026-10-01
 
 ### Added

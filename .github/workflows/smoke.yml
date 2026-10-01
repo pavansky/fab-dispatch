@@ -39,3 +39,18 @@ jobs:
           cat health.json; echo
           python3 -c "import json; h=json.load(open('health.json')); assert h['status']=='ok' and h['schema_ok'], h"
           curl -sf "${hdr[@]}" "$URL/api/auth/config" | python3 -c "import json,sys; c=json.load(sys.stdin); assert c['mode']=='supabase', c; print('auth:', c['mode'])"
+          # App tables must not be readable through Supabase's public Data API (migration 3).
+          python3 - <<'PY'
+          import json, os, urllib.error, urllib.request
+          cfg = json.load(urllib.request.urlopen(os.environ["URL"] + "/api/auth/config"))
+          if cfg.get("mode") == "supabase":
+              for table in ("shifts", "shift_events", "shift_presence", "plan_cache"):
+                  req = urllib.request.Request(f"{cfg['supabase_url']}/rest/v1/{table}?select=*&limit=1",
+                                               headers={"apikey": cfg["supabase_publishable_key"]})
+                  try:
+                      rows = json.load(urllib.request.urlopen(req))
+                      assert rows == [], f"{table} is readable with the public key"
+                  except urllib.error.HTTPError as e:
+                      assert e.code in (401, 403, 404), f"{table}: unexpected {e.code}"
+                  print(f"{table}: closed to the public API")
+          PY
