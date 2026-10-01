@@ -19,7 +19,7 @@ export default function Markdown({ children, onHelpLink }) {
           h1: () => null, // the panel shows the title
           h2: ({ children: c }) => <h3 id={slugify(textOf(c))}>{c}</h3>,
           h3: ({ children: c }) => <h4>{c}</h4>,
-          table: ({ children: c }) => <div className="table-wrap"><table className="data">{c}</table></div>,
+          table: ({ children: c }) => <div className="table-wrap" tabIndex={0}><table className="data">{c}</table></div>,
           a: ({ href = '', children: c }) => {
             if (href.startsWith('help:')) {
               const { slug, anchor } = parseHelpTarget(href)

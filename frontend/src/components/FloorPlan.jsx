@@ -98,7 +98,7 @@ export default function FloorPlan({
         className={`floor ${addMode ? 'adding' : ''}`}
         viewBox={`${-PAD} ${-PAD} ${W + 2 * PAD} ${H + 2 * PAD}`}
         onClick={handleClick}
-        role="img"
+        role="group"
         aria-label={`Fab floor plan${result ? `, ${result.label}` : ''}`}
       >
         <rect className="f-bg" x={0} y={0} width={W} height={H} rx={3} />

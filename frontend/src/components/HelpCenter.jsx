@@ -8,7 +8,7 @@ import Markdown from './Markdown.jsx'
  * Markdown the assistant answers from, served by the API.
  */
 export default function HelpCenter({ target, onNavigate, onClose, onTour }) {
-  const { openAssistant } = useHelp()
+  const { openAssistant, openAbout } = useHelp()
   const [toc, setToc] = useState(null)
   const [article, setArticle] = useState(null)
   const [query, setQuery] = useState('')
@@ -99,6 +99,7 @@ export default function HelpCenter({ target, onNavigate, onClose, onTour }) {
         <div className="help-cta">
           <button className="btn" onClick={onTour}>Take the tour</button>
           <button className="btn" onClick={() => openAssistant('')}>Ask the assistant</button>
+          <button className="btn" onClick={openAbout}>About &amp; support</button>
         </div>
       </>
     )

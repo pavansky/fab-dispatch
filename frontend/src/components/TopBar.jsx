@@ -12,7 +12,7 @@ function ThemeSwitch({ theme, onTheme, className = '' }) {
   )
 }
 
-function UserMenu({ theme, onTheme }) {
+function UserMenu({ theme, onTheme, onAbout }) {
   const { user, signOut } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -38,6 +38,7 @@ function UserMenu({ theme, onTheme }) {
           </p>
           {/* On phones the theme switch lives here, where there's room for it. */}
           <div className="menu-theme"><span className="help">Theme</span><ThemeSwitch theme={theme} onTheme={onTheme} /></div>
+          <button className="btn block" role="menuitem" style={{ marginBottom: 6 }} onClick={() => { setOpen(false); onAbout() }}>About &amp; support</button>
           <button className="btn block" role="menuitem" onClick={signOut}>Sign out</button>
         </div>
       )}
@@ -45,7 +46,7 @@ function UserMenu({ theme, onTheme }) {
   )
 }
 
-export default function TopBar({ fabs, fabId, onFab, chips, busy, pending, solvedNote, theme, onTheme, onMenu, onHelp }) {
+export default function TopBar({ fabs, fabId, onFab, chips, busy, pending, solvedNote, theme, onTheme, onMenu, onHelp, onAbout }) {
   return (
     <header className="topbar">
       <button className="btn ghost menu-btn" onClick={onMenu} aria-label="Open controls">☰</button>
@@ -61,7 +62,7 @@ export default function TopBar({ fabs, fabId, onFab, chips, busy, pending, solve
         <span className="solve-text">{busy ? `Solving ${[...pending].map((a) => ALGO_SHORT[a]).join(', ')}…` : solvedNote}</span></span>
       <ThemeSwitch theme={theme} onTheme={onTheme} className="bar-theme" />
       <button className="btn ghost help-btn" onClick={onHelp} aria-label="Help" aria-keyshortcuts="?" title="Help (?)" data-tour="help">?</button>
-      <UserMenu theme={theme} onTheme={onTheme} />
+      <UserMenu theme={theme} onTheme={onTheme} onAbout={onAbout} />
     </header>
   )
 }

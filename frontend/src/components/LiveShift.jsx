@@ -170,7 +170,7 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
         </section>
         <section className="card">
           <div className="card-h"><div><h2><span className="section-no">02</span>Recent shifts · {profile.name}</h2><p>Rejoin a running shift or review a finished one.</p></div></div>
-          <div className="card-b table-wrap">
+          <div className="card-b table-wrap" tabIndex={0}>
             {recent.length === 0 ? <div className="empty">No shifts yet for this fab.</div> : (
               <table className="data">
                 <thead><tr><th>Shift</th><th>Started by</th><th>Strategy</th><th className="r">Clock</th><th>Status</th><th /></tr></thead>
@@ -305,7 +305,7 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
       {plan && plan.unassigned.length > 0 && (
         <section className="card">
           <div className="card-h"><div><h2>Unassigned now</h2></div></div>
-          <div className="card-b table-wrap">
+          <div className="card-b table-wrap" tabIndex={0}>
             <table className="data"><tbody>
               {plan.unassigned.map((u) => {
                 const j = state.scenario.jobs.find((x) => x.id === u.job_id)

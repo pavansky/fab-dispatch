@@ -15,7 +15,7 @@ export default function Workforce({ scenario, result, offShift, onSelect }) {
     <>
       <section className="card">
         <div className="card-h"><div><div className="h-row"><h2>Demand vs certified supply</h2><InfoLink slug="views" anchor="workforce" label="Workforce view" /></div><p>By tool family, engineers on shift only. A family with unserved work and few top-level engineers is a staffing problem, not an algorithm problem.</p></div></div>
-        <div className="card-b table-wrap">
+        <div className="card-b table-wrap" tabIndex={0}>
           <table className="data">
             <thead>
               <tr><th>Tool family</th><th>Jobs</th><th>Demand</th><th className="r">Bottleneck</th><th>Certified (L1 / L2 / L3)</th><th className="r">Highest level needed</th><th className="r">Served</th></tr>
@@ -47,7 +47,7 @@ export default function Workforce({ scenario, result, offShift, onSelect }) {
             <span><span className="lvl l1">L1</span></span><span><span className="lvl l2">L2</span></span><span><span className="lvl l3">L3</span></span>
           </div>
         </div>
-        <div className="card-b table-wrap">
+        <div className="card-b table-wrap" tabIndex={0}>
           <table className="data matrix">
             <thead><tr><th>Engineer</th>{FAMILIES.map((f) => <th key={f} style={{ textAlign: 'center' }}>{familyLabel(f)}</th>)}<th className="r">Jobs</th></tr></thead>
             <tbody>

@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 
 // Lets any control open the help center at an article (and section) without prop drilling.
-export const HelpContext = createContext({ openHelp: () => {}, openAssistant: () => {} })
+export const HelpContext = createContext({ openHelp: () => {}, openAssistant: () => {}, openAbout: () => {} })
 export const useHelp = () => useContext(HelpContext)
 
 export const TOUR_KEY = 'fab-dispatch-tour'

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { askAssistant } from '../api.js'
+import { askAssistant, sendFeedback } from '../api.js'
 import { parseHelpTarget, useHelp } from '../lib/help.js'
+import { LINKS } from '../lib/links.js'
 import Markdown from './Markdown.jsx'
 
 let nextId = 1
@@ -33,13 +34,22 @@ export default function Assistant({ messages, setMessages, context, suggestions,
     setBusy(true)
     try {
       const a = await askAssistant(q, context())
-      setMessages((m) => [...m, { id: nextId++, role: 'assistant', ...a }])
+      setMessages((m) => [...m, { id: nextId++, role: 'assistant', question: q, ...a }])
     } catch (e) {
       setMessages((m) => [...m, { id: nextId++, role: 'assistant', error: true, answer: e.message, citations: [], actions: [] }])
     } finally {
       setBusy(false)
       input.current?.focus()
     }
+  }
+
+  const patch = (id, change) => setMessages((all) => all.map((x) => (x.id === id ? { ...x, ...change } : x)))
+  const rate = (m, helpful, comment = '') => {
+    patch(m.id, { feedback: 'sent' })
+    sendFeedback({
+      question: m.question, intent: m.intent, helpful, comment,
+      citations: (m.citations ?? []).map((c) => c.slug), provider: m.provider ?? 'local',
+    }).catch(() => {}) // feedback is best-effort; never interrupt the conversation
   }
 
   const act = (a) => {
@@ -52,7 +62,7 @@ export default function Assistant({ messages, setMessages, context, suggestions,
       <div className="assistant-h">
         <div>
           <b>Ask Dispatch</b>
-          <p className="help">Answers from help and the shift on your screen, with sources.</p>
+          <p className="help">Answers from help and the shift on your screen, with sources. <a href={LINKS.aiTransparency} target="_blank" rel="noopener noreferrer">How it works</a></p>
         </div>
         {messages.length > 0 && <button className="btn ghost" onClick={() => setMessages([])}>Clear</button>}
         <button className="btn ghost" onClick={onClose} aria-label="Close assistant">✕</button>
@@ -87,6 +97,23 @@ export default function Assistant({ messages, setMessages, context, suggestions,
               </div>
             )}
             {m.provider && m.provider !== 'local' && <p className="help" style={{ margin: '6px 0 0' }}>Worded by {m.provider}; facts from the sources above.</p>}
+            {!m.error && m.question && (
+              <div className="msg-feedback" aria-label="Rate this answer">
+                {m.feedback === 'sent' ? <span className="muted">Thanks for the feedback.</span>
+                  : m.feedback === 'down' ? (
+                    <form onSubmit={(e) => { e.preventDefault(); rate(m, false, new FormData(e.currentTarget).get('comment') ?? '') }}>
+                      <input className="input" name="comment" maxLength={500} placeholder="What was wrong? (optional)" aria-label="What was wrong with this answer?" />
+                      <button className="btn">Send</button>
+                    </form>
+                  ) : (
+                    <>
+                      <span className="muted">Helpful?</span>
+                      <button className="btn ghost" aria-label="Helpful" onClick={() => rate(m, true)}>👍</button>
+                      <button className="btn ghost" aria-label="Not helpful" onClick={() => patch(m.id, { feedback: 'down' })}>👎</button>
+                    </>
+                  )}
+              </div>
+            )}
           </li>
         ))}
         {busy && <li className="msg assistant-msg"><span className="solving"><span className="spinner" />Looking it up…</span></li>}

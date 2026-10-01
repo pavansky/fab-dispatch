@@ -15,6 +15,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: { '/api': 'http://127.0.0.1:8000' },
+    // GitHub Codespaces serves the forwarded port on *.app.github.dev.
+    allowedHosts: ['.app.github.dev'],
   },
   // Unit and component tests (Vitest, jsdom). Browser end-to-end tests live in e2e/ (Playwright).
   test: {
