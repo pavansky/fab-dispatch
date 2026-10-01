@@ -13,3 +13,9 @@ backend/data/
 backend/uv.lock
 backend/_uv/
 backend/.vercel/
+
+# test artifacts
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
