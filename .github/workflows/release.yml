@@ -1,0 +1,40 @@
+name: Release
+
+# Promotion to production. Pushing a SemVer tag (vX.Y.Z) re-runs the full CI on that
+# exact commit, checks it is already on main (so it has been through UAT), then
+# fast-forwards the `production` branch. Vercel deploys production only from that branch.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
+  promote:
+    name: promote to production
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Tag must be on main (shipped to UAT first)
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
+      - name: Fast-forward production
+        run: |
+          git fetch origin production || true
+          if git rev-parse --verify -q origin/production >/dev/null; then
+            git merge-base --is-ancestor origin/production "$GITHUB_SHA" || { echo "::error::production would move backwards"; exit 1; }
+          fi
+          git push origin "$GITHUB_SHA:refs/heads/production"
+      - name: GitHub release from the changelog
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {on=0} on' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

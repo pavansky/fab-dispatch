@@ -1,0 +1,28 @@
+name: Post-deploy smoke test
+
+# Vercel reports each deployment back to GitHub. When one succeeds (a PR preview, UAT
+# from main, or production), check it is healthy, its schema is current, and it runs
+# real authentication, never demo mode.
+on: deployment_status
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    env:
+      URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+      BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - name: Health and auth mode
+        run: |
+          hdr=(); [ -n "$BYPASS" ] && hdr=(-H "x-vercel-protection-bypass: $BYPASS")
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o health.json -w '%{http_code}' "${hdr[@]}" "$URL/api/health") && [ "$code" = 200 ] && break
+            sleep 10
+          done
+          cat health.json; echo
+          python3 -c "import json; h=json.load(open('health.json')); assert h['status']=='ok' and h['schema_ok'], h"
+          curl -sf "${hdr[@]}" "$URL/api/auth/config" | python3 -c "import json,sys; c=json.load(sys.stdin); assert c['mode']=='supabase', c; print('auth:', c['mode'])"

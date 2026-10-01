@@ -1,0 +1,5 @@
+# Every change needs a review from the owners.
+*                         @pavansky
+/backend/app/fabs/        @pavansky
+/backend/app/store.py     @pavansky
+/.github/                 @pavansky
