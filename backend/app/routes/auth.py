@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from ..auth import Role, User, current_user, issue_demo_token
 from ..config import get_settings
+from ..deps import get_store
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -46,3 +47,15 @@ def demo_sign_in(req: DemoSignIn) -> dict:
 @router.get("/me", response_model=User)
 def me(user: User = Depends(current_user)) -> User:
     return user
+
+
+@router.delete("/me")
+def delete_me(user: User = Depends(current_user)) -> dict:
+    """Delete your account and personal data (GDPR Art. 17). Feedback, presence and pending
+    replays are deleted; your email in shared shift history becomes "a deleted user", so the
+    audit trail keeps its shape without identifying you. On Supabase the sign-in account
+    itself is removed too. Demo accounts are shared, so only their data is erased."""
+    store = get_store()
+    erased = store.delete_user_data(user.id, user.email)
+    account = user.provider in ("supabase", "guest") and store.delete_auth_user(user.id)
+    return {"erased": erased, "account_deleted": account}

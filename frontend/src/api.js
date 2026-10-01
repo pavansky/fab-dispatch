@@ -111,6 +111,7 @@ export const helpIndex = () => request('/help').then((r) => r.data)
 export const helpArticle = (slug) => request(`/help/${encodeURIComponent(slug)}`).then((r) => r.data)
 export const helpSearch = (q, signal) => request(`/help/search?q=${encodeURIComponent(q)}`, { signal }).then((r) => r.data)
 export const getHealth = () => request('/health').then((r) => r.data)
+export const deleteAccount = () => request('/auth/me', { method: 'DELETE' }).then((r) => r.data)
 export const sendFeedback = (feedback) => request('/assistant/feedback', { method: 'POST', body: feedback })
 export const askAssistant = (question, context) =>
   request('/assistant/ask', { method: 'POST', body: { question, context } }).then((r) => r.data)

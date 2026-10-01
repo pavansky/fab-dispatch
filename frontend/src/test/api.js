@@ -57,6 +57,7 @@ export function workspaceRoutes({ role = 'dispatcher' } = {}) {
     'POST /benchmark': ({ body }) => ({ ...benchmark, preset: body.preset, runs: benchmark.runs.map((r) => ({ ...r, preset: body.preset })) }),
     'GET /shifts': [],
     'GET /health': health,
+    'DELETE /auth/me': { erased: { assistant_feedback: 0, shifts: 0 }, account_deleted: true },
     'POST /assistant/feedback': () => new Response(null, { status: 204 }),
     'GET /help': helpIndex,
     'GET /help/search': ({ url }) => ({ ...helpSearch, query: new URL(url, 'http://x').searchParams.get('q') }),

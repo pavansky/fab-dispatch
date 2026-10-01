@@ -39,5 +39,12 @@ off on the hosted app (see [AI transparency](ai.md)).
 
 ## Your choices
 
-Sign out at any time from the user menu. To have your account and its data deleted, ask through
-[support](support.md).
+Sign out at any time from the user menu. To delete your account, open the user menu and choose
+**Delete my account**. It takes effect immediately:
+
+- your assistant feedback, presence and pending requests are deleted;
+- your email in shared shift history is replaced with "a deleted user" (the fab keeps the record of
+  what happened, without your identity);
+- your sign-in account is removed.
+
+Questions about your data: [support](support.md).

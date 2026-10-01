@@ -217,6 +217,7 @@ export function SignIn() {
       <nav className="signin-footer" aria-label="About Fab Dispatch">
         <a href={LINKS.docs} target="_blank" rel="noopener noreferrer">Documentation</a>
         <a href={LINKS.privacy} target="_blank" rel="noopener noreferrer">Privacy</a>
+        <a href={LINKS.terms} target="_blank" rel="noopener noreferrer">Terms</a>
         <a href={LINKS.support} target="_blank" rel="noopener noreferrer">Support</a>
         <a href={LINKS.source} target="_blank" rel="noopener noreferrer">GitHub</a>
       </nav>

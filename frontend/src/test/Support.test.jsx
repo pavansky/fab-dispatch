@@ -6,6 +6,21 @@ import { LINKS, REPO, reportProblemUrl } from '../lib/links.js'
 import { fixtures } from './api.js'
 import { signInAs } from './app.jsx'
 
+describe('Deleting your account', () => {
+  it('takes two deliberate steps, then deletes and signs you out', async () => {
+    const { api, user } = await signInAs('dispatcher')
+    await user.click(screen.getByRole('button', { name: 'D' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Delete my account…' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Keep my account' }))
+    expect(screen.queryByRole('menuitem', { name: 'Delete permanently' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('menuitem', { name: 'Delete my account…' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Delete permanently' }))
+    await waitFor(() => expect(api.fetchMock.mock.calls.some(([url, init]) => url.endsWith('/auth/me') && init?.method === 'DELETE')).toBe(true))
+    expect(await screen.findByRole('button', { name: /dispatcher/i })).toBeInTheDocument()
+  })
+})
+
 describe('About & support', () => {
   it('shows the release, live status, and every documentation and support link', async () => {
     const { user } = await signInAs('dispatcher')
@@ -20,6 +35,7 @@ describe('About & support', () => {
     expect(href('Ask a question')).toBe(LINKS.discussions)
     expect(href('Report a security issue')).toBe(LINKS.security)
     expect(href('Privacy and data')).toBe(LINKS.privacy)
+    expect(href('Terms of use')).toBe(LINKS.terms)
     const report = new URL(href('Report a problem'))
     expect(report.origin + report.pathname).toBe(`${REPO}/issues/new`)
     expect(report.searchParams.get('body')).toContain(`Release: ${fixtures.health.release}`)
@@ -99,6 +115,6 @@ describe('sign-in footer', () => {
     mockApi(workspaceRoutes())
     renderApp()
     const footer = await screen.findByRole('navigation', { name: 'About Fab Dispatch' })
-    expect(within(footer).getAllByRole('link').map((a) => a.textContent)).toEqual(['Documentation', 'Privacy', 'Support', 'GitHub'])
+    expect(within(footer).getAllByRole('link').map((a) => a.textContent)).toEqual(['Documentation', 'Privacy', 'Terms', 'Support', 'GitHub'])
   })
 })
