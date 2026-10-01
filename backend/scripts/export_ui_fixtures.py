@@ -82,6 +82,7 @@ def export() -> dict[str, object]:
         run["metrics"]["runtime_ms"] = pinned[run["algorithm"]]
     return {
         "auth_config": ok(c.get("/api/auth/config")),
+        "health": ok(c.get("/api/health")),
         "me": ok(c.get("/api/auth/me")),
         "meta": meta,
         "fabs": ok(c.get("/api/fabs")),

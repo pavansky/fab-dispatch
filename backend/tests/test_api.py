@@ -19,7 +19,15 @@ def scenario():
 
 def test_api_root_points_to_docs_and_ui():
     body = anonymous.get("/").json()
-    assert body["docs"] == "/docs" and "5173" in body["ui"]
+    assert body["docs"] == "/api/docs" and "5173" in body["ui"]
+
+
+def test_api_reference_is_served_under_api_so_it_works_behind_the_vercel_rewrite():
+    assert anonymous.get("/api/docs").status_code == 200
+    assert anonymous.get("/api/redoc").status_code == 200
+    spec = anonymous.get("/api/openapi.json").json()
+    assert spec["info"]["version"] and "/api/assistant/ask" in spec["paths"]
+    assert anonymous.get("/docs").status_code == 404  # the web app owns /docs in production
 
 
 def test_health_and_liveness():

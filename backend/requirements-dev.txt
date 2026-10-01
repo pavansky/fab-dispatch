@@ -4,3 +4,4 @@ pytest-cov==7.1.0
 httpx==0.28.1
 ruff==0.16.9
 pip-audit==2.10.1
+pyyaml==6.0.3            # docs-site consistency test reads mkdocs.yml

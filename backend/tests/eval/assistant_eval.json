@@ -1,44 +1,183 @@
 {
   "_about": "Questions a dispatcher actually asks. 'cite' is the help article (or any of several) that must be the top source; 'refuse' questions are out of scope and must get an 'I don't know'. tests/test_assistant.py reports retrieval accuracy and fails below the floor.",
   "docs": [
-    {"q": "What does idle wait mean?", "cite": "metrics"},
-    {"q": "How is workload spread measured?", "cite": "metrics"},
-    {"q": "What is operating cost?", "cite": "metrics"},
-    {"q": "What does bottleneck coverage mean?", "cite": "metrics"},
-    {"q": "How do I report a tool-down during a live shift?", "cite": "live-dispatch"},
-    {"q": "Who is driving the clock?", "cite": "live-dispatch"},
-    {"q": "How do I share a live shift with my team?", "cite": "live-dispatch"},
-    {"q": "Why does the live view say reconnecting?", "cite": "live-dispatch"},
-    {"q": "Who can run benchmarks?", "cite": "benchmark"},
-    {"q": "What does tied mean in the benchmark?", "cite": "benchmark"},
-    {"q": "How far from optimal are the heuristics?", "cite": ["benchmark", "strategies"]},
-    {"q": "How is the recommendation chosen?", "cite": "recommendation"},
-    {"q": "What is the noise margin?", "cite": "recommendation"},
-    {"q": "What does the efficient frontier on the chart mean?", "cite": "recommendation"},
-    {"q": "What is Regret-2?", "cite": "strategies"},
-    {"q": "How does ALNS work?", "cite": "strategies"},
-    {"q": "When should I use the Hungarian algorithm?", "cite": "strategies"},
-    {"q": "What are the hard constraints?", "cite": "constraints-and-weights"},
-    {"q": "What does the walking weight do?", "cite": "constraints-and-weights"},
-    {"q": "What is the stability weight?", "cite": "constraints-and-weights"},
-    {"q": "How do I take an engineer off shift?", "cite": "what-ifs"},
-    {"q": "Can I plan with predicted repair durations?", "cite": "what-ifs"},
-    {"q": "How do I generate a new shift?", "cite": "what-ifs"},
-    {"q": "What do the circles and squares on the floor plan mean?", "cite": "floor-plan"},
-    {"q": "Where do I see the next-best engineer for a job?", "cite": "floor-plan"},
-    {"q": "How do I sign out?", "cite": "roles-and-access"},
-    {"q": "What can a viewer do?", "cite": "roles-and-access"},
-    {"q": "How do I switch to another fab?", "cite": "fabs"},
-    {"q": "How do I add a new fab?", "cite": "fabs"},
-    {"q": "What is a PM?", "cite": "glossary"},
-    {"q": "What is a bottleneck down?", "cite": "glossary"},
-    {"q": "What are the keyboard shortcuts?", "cite": "keyboard-shortcuts"},
-    {"q": "Is this real fab data?", "cite": "faq"},
-    {"q": "Why is a slower strategy recommended?", "cite": ["faq", "recommendation"]},
-    {"q": "Can I use it on my phone?", "cite": "views"},
-    {"q": "What does the workforce view show?", "cite": "views"},
-    {"q": "Where do the assistant's answers come from?", "cite": "assistant"},
-    {"q": "What should I do first?", "cite": "getting-started"}
+    {
+      "q": "What does idle wait mean?",
+      "cite": "metrics"
+    },
+    {
+      "q": "How is workload spread measured?",
+      "cite": "metrics"
+    },
+    {
+      "q": "What is operating cost?",
+      "cite": "metrics"
+    },
+    {
+      "q": "What does bottleneck coverage mean?",
+      "cite": "metrics"
+    },
+    {
+      "q": "How do I report a tool-down during a live shift?",
+      "cite": "live-dispatch"
+    },
+    {
+      "q": "Who is driving the clock?",
+      "cite": "live-dispatch"
+    },
+    {
+      "q": "How do I share a live shift with my team?",
+      "cite": "live-dispatch"
+    },
+    {
+      "q": "Why does the live view say reconnecting?",
+      "cite": "live-dispatch"
+    },
+    {
+      "q": "Who can run benchmarks?",
+      "cite": "benchmark"
+    },
+    {
+      "q": "What does tied mean in the benchmark?",
+      "cite": "benchmark"
+    },
+    {
+      "q": "How far from optimal are the heuristics?",
+      "cite": [
+        "benchmark",
+        "strategies"
+      ]
+    },
+    {
+      "q": "How is the recommendation chosen?",
+      "cite": "recommendation"
+    },
+    {
+      "q": "What is the noise margin?",
+      "cite": "recommendation"
+    },
+    {
+      "q": "What does the efficient frontier on the chart mean?",
+      "cite": "recommendation"
+    },
+    {
+      "q": "What is Regret-2?",
+      "cite": "strategies"
+    },
+    {
+      "q": "How does ALNS work?",
+      "cite": "strategies"
+    },
+    {
+      "q": "When should I use the Hungarian algorithm?",
+      "cite": "strategies"
+    },
+    {
+      "q": "What are the hard constraints?",
+      "cite": "constraints-and-weights"
+    },
+    {
+      "q": "What does the walking weight do?",
+      "cite": "constraints-and-weights"
+    },
+    {
+      "q": "What is the stability weight?",
+      "cite": "constraints-and-weights"
+    },
+    {
+      "q": "How do I take an engineer off shift?",
+      "cite": "what-ifs"
+    },
+    {
+      "q": "Can I plan with predicted repair durations?",
+      "cite": "what-ifs"
+    },
+    {
+      "q": "How do I generate a new shift?",
+      "cite": "what-ifs"
+    },
+    {
+      "q": "What do the circles and squares on the floor plan mean?",
+      "cite": "floor-plan"
+    },
+    {
+      "q": "Where do I see the next-best engineer for a job?",
+      "cite": "floor-plan"
+    },
+    {
+      "q": "How do I sign out?",
+      "cite": "roles-and-access"
+    },
+    {
+      "q": "What can a viewer do?",
+      "cite": "roles-and-access"
+    },
+    {
+      "q": "How do I switch to another fab?",
+      "cite": "fabs"
+    },
+    {
+      "q": "How do I add a new fab?",
+      "cite": "fabs"
+    },
+    {
+      "q": "What is a PM?",
+      "cite": "glossary"
+    },
+    {
+      "q": "What is a bottleneck down?",
+      "cite": "glossary"
+    },
+    {
+      "q": "What are the keyboard shortcuts?",
+      "cite": "keyboard-shortcuts"
+    },
+    {
+      "q": "Is this real fab data?",
+      "cite": "faq"
+    },
+    {
+      "q": "Why is a slower strategy recommended?",
+      "cite": [
+        "faq",
+        "recommendation"
+      ]
+    },
+    {
+      "q": "Can I use it on my phone?",
+      "cite": "views"
+    },
+    {
+      "q": "What does the workforce view show?",
+      "cite": "views"
+    },
+    {
+      "q": "Where do the assistant's answers come from?",
+      "cite": "assistant"
+    },
+    {
+      "q": "What should I do first?",
+      "cite": "getting-started"
+    },
+    {
+      "q": "How do I report a bug?",
+      "cite": "support"
+    },
+    {
+      "q": "Where is the API documentation?",
+      "cite": "support"
+    },
+    {
+      "q": "How do I rate an answer from the assistant?",
+      "cite": [
+        "support",
+        "assistant"
+      ]
+    },
+    {
+      "q": "Which version am I running?",
+      "cite": "support"
+    }
   ],
   "refuse": [
     "What's the weather in Paris?",

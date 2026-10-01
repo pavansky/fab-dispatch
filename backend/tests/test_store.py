@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from app.store import NotFound, PostgresStore, SQLiteStore, VersionConflict
+from app.store import APP_TABLES, SCHEMA_VERSION, NotFound, PostgresStore, SQLiteStore, VersionConflict
 
 PG_URL = os.environ.get("FAB_TEST_PG_URL")
 
@@ -97,7 +97,7 @@ def test_app_tables_are_closed_to_the_supabase_api_roles():
 
     store = PostgresStore(PG_URL, schema)
     store.migrate()
-    tables = ["shifts", "shift_events", "plan_cache", "idempotency_keys", "shift_presence", "schema_migrations"]
+    tables = APP_TABLES
     with psycopg.connect(PG_URL) as c:
         for t in tables:
             rls = c.execute(
@@ -113,4 +113,18 @@ def test_app_tables_are_closed_to_the_supabase_api_roles():
     sid = uuid.uuid4().hex[:12]
     store.create_shift(sid, {"ok": True}, "fab1-300mm-logic", "svc@x")  # the service still reads and writes
     assert store.get_shift(sid)[0] == {"ok": True}
-    assert store.schema_version() == 3
+    assert store.schema_version() == SCHEMA_VERSION
+
+
+def test_feedback_is_stored_counted_and_pruned(store):
+    store.add_feedback(
+        {"user_id": "u1", "intent": "job", "helpful": True, "question": "why J006?", "citations": ["floor-plan"]}
+    )
+    store.add_feedback(
+        {"user_id": "u2", "intent": "job", "helpful": False, "question": "why J007?", "comment": "wrong"}
+    )
+    store.add_feedback({"user_id": "u1", "intent": "docs", "helpful": True, "question": "idle wait?"})
+    stats = {r["intent"]: r for r in store.feedback_stats(30)}
+    assert stats["job"]["total"] == 2 and stats["job"]["helpful"] == 1
+    assert stats["docs"] == {"intent": "docs", "total": 1, "helpful": 1}
+    assert store.prune()["assistant_feedback"] == 0  # all recent: nothing to delete

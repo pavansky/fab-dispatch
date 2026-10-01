@@ -235,3 +235,25 @@ def test_llm_is_not_asked_to_reword_refusals_or_used_without_a_key():
     s = Settings(assistant_llm="anthropic", anthropic_api_key="k")
     assert rewrite("q", refusal, s, transport=lambda *_: 1 / 0) == refusal
     assert rewrite("q", GROUNDED, Settings(assistant_llm="anthropic"), transport=lambda *_: 1 / 0) == GROUNDED
+
+
+# ----------------------------------------------------------------------------- feedback loop
+def test_feedback_is_recorded_and_reported_to_dispatchers_only():
+    fb = {"question": "Why is J006 assigned this way?", "intent": "job", "helpful": True, "citations": ["floor-plan"]}
+    assert client.post("/api/assistant/feedback", json=fb).status_code == 204
+    assert (
+        client.post("/api/assistant/feedback", json={**fb, "helpful": False, "comment": "too long"}).status_code == 204
+    )
+    assert client.get("/api/assistant/stats").status_code == 403  # viewers can rate, not read the stats
+    dispatcher = TestClient(app, headers=auth_headers("dispatcher"))
+    stats = dispatcher.get("/api/assistant/stats", params={"days": 7}).json()
+    job = next(r for r in stats["by_intent"] if r["intent"] == "job")
+    assert job["total"] >= 2 and 0 < job["helpful_rate"] < 1
+    assert stats["total"] >= 2 and stats["days"] == 7
+
+
+def test_feedback_needs_sign_in_and_is_bounded():
+    fb = {"question": "q", "intent": "docs", "helpful": True}
+    assert TestClient(app).post("/api/assistant/feedback", json=fb).status_code == 401
+    assert client.post("/api/assistant/feedback", json={**fb, "comment": "x" * 501}).status_code == 422
+    assert client.post("/api/assistant/feedback", json={**fb, "citations": ["a"] * 11}).status_code == 422

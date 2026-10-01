@@ -1,5 +1,7 @@
 {
  "version": "2026.10.1",
+ "release": "2.3.0",
+ "commit": "local",
  "algorithms": {
   "greedy": {
    "label": "Greedy (priority, then deadline)",
