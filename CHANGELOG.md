@@ -2,6 +2,19 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.6.0] - 2026-10-02
+
+### Added
+- **Proven optimum at full shift size.** The exact solver (route enumeration + set-partitioning
+  MILP) now handles 14 engineers × 45 jobs: about 34,000 routes, solved to proven optimality in 20 s
+  on average (138 s worst). New study: `python -m scripts.benchmark --only gaps-full`.
+
+### Changed
+- **Every gap is now measured at full size** (80 shifts, all proven optimal): PyVRP 2.7%, ALNS
+  5.7%, Regret-2 19.4%, Hungarian 25.8%, Greedy 28.1%. The earlier small-shift figures (ALNS 0.9%)
+  understated the gaps; README, analysis, help and decisions now use the full-size numbers.
+- The exact solver uses a sparse constraint matrix and guards on route count instead of job count.
+
 ## [2.5.1] - 2026-10-02
 
 ### Changed
