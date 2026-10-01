@@ -138,7 +138,55 @@ differences are cost and PMs. With scarce skills and tight SLAs, the order of de
 *whether* urgent work gets done, and batch and search methods pull ahead (surge: 90% → 92% of bottleneck
 downs). At hard capacity limits the gap closes again, because nothing can be done.
 
-## 4. Limitations and next steps
+## 4. Why these algorithms, and not the newest ones in the literature?
+
+I checked the current research (October 2026) before settling the lineup. Short answer: the lineup
+already contains the state of the art for this problem class, the measured headroom above it is
+under 1%, and the open research frontier is somewhere else (uncertainty, not search).
+
+**The lineup spans every family, including the current best.**
+
+| Family | Here | Why it's in |
+|---|---|---|
+| Construction | Greedy, Regret-2 | What dispatchers do by hand; the baseline every method must beat |
+| Assignment | Hungarian | Optimal one-job-per-round matching; best response time and fairness |
+| Large neighbourhood search | ALNS | Optimises *our* exact objective; the family that recent LLM-designed operators improve ([VRPAgent](https://arxiv.org/pdf/2510.07073)) |
+| Hybrid genetic search | PyVRP | The state of the art for VRPTW: first in the [2021 DIMACS VRPTW challenge](http://dimacs.rutgers.edu/news_archive/challenge) and the static [EURO meets NeurIPS 2022](https://arxiv.org/abs/2403.13795) competition |
+| Exact | Set-partitioning MILP | Proves the optimum on small shifts, so every gap above is measured, not guessed |
+
+**The measured headroom is small.** On shifts solved to proven optimality, ALNS is 0.9% from the
+optimum on average and finds it 13 times in 20 (section 1). No newer method can gain more than that
+0.9% there. At full size (14 × 45) the optimum isn't provable within the time limit, so the
+full-size headroom is still unmeasured; a lower bound (LP relaxation or column generation) would
+measure it, and is the right next step before adding solvers.
+
+**Why not neural solvers?** Learned routing solvers report their results *relative to* PyVRP's HGS
+on the VRPTW, and the best of them match or narrowly beat it
+([Neural Deconstruction Search](https://arxiv.org/pdf/2501.03715),
+[RouteFinder](https://arxiv.org/pdf/2406.15007v2)). They need GPU training for each instance
+distribution, can't express this objective's terms (convex workload balance, plan stability,
+certification levels), and give no per-decision explanation, which the brief requires.
+
+**Why not LLM-evolved heuristics?** Methods like [ReEvo and EoH](https://arxiv.org/pdf/2409.16867),
+[VRPAgent](https://arxiv.org/pdf/2510.07073) and [PyVRP+](https://arxiv.org/abs/2604.07872)
+(up to 2.7% better than HGS on hard variants) are design-time tools: an LLM evolves operators
+offline, evaluated by a solver like this one. They're a natural extension, evolving ALNS's destroy
+and repair operators against this evaluator, not a replacement strategy to run per request.
+
+**Where the real frontier is: uncertainty.** Recent technician-routing research has moved from
+static to dynamic, stochastic problems: requests arriving during the day, uncertain repair times,
+rework ([a 2026 survey](https://link.springer.com/article/10.1007/s00291-026-00865-y),
+[learned dispatch policies](https://arxiv.org/pdf/2409.01815),
+[value function approximation](https://doi.org/10.1287/trsc.2022.0434)). The live mode here is
+rolling-horizon re-optimisation, the standard strong baseline in that literature. The gains left are
+in anticipating what hasn't happened yet:
+
+1. **Plan against a duration quantile.** Repair history already predicts p10–p90 per job; planning
+   at p80 trades a little idle time for fewer broken schedules.
+2. **Keep capacity in reserve.** A learned policy can hold a qualified engineer near the bottleneck
+   tools instead of committing everyone, which matters most when a litho tool goes down mid-shift.
+
+## 5. Limitations and next steps
 
 - **Synthetic data.** Real MES events and maintenance history would replace the generator and the
   repair catalogue. The interfaces (`Scenario`, `report_job`, `RepairIndex`) are where they'd plug in.
