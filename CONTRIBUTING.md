@@ -34,6 +34,12 @@ CI runs the same checks, plus the suite on Python 3.11/3.12/3.14 and against Pos
   `docs/ANALYSIS.md`.
 - **Style**: ruff (format + lint) for Python, ESLint for the frontend. Module docstrings explain *why*.
 
+## License
+
+By contributing, you agree that your contribution is licensed under the project's
+[MIT License](LICENSE). Adding a dependency? Check that its license is compatible and add it to
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); a test fails until it's listed.
+
 ## Releasing
 
 See [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md): merge to `main` → verify in UAT → tag `vX.Y.Z`.

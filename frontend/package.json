@@ -2,6 +2,7 @@
   "name": "fab-dispatch-ui",
   "private": true,
   "version": "2.3.0",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=20.19"

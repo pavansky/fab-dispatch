@@ -4,7 +4,7 @@ site_url: https://pavansky.github.io/fab-dispatch/
 repo_url: https://github.com/pavansky/fab-dispatch
 repo_name: pavansky/fab-dispatch
 edit_uri: edit/main/docs/
-copyright: Fab Dispatch · built by PavanSky
+copyright: Fab Dispatch · © 2026 PavanSky · <a href="https://github.com/pavansky/fab-dispatch/blob/main/LICENSE">MIT License</a>
 
 docs_dir: docs
 exclude_docs: |
@@ -131,3 +131,5 @@ nav:
       - Support: support.md
       - Contributing: project/contributing.md
       - Changelog: project/changelog.md
+      - License: project/license.md
+      - Third-party software: project/third-party.md
