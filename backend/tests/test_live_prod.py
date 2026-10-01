@@ -90,7 +90,7 @@ def test_migrations_upgrade_a_pre_versioning_database(tmp_path):
     legacy.commit()
     legacy.close()
     store = SQLiteStore(str(path))
-    assert store.migrate() == [1, 2]
+    assert store.migrate() == list(range(1, SCHEMA_VERSION + 1))
     assert store.migrate() == []  # idempotent
     assert store.schema_version() == SCHEMA_VERSION
     assert store.get_shift("old1") == ({"clock": 5}, 3)

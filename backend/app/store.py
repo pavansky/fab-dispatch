@@ -86,6 +86,40 @@ MIGRATIONS: list[tuple[int, str, dict[str, list[str]]]] = [
             ],
         },
     ),
+    (
+        3,
+        "lock app tables away from the Supabase Data API",
+        {
+            # Supabase exposes tables in its API schemas to the public `anon` and `authenticated`
+            # roles, and grants them access to new tables by default. Only this service (which
+            # connects as the table owner, so RLS doesn't apply to it) may touch app data: enable
+            # RLS with no policies, and revoke the API roles' grants. No-op where they don't exist.
+            "sqlite": [],
+            "postgres": [
+                *(
+                    f"ALTER TABLE {t} ENABLE ROW LEVEL SECURITY"
+                    for t in (
+                        "shifts",
+                        "shift_events",
+                        "plan_cache",
+                        "idempotency_keys",
+                        "shift_presence",
+                        "schema_migrations",
+                    )
+                ),
+                """DO $$
+                BEGIN
+                  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')
+                     AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    REVOKE ALL ON shifts, shift_events, plan_cache, idempotency_keys, shift_presence,
+                      schema_migrations FROM anon, authenticated;
+                    EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM anon, authenticated',
+                                   pg_get_serial_sequence('shift_events', 'id'));
+                  END IF;
+                END $$""",
+            ],
+        },
+    ),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 PRESENCE_WINDOW_S = 30
