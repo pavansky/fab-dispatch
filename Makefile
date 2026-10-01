@@ -1,7 +1,10 @@
 # Common tasks. Everything also works without make: see README.
 PY := backend/.venv/bin/python
 
-.PHONY: setup dev api web test e2e lint format cov audit check bench gap up down clean fixtures
+.PHONY: start docs setup dev api web test e2e lint format cov audit check bench gap up down clean fixtures
+
+start:            ## one command: install what's missing, start API + UI, open the browser
+	python3 run.py
 
 setup:            ## create the Python venv and install both apps
 	cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
@@ -43,6 +46,11 @@ audit:            ## known-vulnerability scan of both dependency trees
 
 check: lint cov audit e2e   ## everything CI checks, locally, before you push
 	cd frontend && npm run build
+
+docs:             ## build the documentation site into site/ (python -m http.server -d site to view)
+	backend/.venv/bin/pip install -q -r docs/requirements.txt
+	backend/.venv/bin/python docs/build.py
+	NO_MKDOCS_2_WARNING=1 backend/.venv/bin/mkdocs build --strict
 
 bench:            ## regenerate the comparison tables in docs/ANALYSIS.md
 	cd backend && .venv/bin/python -m scripts.benchmark --seeds 20
