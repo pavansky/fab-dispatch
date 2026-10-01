@@ -58,6 +58,8 @@ function remember(key, value) {
   planCache.set(key, value)
   if (planCache.size > MAX_ENTRIES) planCache.delete(planCache.keys().next().value)
 }
+/** Forget cached plans (on sign-out, so the next session on this browser starts clean). */
+export function clearPlanCache() { planCache.clear() }
 
 export const getMeta = () => request('/meta').then((r) => r.data)
 export const generateScenario = (params) => request('/scenario', { method: 'POST', body: params }).then((r) => r.data)

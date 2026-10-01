@@ -80,6 +80,7 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
     const url = new URL(location.href)
     url.searchParams.set('shift', shiftId)
     history.replaceState(null, '', url)
+    etag.current = null // a cached ETag would get a 304 here, with no view to keep
     refresh(shiftId).catch((e) => { onError(e.message); setShiftId(null) })
   }, [shiftId, refresh, onError])
 
@@ -143,7 +144,7 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
 
   const leave = () => {
     if (playing) pause()
-    setShiftId(null); setView(null); setFeed([])
+    setShiftId(null); setView(null); setFeed([]); etag.current = null
     const url = new URL(location.href); url.searchParams.delete('shift'); history.replaceState(null, '', url)
   }
 
