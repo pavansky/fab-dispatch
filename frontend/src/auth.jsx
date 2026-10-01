@@ -181,7 +181,7 @@ export function SignIn() {
         {auth.config?.mode === 'supabase' && (
           <form onSubmit={(e) => { e.preventDefault(); run(async () => {
             if (usePassword) await auth.signInWithPassword(email, password, captcha)
-            else { await auth.sendMagicLink(email, captcha); setSentTo(email); setMessage(`Check ${email} for a sign-in link, or enter the 6-digit code from it.`) }
+            else { await auth.sendMagicLink(email, captcha); setSentTo(email); setMessage(`Check ${email} for a sign-in link, or enter the code from it.`) }
           }) }}>
             <label className="field" style={{ marginTop: 18 }}><span>Work email</span>
               <input className="input" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -203,11 +203,12 @@ export function SignIn() {
         {message && <p className="notice" role="status">{message}</p>}
         {sentTo && (
           <form className="signin-code" onSubmit={(e) => { e.preventDefault(); run(() => auth.verifyCode(sentTo, code.trim())) }}>
-            <label className="field"><span>6-digit code</span>
-              <input className="input code-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6}
+            {/* Supabase's code length is a project setting (6 to 10 digits), so accept that range. */}
+            <label className="field"><span>Code from the email</span>
+              <input className="input code-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6,10}" maxLength={10}
                 required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
             </label>
-            <button className="btn primary block" disabled={busy || code.length !== 6}>Verify code</button>
+            <button className="btn primary block" disabled={busy || code.length < 6}>Verify code</button>
           </form>
         )}
         {error && <p className="error-bar" role="alert" style={{ marginTop: 12 }}>{error}</p>}

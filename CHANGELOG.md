@@ -2,6 +2,13 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.2.1] - 2026-10-01
+
+### Fixed
+- Signing in with the emailed code only accepted 6 digits, but Supabase's code length is a project
+  setting (6 to 10; this project sends 8), so the code could never be entered. The field now accepts
+  6 to 10 digits.
+
 ## [2.2.0] - 2026-10-01
 
 ### Added
@@ -25,7 +32,7 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
   keyless; an optional LLM (`anthropic` or local `ollama`) can reword answers. Its quality is measured on
   an evaluation set in CI.
 - **Guest access:** "Try it as a guest" (Supabase anonymous sign-in), role set by `FAB_GUEST_ROLE`.
-- **Sign in with a 6-digit code** from the email, as well as the link.
+- **Sign in with the code** from the email, as well as the link.
 - **Branded auth emails** (six templates, generated from one layout) and setup guide in `supabase/`.
 - **Brand assets:** favicon, app icons, web manifest and a link-preview card for shared links.
 

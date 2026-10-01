@@ -4,7 +4,7 @@ Run after editing copy or style:  python3 supabase/build_templates.py
 Then apply each file in Supabase: Authentication -> Emails -> Templates (see README.md).
 
 Email-client-safe on purpose: table layout, inline styles, no images or web fonts (often
-blocked), a hidden preview line, a button plus a plain-link fallback, and a 6-digit code
+blocked), a hidden preview line, a button plus a plain-link fallback, and the one-time code
 where the flow supports one. Variables like {{ .ConfirmationURL }} are Supabase's (Go templates).
 """
 
