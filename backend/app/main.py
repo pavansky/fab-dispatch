@@ -15,7 +15,7 @@ from .config import get_settings
 from .help import load_articles
 from .http import error_body
 from .observability import RequestContext, configure_logging, request_id
-from .routes import auth, fabs, help, live, planning, repairs, system
+from .routes import auth, fabs, help, ingest, live, planning, repairs, system
 from .version import APP_VERSION
 
 log = logging.getLogger("fab")
@@ -79,6 +79,7 @@ def create_app() -> FastAPI:
         live.router,
         repairs.router,
         help.router,
+        ingest.router,
     ):
         app.include_router(r)
     load_articles()  # broken help content (bad link, missing title) fails at startup, not in front of users

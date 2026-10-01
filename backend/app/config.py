@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     qdrant_path: str | None = Field(
         None, description="optional on-disk path for embedded Qdrant; unset = in-memory per process"
     )
+    ingest_tokens: dict[str, str] = Field(
+        default_factory=dict,
+        description="fab id -> SHA-256 hex of that fab's ingestion token, for equipment systems "
+        "posting tool-downs (POST /api/ingest/tool-downs). Store hashes, never tokens.",
+    )
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     solver_time_limit_s: float = Field(3.0, gt=0, le=20, description="safety cap for ALNS and PyVRP")
     alns_iterations: int = Field(300, ge=1, description="ALNS iteration budget (deterministic stop); see ANALYSIS §1")
