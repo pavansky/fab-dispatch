@@ -1,5 +1,7 @@
 # Deployment
 
+For the dev → UAT → production flow, promotion and rollback, see [ENVIRONMENTS.md](ENVIRONMENTS.md).
+
 Three ways to run it, in increasing order of production-likeness. All use free and open-source software.
 
 ## 1. Local (default)

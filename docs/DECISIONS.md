@@ -116,3 +116,47 @@ opt-in (`FAB_QDRANT_PATH`) and falls back to memory if locked. Shared state belo
 uncacheable.
 **Decision.** ALNS 300 and PyVRP 1000 iterations, the knee of the measured curve. Going higher triples
 latency for a further 0.2–3.9% cost. Configurable, and part of the cache key.
+
+### D17. Fab-specific knowledge is data (fab profiles), not code
+**Context.** The first build hard-coded one fab: its floor, tool families, shift and fault
+catalogue. Each new customer site would have meant a code change and a release.
+**Decision.** One validated JSON profile per fab (`backend/app/fabs/profiles`). The generator, repair
+history, API and UI all read it. A second, deliberately different fab (200mm, 8-hour shifts, photo as
+the constraint) ships alongside to prove the engine is generic. Fab 1 was converted with a golden
+test proving its generated scenarios are byte-identical to the old hard-coded generator.
+**Trade-off.** Profile authors must describe the floor and fault catalogue. The onboarding guide and
+schema validation keep that tractable.
+
+### D18. Authentication via a managed identity provider; demo sign-in only locally
+**Decision.** Supabase Auth in UAT and production. The API verifies Supabase-issued tokens: JWKS for
+asymmetric keys, falling back to the legacy HS256 secret. Locally, a one-click demo sign-in keeps the
+"runs locally with no keys" requirement. Settings **refuse** demo mode in production unless
+explicitly allowed with a non-default secret (fail closed).
+**Why.** Passwords, resets, magic links and MFA are a product in their own right; storing passwords
+here would add risk and no value. Roles (`viewer` < `dispatcher`) and fab access come from
+`app_metadata`, which users can't edit, with an email allow-list to bootstrap the first dispatchers.
+
+### D19. Tenancy by fab, and 404 rather than 403 across tenants
+**Decision.** Every fab-specific request and every live shift is checked against the user's fab
+list. A shift or fab outside it returns **404**, so one customer can't confirm another's fab exists.
+
+### D20. Versioned, additive migrations under an advisory lock
+**Decision.** Numbered migrations recorded in `schema_migrations`, applied at startup under a
+Postgres advisory lock. Additive only; destructive changes are split across releases. Health
+reports `schema_ok`, which the post-deploy smoke test checks.
+**Why.** "Create if missing" can't evolve a schema. A runner that serialises serverless cold starts
+and is visible in health checks can.
+
+### D21. Real-time safety: clock lease, idempotency keys, presence
+**Decision.** Only one dispatcher drives a shift's clock: a 20 s lease, renewed by each tick and
+released on pause. Mutating live calls accept an `Idempotency-Key`; a retry returns the first
+response. Open SSE streams heartbeat presence.
+**Why.** Two people pressing Play, or a flaky network retrying "advance 60 minutes", would otherwise
+corrupt the shift. These are the failure modes of a multi-user real-time tool.
+
+### D22. Promotion pipeline: main is UAT, tags are production
+**Decision.** Pull requests get CI and a preview deploy. `main` deploys to UAT (its own database).
+A SemVer tag re-runs CI on that commit, must already be on `main`, and fast-forwards the
+`production` branch that Vercel deploys from. Every deployment is smoke-tested.
+**Why.** Nothing reaches production without passing UAT and CI on the exact commit. Rollback is
+promoting the previous deployment, and production can't move backwards by accident.

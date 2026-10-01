@@ -2,6 +2,32 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.0.0] - 2026-10-01
+
+### Added
+- **Multi-fab**: site-specific data moved into validated fab profiles; a second fab (200mm analog,
+  8-hour shifts, photo constraint) ships alongside; fab switcher in the UI; per-fab repair history.
+- **Authentication and roles**: Supabase Auth in UAT/production (magic link or password), demo sign-in
+  for local development, `viewer` and `dispatcher` roles, per-user fab access.
+- **Real-time hardening**: one clock driver at a time (lease), idempotency keys on live actions,
+  presence ("who's watching"), recent shifts to rejoin, actor on every event, offline banner, toasts.
+- **Platform**: versioned database migrations with an advisory lock; `schema_ok` in health;
+  daily data retention via Vercel Cron; strict security headers (CSP, HSTS, Permissions-Policy).
+- **Delivery**: CI with lint, format, coverage floor, Python 3.11/3.12/3.14, Postgres, frontend
+  lint/tests/build, dependency audits and image builds; release workflow promoting tagged commits
+  from `main` (UAT) to `production`; post-deploy smoke tests; Dependabot; pre-commit; PR and issue
+  templates; CODEOWNERS.
+- Mobile and tablet layouts: drawer controls, scrollable tabs, touch-friendly floor plan.
+- Docs: environments and release runbook, fab onboarding guide, contributing guide.
+
+### Changed
+- **Breaking:** all planning, live and repair endpoints require authentication; scenarios carry a
+  `fab_id`; listing shifts needs `fab_id`.
+- Light theme is the default; dark and auto (follow the OS) are opt-in.
+
+### Security
+- Vitest upgraded to 5.x (moderate advisory in the test runner); both dependency trees audit clean.
+
 ## [1.2.0] - 2026-10-01
 
 ### Added

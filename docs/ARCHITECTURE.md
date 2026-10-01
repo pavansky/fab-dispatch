@@ -32,7 +32,33 @@ flowchart LR
 One FastAPI app, stateless between requests. All durable state lives in the store, so any number of
 instances (or serverless invocations) can serve the same users.
 
-## 2. The core: one constraint engine, many strategies
+## 2. Fabs, users and tenancy
+
+```mermaid
+flowchart LR
+  B[Browser] -->|"Supabase Auth (prod/UAT)<br/>or demo sign-in (local)"| T[access token]
+  T -->|Bearer| API
+  API --> V{verify token<br/>JWKS / HS256 / demo}
+  V --> U["User: role + fabs<br/>(from app_metadata)"]
+  U --> R{role ≥ required?}
+  U --> F{fab in user's fabs?}
+  F -->|no| N[404]
+  R -->|no| X[403]
+  F -->|yes| P["Fab profile<br/>app/fabs/profiles/*.json"]
+```
+
+- **Fab profiles** hold everything site-specific: floor, tool families with bay areas, tool-ID
+  prefixes, fault catalogues, shift pattern and planning presets. They are validated at startup. The
+  generator, repair history (one Qdrant collection per fab), API and UI all read them, so onboarding
+  a fab is a JSON file ([ONBOARDING_A_FAB.md](ONBOARDING_A_FAB.md)).
+- **Identity**: `app/auth.py`. Supabase-issued tokens are verified against the project's JWKS
+  (ES256/RS256) or the legacy HS256 secret, with issuer and audience checks. Local development
+  uses short-lived demo tokens, which settings refuse in production.
+- **Authorisation**: `viewer` (plan, explore, watch) < `dispatcher` (drive live shifts, report
+  tool-downs, call engineers off, run benchmarks). Fab access comes from `app_metadata.fabs`, and
+  requests outside it return 404.
+
+## 3. The core: one constraint engine, many strategies
 
 `app/planner.py` is the only place that knows the rules. It simulates each engineer's route from the
 home bay (or from where locked live work leaves them), and answers two questions:
@@ -58,7 +84,7 @@ The algorithms only decide **order and scope**:
 So a result from any strategy is measured identically, and the hard-constraint tests in
 `tests/test_constraints.py` re-derive every route's timing from scratch.
 
-## 3. Request lifecycle: planning
+## 4. Request lifecycle: planning
 
 1. The browser issues five `POST /api/plan` calls (one per strategy) in parallel. A newer input aborts
    older requests (`AbortController`), and a browser-side LRU answers repeats with no network.
@@ -68,7 +94,7 @@ So a result from any strategy is measured identically, and the hard-constraint t
    safety cap. A result that hit the cap isn't reproducible, so it isn't written to the shared cache.
 4. The response carries `X-Cache` (`memory`/`store`/`miss`) and `Server-Timing`.
 
-## 4. Live dispatch
+## 5. Live dispatch
 
 ```mermaid
 sequenceDiagram
@@ -96,11 +122,16 @@ sequenceDiagram
   tool-down disturbs as few people as possible.
 - **Concurrency.** Every write is `UPDATE … WHERE version = expected`. The server retries a lost race;
   a client that sent `If-Match` gets a 409 instead of a silent overwrite.
+- **One clock driver.** Advancing the clock takes a 20 s lease, renewed on each tick and released on
+  pause, so two dispatchers can't run the shift at double speed.
+- **Idempotency.** Mutating live calls carry an `Idempotency-Key`; a retry returns the stored first
+  response instead of applying the change again.
+- **Presence and audit.** Open SSE streams heartbeat who is watching; every event records its actor.
 - **Fan-out.** The event log is the source of truth. SSE tails it by id, so reconnects resume exactly
   where they left off and any instance can serve any viewer. Each SSE response closes after
   `FAB_SSE_WINDOW_S` (25 s) to stay inside serverless limits, and `EventSource` reconnects by itself.
 
-## 5. Repair history (Qdrant)
+## 6. Repair history (Qdrant)
 
 `knowledge.py` holds a seeded catalogue of fault codes per tool family. Each code has root causes with
 their own repair-time distributions, giving 1,800 past repairs. Each repair's symptom is embedded
@@ -116,13 +147,17 @@ Modes: in-memory per process by default (any number of workers, no file locks), 
 `FAB_QDRANT_PATH` (falls back to memory if another process holds the lock), and a server via
 `FAB_QDRANT_URL` in compose or production. The index is built idempotently on first use (about 0.6 s).
 
-## 6. Configuration
+## 7. Configuration and migrations
 
 `app/config.py`: one `Settings` (pydantic-settings, prefix `FAB_`, `.env` supported). Every value has a
 working default, so a fresh clone runs with no configuration. On Vercel (`VERCEL` set) the defaults
 move to `/tmp` and logs switch to JSON. See [.env.example](../.env.example).
 
-## 7. Performance (measured, M-series laptop)
+Schema changes are numbered, append-only migrations (`MIGRATIONS` in `app/store.py`), recorded in
+`schema_migrations` and applied at startup under a Postgres advisory lock. `/api/health` reports
+`schema_ok`. Environments and promotion: [ENVIRONMENTS.md](ENVIRONMENTS.md).
+
+## 8. Performance (measured, M-series laptop)
 
 | Operation | Time |
 |---|---|
@@ -136,10 +171,12 @@ move to `/tmp` and logs switch to JSON. See [.env.example](../.env.example).
 
 Full solver numbers are in [ANALYSIS.md](ANALYSIS.md).
 
-## 8. Repo map
+## 9. Repo map
 
 | Path | Responsibility |
 |---|---|
+| `app/fabs/` | fab profile schema, registry and the profile JSON files |
+| `app/auth.py`, `app/validation.py` | identity, roles, fab scoping, scenario checks against a profile |
 | `app/models.py` | pydantic domain model and validation |
 | `app/planner.py` | constraint engine (section 2) |
 | `app/algorithms/*` | the six solvers |
