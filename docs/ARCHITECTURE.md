@@ -7,26 +7,29 @@ flowchart LR
   subgraph Browser
     UI[React UI<br/>usePlans · LiveShift]
   end
+  MES[Equipment / MES<br/>per-fab token]
   subgraph API[FastAPI app]
     R1[routes/planning]
     R2[routes/live + SSE]
     R3[routes/repairs]
+    R4[routes/ingest]
     SVC[PlanningService<br/>2-tier plan cache]
     ENG[engine.allocate]
     PL[Planner<br/>constraints + cost]
     ALG[algorithms<br/>greedy · hungarian · regret · alns · pyvrp · exact]
     LIVE[live.py<br/>rolling horizon]
-    KN[knowledge.py<br/>RepairIndex]
+    KN[knowledge.py<br/>RepairIndex: exact k-NN]
   end
-  DB[(SQLite / Postgres<br/>shifts · shift_events · plan_cache)]
-  Q[(Qdrant<br/>embedded or server)]
+  DB[(SQLite / Postgres<br/>shifts · shift_events · assignments<br/>plan_cache · rate_limits)]
+  Q[(Qdrant server<br/>optional, at scale)]
 
   UI -- "POST /api/plan ×5 in parallel" --> R1 --> SVC --> ENG --> ALG --> PL
   SVC <--> DB
   UI -- "POST /api/shifts/*" --> R2 --> LIVE --> ENG
   R2 <--> DB
   UI -- "EventSource /stream" --> R2
-  UI -- "POST /api/repairs/*" --> R3 --> KN <--> Q
+  UI -- "POST /api/repairs/*" --> R3 --> KN -.-> Q
+  MES -- "POST /api/ingest/tool-downs" --> R4 --> LIVE
 ```
 
 One FastAPI app, stateless between requests. All durable state lives in the store, so any number of
@@ -130,6 +133,13 @@ sequenceDiagram
 - **Fan-out.** The event log is the source of truth. SSE tails it by id, so reconnects resume exactly
   where they left off and any instance can serve any viewer. Each SSE response closes after
   `FAB_SSE_WINDOW_S` (25 s) to stay inside serverless limits, and `EventSource` reconnects by itself.
+  Polling backs off while a shift is quiet (0.25 s → 2 s) and snaps back on the next event.
+- **Read model.** The shift document is the write model; every write also replaces the shift's rows
+  in `assignments` (engineer, times, status per job) **in the same transaction**. Questions about the
+  domain, such as an engineer's history across shifts, are indexed queries, not document scans.
+- **Ingestion.** Equipment systems post tool-downs to `POST /api/ingest/tool-downs` with a per-fab
+  token (only its SHA-256 is configured) and a required `Idempotency-Key`, since integrations deliver
+  at least once. The fault joins the fab's live shift and is re-planned like any other.
 
 ## 6. Repair history (Qdrant)
 
@@ -143,9 +153,11 @@ duration as a similarity²-weighted mean with a p10–p90 range. The likely root
 weighted vote, and the most frequent fixers are listed. This is k-NN regression, so every prediction
 can be traced back to the neighbours that produced it.
 
-Modes: in-memory per process by default (any number of workers, no file locks), optional on-disk via
-`FAB_QDRANT_PATH` (falls back to memory if another process holds the lock), and a server via
-`FAB_QDRANT_URL` in compose or production. The index is built idempotently on first use (about 0.6 s).
+Search is **exact** by default: the vectors are normalised, so cosine similarity is one NumPy matrix
+product. At 1,800 repairs per fab that's ~0.1 ms per query and an 80 ms build on first use, with no
+vector database to run. Ties break by repair id, so answers are reproducible. Real history grows into
+the millions; `FAB_QDRANT_URL` moves the same interface onto a Qdrant server with approximate (HNSW)
+search, and `FAB_QDRANT_PATH` keeps an embedded on-disk Qdrant for experiments.
 
 ## 7. Configuration and migrations
 
@@ -167,7 +179,7 @@ Schema changes are numbered, append-only migrations (`MIGRATIONS` in `app/store.
 | Repeated plan, production (cache hit) | < 1 ms server time |
 | Same plan from the in-process cache | ~3 ms end to end through nginx |
 | Live re-plan with ALNS | ~100 ms |
-| Repair-history query | ~7 ms (index build ~0.6 s, once) |
+| Repair-history query | ~0.1 ms (index build ~80 ms, once) |
 
 Full solver numbers are in [ANALYSIS.md](ANALYSIS.md).
 
@@ -187,3 +199,31 @@ Full solver numbers are in [ANALYSIS.md](ANALYSIS.md).
 | `app/store.py` | `Store` interface with SQLite and Postgres implementations |
 | `app/routes/*` | HTTP surface |
 | `app/observability.py`, `app/http.py` | logging, request IDs, security headers, rate limiting, ETags |
+
+## 10. Design principles, trade-offs, and what changes at fab scale
+
+### Principles this design follows
+
+| Principle | Where it shows |
+|---|---|
+| **Stateless compute, state in one place** | Any instance serves any request; shifts, events, caches and quotas live in the store. |
+| **The log is the truth** | `shift_events` is append-only; streams resume by id; the audit trail survives account deletion. |
+| **Separate writes from reads (CQRS)** | The shift document is written with an optimistic version; `assignments` is projected from it in the same transaction for queries. |
+| **Make retries safe** | Idempotency keys on every mutating live call, required for integrations. |
+| **Defence in depth** | Fab scope is checked in SQL *and* in the route; app tables are closed to Supabase's public API and checked after every deploy. |
+| **Degrade, don't fail** | The shared rate limit fails open; a locked Qdrant folder falls back to memory; capped solves aren't cached. |
+| **Deterministic where possible** | Fixed seeds and iteration budgets make plans cacheable by content hash, and repair search breaks ties by id. |
+| **Simplest thing that holds at this scale** | Exact search instead of a vector database; Postgres polling instead of a message broker, with the next step named below. |
+
+### Deliberate trade-offs, and the next step for each
+
+| Today | Why it's right here | At a real fab's scale |
+|---|---|---|
+| Solves run inside the request (threadpool), ~1 s on Vercel | 14 × 45 jobs solve well inside any limit; no queue to operate | A job queue (e.g. Postgres `SKIP LOCKED` or a managed queue) with workers; `202 Accepted` plus progress over the existing event stream |
+| Live updates by adaptive polling of the event log | Works on serverless with no extra service; ~2 queries/s per busy viewer, 0.5/s idle | Postgres `LISTEN/NOTIFY` on long-lived workers, or Supabase Realtime on the events table with per-fab policies |
+| Shift state is one JSON document, rewritten per write | One atomic, version-checked write; simple to re-plan | Keep it as the write model, store only the diff per event, and snapshot every N events |
+| Fab isolation in SQL and in code, one database role | One service role is simple to reason about | Row-level security policies keyed by a per-request fab claim, so the database enforces isolation even against a bug |
+| UAT and production share a Supabase project (separate schemas) | Free tier: one project | One project per environment, so a UAT incident can't touch production |
+| Durations are point estimates | Repair history already gives p10–p90 | Plan against a chosen quantile (e.g. p80) per job, or robust/stochastic optimisation across scenarios |
+| Ingestion pushes into the live shift | The integration point exists and is safe to retry | A durable inbox table between ingestion and planning, so a burst of faults queues instead of contending for the shift |
+
