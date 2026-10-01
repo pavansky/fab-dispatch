@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ALGO_SHORT } from '../lib/metrics.js'
 import { useAuth } from '../auth.jsx'
+import { deleteAccount } from '../api.js'
 
 const THEMES = [['light', 'Light'], ['dark', 'Dark'], ['system', 'Auto']]
 
@@ -15,9 +16,20 @@ function ThemeSwitch({ theme, onTheme, className = '' }) {
 function UserMenu({ theme, onTheme, onAbout }) {
   const { user, signOut } = useAuth()
   const [open, setOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
   const ref = useRef(null)
+  const removeAccount = async () => {
+    setDeleteError(null)
+    try {
+      await deleteAccount()
+      signOut()
+    } catch (e) {
+      setDeleteError(e.message)
+    }
+  }
   useEffect(() => {
-    if (!open) return
+    if (!open) { setConfirmDelete(false); return }
     const close = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
     const esc = (e) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('pointerdown', close)
@@ -40,6 +52,17 @@ function UserMenu({ theme, onTheme, onAbout }) {
           <div className="menu-theme"><span className="help">Theme</span><ThemeSwitch theme={theme} onTheme={onTheme} /></div>
           <button className="btn block" role="menuitem" style={{ marginBottom: 6 }} onClick={() => { setOpen(false); onAbout() }}>About &amp; support</button>
           <button className="btn block" role="menuitem" onClick={signOut}>Sign out</button>
+          {/* Two steps, so a stray click can't delete anything. */}
+          {confirmDelete ? (
+            <div className="menu-danger" role="group" aria-label="Delete account">
+              <p className="help">Deletes your account and personal data. Shifts you ran stay, credited to &ldquo;a deleted user&rdquo;. This can&rsquo;t be undone.</p>
+              <button className="btn block danger" role="menuitem" onClick={removeAccount}>Delete permanently</button>
+              <button className="btn block ghost" role="menuitem" onClick={() => setConfirmDelete(false)}>Keep my account</button>
+              {deleteError && <p className="error-bar" role="alert">{deleteError}</p>}
+            </div>
+          ) : (
+            <button className="link-btn menu-delete" role="menuitem" onClick={() => setConfirmDelete(true)}>Delete my account…</button>
+          )}
         </div>
       )}
     </div>

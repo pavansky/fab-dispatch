@@ -126,6 +126,7 @@ nav:
       - Sign-in emails, sender and CAPTCHA: project/supabase.md
   - Trust:
       - Privacy and data: privacy.md
+      - Terms of use: terms.md
       - Security: project/security.md
   - Project:
       - Support: support.md

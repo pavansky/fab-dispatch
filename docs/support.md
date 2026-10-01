@@ -15,7 +15,7 @@
 | Report a problem | [Open an issue](https://github.com/pavansky/fab-dispatch/issues/new/choose); in the app, **About & support → Report a problem** prefills your release and browser |
 | Report a security issue | Privately, via the [security policy](project/security.md); please don't open a public issue |
 | Onboard a new fab | [Fab onboarding request](https://github.com/pavansky/fab-dispatch/issues/new?template=fab-onboarding.md) |
-| Delete your account | Ask in Discussions or an issue; no details needed beyond the request |
+| Delete your account | User menu → **Delete my account** (immediate; see [privacy](privacy.md)) |
 
 ## What to expect
 

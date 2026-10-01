@@ -57,7 +57,8 @@ export default function About({ onClose, onHelp }) {
               <li><a href={report} {...ext}><b>Report a problem ↗</b><span className="help-snippet">Opens a prefilled issue with your release and browser.</span></a></li>
               <li><a href={LINKS.discussions} {...ext}><b>Ask a question ↗</b><span className="help-snippet">Community Q&amp;A on GitHub Discussions.</span></a></li>
               <li><a href={LINKS.security} {...ext}><b>Report a security issue ↗</b><span className="help-snippet">Privately, through the security policy. Please don't open a public issue.</span></a></li>
-              <li><a href={LINKS.privacy} {...ext}><b>Privacy and data ↗</b><span className="help-snippet">What's stored, for how long, and why.</span></a></li>
+              <li><a href={LINKS.privacy} {...ext}><b>Privacy and data ↗</b><span className="help-snippet">What's stored, for how long, and why. Delete your account from the user menu.</span></a></li>
+              <li><a href={LINKS.terms} {...ext}><b>Terms of use ↗</b><span className="help-snippet">A demo with synthetic data, provided as is.</span></a></li>
               <li><a href={LINKS.aiTransparency} {...ext}><b>How the assistant works ↗</b><span className="help-snippet">Sources, evaluation, limits.</span></a></li>
             </ul>
           </section>

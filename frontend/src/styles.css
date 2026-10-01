@@ -599,3 +599,11 @@ svg.floor { touch-action: manipulation; }
 .msg-feedback form { display: flex; gap: 6px; width: 100%; }
 .msg-feedback form .input { flex: 1; padding: 4px 8px; font-size: 12.5px; }
 .msg-feedback form .btn { padding: 4px 10px; font-size: 12px; }
+
+/* Account deletion: quiet until asked, then unmistakable. */
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--ink-2); text-decoration: underline; cursor: pointer; }
+.menu-delete { display: block; margin: 10px auto 0; font-size: 12px; }
+.menu-danger { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.menu-danger .help { margin: 0 0 8px; }
+.menu-danger .btn { margin-bottom: 6px; }
+.btn.danger { background: var(--critical); border-color: var(--critical); color: var(--surface); }
