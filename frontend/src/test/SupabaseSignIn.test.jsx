@@ -1,4 +1,4 @@
-// Supabase sign-in paths (guest, magic link + emailed code, password) with a fake client.
+// Supabase sign-in paths (guest, emailed one-time code or link) with a fake client.
 import { act, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fixtures, mockApi, workspaceRoutes } from './api.js'
@@ -18,7 +18,6 @@ beforeEach(() => {
     signInAnonymously: vi.fn(async () => { signIn('guest-token'); return { error: null } }),
     signInWithOtp: vi.fn().mockResolvedValue({ error: null }),
     verifyOtp: vi.fn(async () => { signIn('email-token'); return { error: null } }),
-    signInWithPassword: vi.fn().mockResolvedValue({ error: { message: 'Invalid login credentials' } }),
     signOut: vi.fn().mockResolvedValue({ error: null }),
   })
 })
@@ -46,13 +45,14 @@ describe('Supabase sign-in', () => {
     expect(screen.getByRole('menu')).toHaveTextContent('guest session')
   })
 
-  it('emails a link and accepts the code from it instead, whatever its length', async () => {
+  it('emails a code (and link) and accepts the code, whatever its length', async () => {
     supabaseApi()
     const user = renderApp()
-    await user.type(await screen.findByLabelText('Work email'), 'recruiter@company.com')
-    await user.click(screen.getByRole('button', { name: 'Email me a sign-in link' }))
+    await user.type(await screen.findByLabelText('Email'), 'recruiter@company.com')
+    await user.click(screen.getByRole('button', { name: 'Email me a sign-in code' }))
     expect(auth.signInWithOtp).toHaveBeenCalledWith({ email: 'recruiter@company.com', options: { emailRedirectTo: location.origin } })
-    expect(await screen.findByRole('status')).toHaveTextContent('enter the code from it')
+    expect(await screen.findByRole('status')).toHaveTextContent('Code sent to recruiter@company.com')
+    expect(screen.getByRole('button', { name: 'Send a new code' })).toBeInTheDocument()
     const verify = screen.getByRole('button', { name: 'Verify code' })
     expect(verify).toBeDisabled()
     const field = screen.getByLabelText('Code from the email')
@@ -66,14 +66,14 @@ describe('Supabase sign-in', () => {
     expect(await screen.findByRole('region', { name: 'Recommendation' }, { timeout: 4000 })).toBeInTheDocument()
   })
 
-  it('shows a wrong password as an error, not a crash', async () => {
+  it('shows a failure to send the code as an error, not a crash', async () => {
     supabaseApi()
+    auth.signInWithOtp.mockResolvedValueOnce({ error: { message: 'Email rate limit exceeded' } })
     const user = renderApp()
-    await user.click(await screen.findByRole('button', { name: 'Use a password instead' }))
-    await user.type(screen.getByLabelText('Work email'), 'a@b.co')
-    await user.type(screen.getByLabelText('Password'), 'nope')
-    await user.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid login credentials')
+    await user.type(await screen.findByLabelText('Email'), 'a@b.co')
+    await user.click(screen.getByRole('button', { name: 'Email me a sign-in code' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Email rate limit exceeded')
+    expect(screen.queryByLabelText('Code from the email')).not.toBeInTheDocument()
   })
 
   it('signs out of Supabase too', async () => {
@@ -116,19 +116,17 @@ describe('CAPTCHA (Cloudflare Turnstile)', () => {
     await waitFor(() => expect(window.turnstile.reset).toHaveBeenCalledWith('w1')) // tokens are single-use
   })
 
-  it('sends the token with the magic link and the password sign-in', async () => {
+  it('sends a fresh token with every code request', async () => {
     supabaseApi('dispatcher', '0x4AAAAAAA-site')
     const user = renderApp()
-    await user.type(await screen.findByLabelText('Work email'), 'recruiter@company.com')
+    await user.type(await screen.findByLabelText('Email'), 'recruiter@company.com')
     await waitFor(() => expect(window.turnstile.render).toHaveBeenCalled())
     solve('cap-2')
-    await user.click(screen.getByRole('button', { name: 'Email me a sign-in link' }))
+    await user.click(screen.getByRole('button', { name: 'Email me a sign-in code' }))
     expect(auth.signInWithOtp).toHaveBeenCalledWith({ email: 'recruiter@company.com', options: { emailRedirectTo: location.origin, captchaToken: 'cap-2' } })
     solve('cap-3')
-    await user.click(screen.getByRole('button', { name: 'Use a password instead' }))
-    await user.type(screen.getByLabelText('Password'), 'pw')
-    await user.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: 'recruiter@company.com', password: 'pw', options: { captchaToken: 'cap-3' } })
+    await user.click(await screen.findByRole('button', { name: 'Send a new code' }))
+    expect(auth.signInWithOtp).toHaveBeenLastCalledWith({ email: 'recruiter@company.com', options: { emailRedirectTo: location.origin, captchaToken: 'cap-3' } })
   })
 
   it('stays out of the way when CAPTCHA is off', async () => {

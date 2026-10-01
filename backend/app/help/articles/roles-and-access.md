@@ -10,7 +10,9 @@ keywords: [sign in, signin, login, log in, sign out, logout, account, password, 
 
 ## Signing in
 
-On the hosted app, sign in with your work email: a **magic link** by email, or a **password**. Running
+On the hosted app, choose **Try it as a guest**, or enter your email and choose **Email me a sign-in
+code**. A one-time code arrives by email; type it in, or open the link in the same email. It's the
+same step whether it's your first visit or not: there's no sign-up and no password. Running
 locally, choose **Continue as Dispatcher** or **Continue as Viewer** (local demo only; the hosted app
 refuses it).
 

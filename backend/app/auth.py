@@ -2,8 +2,8 @@
 
 Two modes behind one interface:
 
-* ``supabase`` (UAT, production): users sign in with Supabase Auth (magic link or
-  password) in the browser. The API verifies the access token Supabase issued: asymmetric
+* ``supabase`` (UAT, production): users sign in with Supabase Auth in the browser,
+  passwordless (an emailed one-time code or link) or as a guest. The API verifies the access token Supabase issued: asymmetric
   keys from the project's JWKS endpoint, or the legacy shared HS256 secret. No password
   ever reaches this service.
 * ``demo`` (local development): a one-click sign-in issues a short-lived token signed

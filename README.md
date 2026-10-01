@@ -160,7 +160,8 @@ docker compose up --build        # production-like: Postgres + Qdrant + API + ng
 https://fab-dispatch.vercel.app runs the same build on Vercel with Supabase (Postgres and Auth).
 
 - **Try it as a guest:** one click, no email. Guests get full dispatcher access to the sample fabs.
-- **Or sign in with your email:** a magic link or the code in it (a branded email), or a password.
+- **Or sign in with your email:** enter it, and a one-time code (and link) arrives by email. The
+  same step for new and returning users: no sign-up, no password.
   Named accounts start as **viewers**; an admin grants **dispatcher**.
 
 Press **?** in the app for help, **/** to ask the assistant, and open **About & support** in the
@@ -210,7 +211,7 @@ user menu for the version, live status, docs and support links.
   fastest plan. Benchmark verdicts use paired bootstrap 95% confidence intervals.
 - **Any fab, no code changes.** Floor plan, tool families, fault catalogue, shift pattern and planning
   presets live in a validated JSON profile. Two very different fabs ship today.
-- **Secure and multi-tenant.** Supabase Auth in production (magic link or password), `viewer` and
+- **Secure and multi-tenant.** Supabase Auth in production (passwordless: an emailed one-time code, or guest access), `viewer` and
   `dispatcher` roles, per-user fab access, and a one-click demo sign-in for local development.
 - **Live dispatch for a whole team.** Tool-downs arrive as the shift runs. The plan re-optimises in
   under a second without reshuffling people, and every dashboard updates over **Server-Sent Events**.
@@ -339,7 +340,7 @@ What a production AI application needs, and where to see it here.
 
 | Area | In place |
 |---|---|
-| **Access** | Supabase Auth (email link, code or password), one-click guest access, `viewer` / `dispatcher` roles, per-user fab access, Cloudflare Turnstile CAPTCHA |
+| **Access** | Supabase Auth (passwordless email code or link), one-click guest access, `viewer` / `dispatcher` roles, per-user fab access, Cloudflare Turnstile CAPTCHA |
 | **Data security** | Row-level security on every app table (closed to the public API), strict CSP, HSTS, rate limits, request size limits, secrets only in the platform |
 | **Reliability** | Versioned migrations under a lock, optimistic concurrency, idempotent live actions, a clock lease, an SSE stream that resumes, cached plans |
 | **Operations** | Health and liveness endpoints, request ids, structured logs, daily data retention, post-deploy smoke tests, an [uptime check every 30 minutes](.github/workflows/uptime.yml) that opens an incident issue |
