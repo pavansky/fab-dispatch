@@ -1,8 +1,8 @@
 {
  "version": 2,
  "state": {
-  "id": "0e8c971f987f",
-  "created_at": "2026-10-01T18:55:39.797641+00:00",
+  "id": "77c77938379d",
+  "created_at": "2026-10-01T20:03:54.820619+00:00",
   "scenario": {
    "fab_id": "fab1-300mm-logic",
    "engineers": [
@@ -673,7 +673,7 @@
     "engineers_used": 3.0,
     "workload_std": 1.6,
     "objective": 83.0,
-    "runtime_ms": 3.67
+    "runtime_ms": 3.65
    },
    "solver": {
     "iterations": 60,
@@ -693,7 +693,7 @@
   "ended": false,
   "created_by": "dispatcher@demo.local",
   "driver": "dispatcher@demo.local",
-  "driver_until": 1790880959.80378
+  "driver_until": 1790885054.8269389
  },
  "status": {
   "J005": "planned",
@@ -725,7 +725,7 @@
     "priority": 3
    },
    "actor": "system",
-   "at": "2026-10-01T18:55:39.803802+00:00"
+   "at": "2026-10-01T20:03:54.826960+00:00"
   },
   {
    "kind": "replanned",
@@ -737,13 +737,13 @@
      "J016"
     ],
     "dropped": [],
-    "runtime_ms": 3.82,
+    "runtime_ms": 4.08,
     "assignments": {
      "J016": "E01"
     }
    },
    "actor": "dispatcher@demo.local",
-   "at": "2026-10-01T18:55:39.807733+00:00"
+   "at": "2026-10-01T20:03:54.831190+00:00"
   },
   {
    "kind": "job_reported",
@@ -754,7 +754,7 @@
     "priority": 2
    },
    "actor": "system",
-   "at": "2026-10-01T18:55:39.807740+00:00"
+   "at": "2026-10-01T20:03:54.831206+00:00"
   },
   {
    "kind": "replanned",
@@ -766,13 +766,13 @@
      "J007"
     ],
     "dropped": [],
-    "runtime_ms": 3.67,
+    "runtime_ms": 3.65,
     "assignments": {
      "J007": "E03"
     }
    },
    "actor": "dispatcher@demo.local",
-   "at": "2026-10-01T18:55:39.811526+00:00"
+   "at": "2026-10-01T20:03:54.834970+00:00"
   },
   {
    "kind": "clock",
@@ -787,7 +787,7 @@
     "total": 18
    },
    "actor": "dispatcher@demo.local",
-   "at": "2026-10-01T18:55:39.811539+00:00"
+   "at": "2026-10-01T20:03:54.834982+00:00"
   }
  ]
 }

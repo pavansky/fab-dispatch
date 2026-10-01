@@ -3,7 +3,7 @@
  "db_ok": true,
  "schema_ok": true,
  "version": "2026.10.1",
- "release": "2.5.1",
+ "release": "2.6.0",
  "commit": "local",
  "env": "local"
 }

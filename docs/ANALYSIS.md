@@ -55,6 +55,27 @@ MILP (HiGHS). Gap = (strategy cost − optimum) / optimum.
 | **ALNS** | **0.9%** | **6.7%** | 13/20 |
 | PyVRP | 1.8% | 11.2% | **14/20** |
 
+### Distance from the proven optimum at full size
+
+The same exact method scales to full shifts: routes are short (4–6 jobs per engineer) and time
+windows prune hard, so a 14 × 45 shift has about 34,000 feasible route sets. Every one of the 80
+shifts below was **solved to proven optimality** (HiGHS, relative gap 0): 20 s on average, 138 s at
+worst. Each optimum is built and costed by the same planner as the heuristics, and the study fails if
+any heuristic ever beats it.
+
+| Strategy | Mean gap | Worst gap | Found the optimum |
+|---|---|---|---|
+| Greedy | 28.1% | 75.4% | 0/80 |
+| Hungarian | 25.8% | 45.3% | 0/80 |
+| Regret-2 | 19.4% | 49.7% | 0/80 |
+| ALNS | 5.7% | 18.1% | 0/80 |
+| **PyVRP** | **2.7%** | **10.0%** | **1/80** |
+
+By preset, PyVRP's mean gap is 4.3% (normal), 0.9% (litho crunch), 2.1% (surge) and 3.6%
+(overstaffed); ALNS's is 7.6%, 1.7%, 5.5% and 7.9%. Giving ALNS 20,000 iterations instead of 300 on a
+normal shift lowers its gap from 8.1% to 5.2% and then stops: it settles in a local optimum, it isn't
+starved of time. Reproduce: `python -m scripts.benchmark --only gaps-full`.
+
 ### Solve time (ms, one shift, an Apple M5 Pro laptop)
 
 | Size | Greedy | Hungarian | Regret-2 | ALNS | PyVRP |
@@ -94,13 +115,13 @@ and serves about 3 points more jobs (1 point in litho crunch). Most of the savin
 falls by about a third (28–35%): the one-pass methods commit jobs in an order that leaves engineers standing at
 tools waiting for windows to open, and only re-sequencing whole routes fixes that.
 
-**2. The method that's best for one objective isn't best for another, and the exact solver shows why.**
-On small shifts **ALNS gets closer to the true optimum than PyVRP** (0.9% vs 1.8% mean gap, 6.7% vs 11.2%
-worst). ALNS optimises our objective exactly, including the convex workload-balance term. PyVRP can't
-express that term natively, so it optimises a slightly different problem very well. On full-size shifts,
-PyVRP's raw search speed (a C++ core) outweighs that mismatch. The
-lesson: a solver is only as good as its fit to the actual objective, and measuring against a proven
-optimum is what reveals it.
+**2. Small test cases flatter heuristics, and only a full-size proof shows it.** On small shifts
+ALNS looked closest to optimal (0.9% vs PyVRP's 1.8%). At full size, proven optimal on 80 shifts,
+the picture flips and widens: PyVRP is 2.7% from the optimum, ALNS 5.7%, and the one-pass rules
+19–28%. ALNS optimises our objective exactly, including the convex workload-balance term that PyVRP
+can't express, but at full size PyVRP's stronger search (a C++ core) outweighs that mismatch. The
+lesson: measure against a proven optimum at the size you'll actually run, not a size that's
+convenient to prove.
 
 **3. Hungarian wins on response time and fairness, and loses on cost, for one reason.** Hungarian has
 the fastest response to tool-downs in every preset (under half the next-best in litho crunch: 7.5 vs 17.9 min)
@@ -128,7 +149,8 @@ to the real fix: cross-training or staffing. For a fab manager, that's often the
 | **Contention**: many jobs competing for few qualified engineers, tight windows | Regret-2 at minimum, a search method ideally | One-at-a-time commitment strands jobs. |
 | KPI is **time-to-respond** or **fairness** | Hungarian in rounds | Structurally spreads first jobs across everyone. Accept the idle-time cost. |
 | KPI is **total cost or throughput**, and about 0.4 s (about 1 s on serverless) is acceptable | PyVRP | Lowest cost in 78/80 shifts. |
-| The objective has terms a library can't express (balance, stability, custom penalties) | ALNS | Optimises the exact objective. Closest to optimal on small shifts. |
+| The objective has terms a library can't express (balance, stability, custom penalties) | ALNS | Optimises the exact objective; 5.7% from optimal at full size. |
+| The plan is made **ahead of time** (next shift) and a minute or two is acceptable | Exact (set partitioning) | Proven optimal: 2.7% cheaper than PyVRP on average, up to 10%. 20 s typical, 138 s worst. |
 | **Plenty of engineers** (overstaffed) | Any for bottleneck work; search for the rest | All cover about 98% of bottleneck downs. Greedy still drops PMs (92% vs 98% overall coverage) and costs 70% more than PyVRP. |
 | **Certification shortage** | Fix staffing | All strategies hit the same ceiling. |
 
@@ -141,8 +163,9 @@ downs). At hard capacity limits the gap closes again, because nothing can be don
 ## 4. Why these algorithms, and not the newest ones in the literature?
 
 I checked the current research (October 2026) before settling the lineup. Short answer: the lineup
-already contains the state of the art for this problem class, the measured headroom above it is
-under 1%, and the open research frontier is somewhere else (uncertainty, not search).
+already contains the state of the art for this problem class, I measured the headroom above it
+exactly instead of guessing (2.7% on average), and the open research frontier is somewhere else
+(uncertainty, not search).
 
 **The lineup spans every family, including the current best.**
 
@@ -152,13 +175,14 @@ under 1%, and the open research frontier is somewhere else (uncertainty, not sea
 | Assignment | Hungarian | Optimal one-job-per-round matching; best response time and fairness |
 | Large neighbourhood search | ALNS | Optimises *our* exact objective; the family that recent LLM-designed operators improve ([VRPAgent](https://arxiv.org/pdf/2510.07073)) |
 | Hybrid genetic search | PyVRP | The state of the art for VRPTW: first in the [2021 DIMACS VRPTW challenge](http://dimacs.rutgers.edu/news_archive/challenge) and the static [EURO meets NeurIPS 2022](https://arxiv.org/abs/2403.13795) competition |
-| Exact | Set-partitioning MILP | Proves the optimum on small shifts, so every gap above is measured, not guessed |
+| Exact | Set-partitioning MILP | Proves the optimum at full size, so every gap is measured, not guessed |
 
-**The measured headroom is small.** On shifts solved to proven optimality, ALNS is 0.9% from the
-optimum on average and finds it 13 times in 20 (section 1). No newer method can gain more than that
-0.9% there. At full size (14 × 45) the optimum isn't provable within the time limit, so the
-full-size headroom is still unmeasured; a lower bound (LP relaxation or column generation) would
-measure it, and is the right next step before adding solvers.
+**The headroom is measured, and it's modest.** At full size, proven optimal on 80 shifts, the best
+heuristic (PyVRP) is 2.7% from the optimum on average and 10% at worst (section 1). That is the most
+any new solver could gain on this problem, and the exact method already captures it when there's time
+to plan ahead. So the open question isn't "which newer heuristic?", it's how to get the optimum
+*fast enough for live dispatch*: column generation (pricing routes instead of enumerating all of
+them) is the established way to do that, and it's the next step for the solver.
 
 **Why not neural solvers?** Learned routing solvers report their results *relative to* PyVRP's HGS
 on the VRPTW, and the best of them match or narrowly beat it
@@ -171,7 +195,8 @@ certification levels), and give no per-decision explanation, which the brief req
 [VRPAgent](https://arxiv.org/pdf/2510.07073) and [PyVRP+](https://arxiv.org/abs/2604.07872)
 (up to 2.7% better than HGS on hard variants) are design-time tools: an LLM evolves operators
 offline, evaluated by a solver like this one. They're a natural extension, evolving ALNS's destroy
-and repair operators against this evaluator, not a replacement strategy to run per request.
+and repair operators against this evaluator, not a replacement strategy to run per request. The
+exact optimum here gives that kind of work something rare: a measured target (ALNS's 5.7% gap).
 
 **Where the real frontier is: uncertainty.** Recent technician-routing research has moved from
 static to dynamic, stochastic problems: requests arriving during the day, uncertain repair times,

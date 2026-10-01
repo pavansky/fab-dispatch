@@ -244,8 +244,10 @@ identifying anyone.
 ### D33. Spend effort on uncertainty, not on more solvers
 **Decision.** Keep five strategies plus the exact optimum; don't add neural or LLM-evolved solvers.
 **Why.** The lineup already includes the state of the art for this problem (PyVRP's hybrid genetic
-search, the DIMACS VRPTW winner), and ALNS is within 0.9% of the proven optimum where it can be
-measured. Neural solvers at best match HGS, need training and can't explain decisions; LLM-evolved
+search, the DIMACS VRPTW winner), and the headroom above it is measured, not assumed: proven optimal
+on 80 full-size shifts, PyVRP is 2.7% from the optimum on average, and the exact method captures that
+gap when the plan is made ahead of time. Neural solvers at best match HGS, need training and can't explain decisions; LLM-evolved
 heuristics are a design-time tool for improving operators. The research frontier for technician
-routing is dynamic and stochastic dispatch, so that's where the next improvement lies (ANALYSIS §4).
+routing is dynamic and stochastic dispatch, so that's where the next improvement lies, alongside
+making the exact optimum fast enough for live use (ANALYSIS §4).
 

@@ -38,8 +38,8 @@
    "title": "The five strategies",
    "heading": "PyVRP",
    "anchor": "pyvrp",
-   "snippet": "A state-of-the-art vehicle-routing solver (iterated local search, C++ core), warm-started from Regret-2. The **lowest operating cost at full scale**, mostly by cutting idle wait.",
-   "score": 0.42
+   "snippet": "A state-of-the-art vehicle-routing solver (iterated local search, C++ core), warm-started from Regret-2. The **lowest operating cost of the five**, mostly by cutting idle wait: abo\u2026",
+   "score": 0.4053
   }
  ]
 }
