@@ -2,6 +2,31 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.4.0] - 2026-10-01
+
+### Added
+- **CodeQL** security analysis of the Python and JavaScript code on every pull request, every push
+  to `main` and weekly (`security-extended` queries).
+- **Dependency review** on pull requests: a new dependency with a high-severity vulnerability, or
+  under a GPL-family or SSPL license, fails the check.
+- **The Docker stack is run in CI, not just built**: it starts Postgres, Qdrant, the API and nginx,
+  checks health, signs in and calls the API, then **Trivy** scans both images for fixable critical
+  and high vulnerabilities.
+- **actionlint** (with shellcheck) on every workflow, **Conventional Commits** and single-author
+  checks on pull requests, and a timeout on every job.
+- **Signed release images** on GitHub Container Registry (`ghcr.io/pavansky/fab-dispatch-api`,
+  `-ui`), with an SBOM and build provenance you can verify with `gh attestation verify`.
+- **Releases confirm production:** the release waits until production reports the new version,
+  healthy with its schema current, before publishing release notes.
+
+### Fixed
+- `docker compose up` failed to start: the API refused demo sign-in in its production mode. The
+  stack now runs with demo sign-in enabled explicitly.
+- Container images carried known, fixable vulnerabilities: OS packages are now updated at build
+  time, the UI image moves to nginx 1.29, and the API image uses Debian's maintained `libpq5`
+  instead of the copy bundled in `psycopg[binary]`. Both images scan clean.
+- The post-deploy smoke test ran against GitHub Pages deployments of the docs site.
+
 ## [2.3.1] - 2026-10-01
 
 ### Added
