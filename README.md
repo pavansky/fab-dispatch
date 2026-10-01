@@ -10,8 +10,9 @@ of fabs, comparing five strategies from a one-pass greedy to a state-of-the-art 
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.14-020202?logo=python&logoColor=white)](#quick-start)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.142-020202?logo=fastapi&logoColor=white)](backend/)
 [![React](https://img.shields.io/badge/React-19-020202?logo=react&logoColor=white)](frontend/)
-[![Tests](https://img.shields.io/badge/tests-214-ef6f2e)](#testing)
-[![Coverage](https://img.shields.io/badge/coverage-92%25-ef6f2e)](#testing)
+[![Tests](https://img.shields.io/badge/tests-304-ef6f2e)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-API%2094%25%20%C2%B7%20UI%2088%25-ef6f2e)](#testing)
+[![E2E](https://img.shields.io/badge/e2e-Playwright-ef6f2e?logo=playwright&logoColor=white)](#testing)
 [![Runs locally](https://img.shields.io/badge/runs%20locally-no%20API%20keys-ef6f2e)](#quick-start)
 
 [**Quick start**](#quick-start) · [**Live app**](https://fab-dispatch.vercel.app) · [5-minute tour](#a-5-minute-tour) · [Results](#results) ·
@@ -175,7 +176,7 @@ Where each part of a resource-allocation brief lives, in the app and in the code
 | Hard and soft constraints | **Cost weights** sliders; rejections on **Floor plan** | `backend/app/planner.py` (one constraint engine for every strategy) |
 | Decision explanations | Click any job on **Floor plan** | `backend/app/engine.py`, `algorithms/alns.py` |
 | Meaningful metrics | Scorecards on **Overview**, tables on **Benchmark** | `backend/app/engine.py` (`_metrics`) |
-| Tests and comparisons | (not in the UI) | `backend/tests/` (constraints, algorithms, optimality, API) and `frontend/src/lib/__tests__/` |
+| Tests and comparisons | (not in the UI) | `backend/tests/` (constraints, algorithms, optimality, API), `frontend/src/**/*.test.*` (components) and `frontend/e2e/` (Playwright) |
 | Map / spatial view | **Floor plan** (SVG, no map service or keys) | `frontend/src/components/FloorPlan.jsx` |
 | Algorithm comparison | **Overview** and **Benchmark** | `frontend/src/components/Overview.jsx`, `Benchmark.jsx` |
 | Metrics display | **Overview**, **Benchmark**, **Workforce** | `frontend/src/components/MetricBars.jsx` |
@@ -204,6 +205,8 @@ Where each part of a resource-allocation brief lives, in the app and in the code
   long the fault will take and who has fixed it before.
 - **Works on a phone.** The controls become a drawer, the tabs scroll, the floor plan works by touch,
   and the light theme is the default.
+- **Tested at every layer.** 215 backend tests, 70 frontend component tests rendered against real API
+  responses, and 19 Playwright end-to-end tests that drive the real app on desktop and on a phone.
 - **Engineered for change.** Versioned database migrations, CI with coverage, security audits and a
   Postgres matrix, a release pipeline that promotes UAT-tested commits to production, and
   post-deploy smoke tests.
@@ -322,32 +325,49 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
 
 ## Testing
 
+Three layers, all run in CI on every pull request:
+
+| Layer | Tool | Count | What it proves |
+|---|---|---|---|
+| Backend | pytest | **215** (4 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store and migrations |
+| Frontend components | Vitest + Testing Library | **70** | Every view and flow renders and behaves correctly against **real API responses** |
+| End-to-end | Playwright | **19** (15 desktop, 4 phone) | The real API and UI together in Chromium, including two browsers on one live shift |
+
+Coverage: **94%** of the API (with Postgres, as CI measures it) and **88%** of the UI. CI fails below
+90% for the API, or below the UI floors in `frontend/vite.config.js`.
+
 ```bash
-# Backend: 200 tests (4 of them need Postgres and skip without it)
-cd backend
+# Backend (from backend/, with the virtualenv active)
 pip install -r requirements-dev.txt
 pytest
 
-# Frontend: 14 tests
-cd frontend
-npm test
+# Frontend unit and component tests (from frontend/)
+npm test                      # or: npm run test:coverage
+
+# End-to-end (from frontend/). Starts the API and UI by itself.
+npx playwright install chromium   # once
+npm run test:e2e
 ```
 
-`make check` runs everything CI runs: lint, format, tests with an 85% coverage floor, dependency
-audits and the frontend build. To include the Postgres tests, point `FAB_TEST_PG_URL` at any
+`make check` runs everything CI runs: lint, format, all three layers with coverage floors, dependency
+audits and the frontend build. To include the Postgres tests locally, point `FAB_TEST_PG_URL` at any
 Postgres database. To reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.md), run
 `python -m scripts.benchmark --seeds 20` from `backend/` (a few minutes).
 
-What the tests cover (92% line coverage):
+**What the tests cover**
 - **Hard constraints** re-derived from scratch for every strategy, on every preset of **every fab**.
-- **Fab 1 golden test:** converting the hard-coded fab into a profile reproduces its scenarios byte for byte.
 - **Optimality:** heuristics checked against the exact MILP optimum, and never allowed to beat it.
+- **Fab 1 golden test:** converting the hard-coded fab into a profile reproduces its scenarios byte for byte.
 - **Auth:** 401 without a token, forged and expired tokens rejected, 403 for viewers on dispatcher
-  actions, 404 across fabs, Supabase role mapping, demo mode refused in production.
-- **Real-time:** idempotent retries, clock lease conflicts, presence, actor audit, retention auth.
-- **Migrations and store** on SQLite and real Postgres, including upgrading a pre-versioning database
-  and environment isolation by schema.
-- **Frontend:** recommendation rules, frontier detection and bootstrap statistics.
+  actions (in the API and in the browser), 404 across fabs, demo mode refused in production.
+- **Real-time:** idempotent retries, clock lease conflicts, presence, audit trail; in the browser, a
+  viewer in a second window watching a dispatcher's changes arrive over Server-Sent Events.
+- **UI against real data:** components render JSON captured from the API
+  (`backend/scripts/export_ui_fixtures.py`). A backend test fails if the API's response shape drifts
+  from those fixtures, so the UI tests can't pass against stale data (`make fixtures` refreshes them).
+- **Phone layout:** the drawer, touch selection, no sideways scrolling on any view, and the user menu
+  staying reachable.
+- **Every end-to-end test fails on any browser console error.**
 
 ## Delivery: dev → UAT → production
 
@@ -359,8 +379,9 @@ What the tests cover (92% line coverage):
 
 - **Branch protection:** `main` only accepts changes that pass CI; `production` can't be force-pushed
   or deleted, and only moves forward through a release.
-- **CI** on every push and PR: ruff lint and format, tests with an 85% coverage floor, Python
-  3.11/3.12/3.14, Postgres migrations, ESLint, Vitest, build, `pip-audit` + `npm audit`, Docker images.
+- **CI** on every push and PR: ruff lint and format, API tests with a 90% coverage floor (Postgres
+  included), Python 3.11/3.12/3.14, Postgres migrations, ESLint, component tests with coverage floors,
+  Playwright end-to-end on desktop and phone, build, `pip-audit` + `npm audit`, Docker images.
 - **Release:** pushing a tag re-runs CI on that exact commit, requires it to be on `main` (UAT-tested),
   fast-forwards the `production` branch, and publishes release notes from the changelog.
 - **Smoke tests** after every deployment: healthy, schema current, real auth (never demo).
@@ -384,11 +405,14 @@ backend/
     store.py               SQLite / Postgres repository + versioned migrations
     routes/                system · auth · fabs · planning · live (SSE) · repairs
   scripts/benchmark.py     reproduces every table in docs/ANALYSIS.md
-  tests/                   200 tests (incl. golden fab fingerprints)
+  scripts/export_ui_fixtures.py   real API responses for the UI tests
+  tests/                   215 tests (incl. golden fab fingerprints, UI fixture contract)
 frontend/src/
   App.jsx auth.jsx api.js  workspace, sign-in, API client
   lib/                     fab context, recommendation logic, statistics, progressive planning
   components/              floor plan, frontier chart, schedule, workforce, live dispatch, benchmark
+  test/                    fake API over real fixtures, app-level and live-dispatch tests
+frontend/e2e/              Playwright: planning, live dispatch, roles and fabs, phone
 .github/                   CI, release and smoke workflows, Dependabot, templates, CODEOWNERS
 docs/                      ANALYSIS · ARCHITECTURE · DECISIONS · DEPLOYMENT · ENVIRONMENTS · ONBOARDING_A_FAB
 ```
@@ -399,7 +423,7 @@ docs/                      ANALYSIS · ARCHITECTURE · DECISIONS · DEPLOYMENT �
 |---|---|
 | [ANALYSIS.md](docs/ANALYSIS.md) | Benchmark, optimality gaps, budget sizing, when each strategy wins |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, auth and tenancy, live dispatch, repair history, migrations, performance |
-| [DECISIONS.md](docs/DECISIONS.md) | 22 design decisions with context and trade-offs |
+| [DECISIONS.md](docs/DECISIONS.md) | 23 design decisions with context and trade-offs |
 | [ENVIRONMENTS.md](docs/ENVIRONMENTS.md) | Dev → UAT → production, releases, rollback, per-environment config |
 | [ONBOARDING_A_FAB.md](docs/ONBOARDING_A_FAB.md) | Adding a new fab: profile, validation, access, release |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Local, Docker and Vercel + Supabase hosting |

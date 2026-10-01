@@ -4,10 +4,25 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 
 ## [2.0.2] - 2026-10-01
 
+### Added
+- **Frontend component tests** (Vitest + Testing Library, 70 tests): sign-in, every view, live
+  dispatch with a simulated event stream, roles, theme, fab switching. They render JSON captured
+  from the real API, and a backend contract test fails if the API's shapes drift from it.
+- **End-to-end tests** (Playwright, 19 tests): the real API and UI in Chromium on desktop and a phone
+  viewport, including a viewer in a second browser watching a dispatcher's live shift. Every test
+  fails on a browser console error. Runs in CI and uploads traces on failure.
+- Coverage floors for the UI; API coverage now measured with Postgres (94%), floor raised to 90%.
+- Floor plan jobs and engineers are keyboard- and screen-reader-accessible buttons.
+
+### Fixed
+- Rejoining a live shift after leaving it showed nothing (a cached ETag got a 304 with no view to keep).
+- On phones the top bar overflowed, hiding the user menu (and sign-out); the theme switch now
+  moves into the user menu below 640px.
+- Cached plans are cleared on sign-out, so the next session on the same browser starts clean.
+
 ### Changed
 - README: quick start first, tested on macOS/Linux and Windows; a 5-minute tour of the app; a
-  requirements map from the brief to the app and code; troubleshooting; how to run every test suite;
-  live-app access by role.
+  requirements map from the brief to the app and code; troubleshooting; the three test layers.
 - Frontend declares its Node requirement (`>=20.19`, from Vite 7).
 - Repository is public, with branch protection on `main` (CI must pass) and `production`.
 
