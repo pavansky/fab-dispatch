@@ -46,7 +46,8 @@ flowchart LR
 
 Set in Vercel → Settings → Environment Variables, scoped to *Production* or *Preview* (UAT and PR
 previews). The Supabase integration injects `POSTGRES_URL`, `SUPABASE_URL`,
-`SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_JWT_SECRET` per scope.
+`SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_JWT_SECRET` per scope. Sign-in emails, the sender and guest
+access are configured in Supabase itself: see [supabase/README.md](../supabase/README.md).
 
 | Variable | Production | Preview (UAT) |
 |---|---|---|
@@ -55,6 +56,8 @@ previews). The Supabase integration injects `POSTGRES_URL`, `SUPABASE_URL`,
 | `FAB_DEFAULT_ROLE` | `viewer` | `viewer` |
 | `CRON_SECRET` | random, ≥ 32 chars | random, ≥ 32 chars |
 | `FAB_DB_SCHEMA` | unset (`public`) | `uat` |
+| `FAB_GUEST_ROLE` | `dispatcher` for a public demo; `none` for a real fab | `dispatcher` |
+| `FAB_ASSISTANT_LLM` | `none` (or `anthropic` with `ANTHROPIC_API_KEY`) | `none` |
 
 ### Why UAT is a schema, not a second database
 

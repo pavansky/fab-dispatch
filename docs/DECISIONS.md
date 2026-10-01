@@ -171,3 +171,21 @@ not CSS classes.
 no longer exists; the contract test turns that drift into a failure. Component tests are fast and
 precise; only a browser proves SSE, the Vite proxy, layout and touch work together. Querying by role
 keeps the UI accessible: the floor plan's jobs became real buttons because the tests needed them to be.
+
+### D24. A grounded assistant: retrieval and tools first, an LLM only to reword
+**Decision.** The assistant classifies the question, then answers only from tools: retrieval over the
+help articles (hybrid: vectors in Qdrant plus keyword, heading and section-text matches) and the
+planning service for the shift on screen. Every answer carries citations and actions. Below a
+measured retrieval score it says "I don't know". An LLM is optional and only rewords the grounded
+answer; citations and actions never come from it.
+**Why.** A dispatcher acts on these answers, so a confident wrong one is worse than none. Grounding
+makes answers checkable and identical to what the screen shows; the refusal threshold sits between
+on-topic (≥ 0.65) and off-topic (≤ 0.36) scores on an evaluation set that runs in CI. It also meets
+the brief's no-keys rule, and makes the LLM a swappable enhancement, not a dependency.
+
+### D25. One-click guest access for the public demo
+**Decision.** Supabase anonymous sign-in behind a "Try it as a guest" button; guests get
+`FAB_GUEST_ROLE` (dispatcher on the public demo, viewer by default, or refused).
+**Why.** Supabase's built-in email sender only reaches the project's own team, and a reviewer
+shouldn't depend on email at all. Anonymous users are real Supabase users, so the API's verification,
+rate limits and fab scoping apply unchanged, and a guest can't escalate.

@@ -10,7 +10,7 @@ of fabs, comparing five strategies from a one-pass greedy to a state-of-the-art 
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.14-020202?logo=python&logoColor=white)](#quick-start)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.142-020202?logo=fastapi&logoColor=white)](backend/)
 [![React](https://img.shields.io/badge/React-19-020202?logo=react&logoColor=white)](frontend/)
-[![Tests](https://img.shields.io/badge/tests-304-ef6f2e)](#testing)
+[![Tests](https://img.shields.io/badge/tests-391-ef6f2e)](#testing)
 [![Coverage](https://img.shields.io/badge/coverage-API%2094%25%20%C2%B7%20UI%2088%25-ef6f2e)](#testing)
 [![E2E](https://img.shields.io/badge/e2e-Playwright-ef6f2e?logo=playwright&logoColor=white)](#testing)
 [![Runs locally](https://img.shields.io/badge/runs%20locally-no%20API%20keys-ef6f2e)](#quick-start)
@@ -113,11 +113,13 @@ docker compose up --build        # production-like: Postgres + Qdrant + API + ng
 
 ### Live app
 
-https://fab-dispatch.vercel.app runs the same build on Vercel with Supabase (Postgres and Auth). Sign in
-with your email (magic link or password). New accounts are **viewers**: they can generate shifts,
-compare all five strategies, explore the floor plan and watch live shifts. Running benchmarks and
-driving a live shift need the **dispatcher** role. For the full experience with no sign-up, run it
-locally.
+https://fab-dispatch.vercel.app runs the same build on Vercel with Supabase (Postgres and Auth).
+
+- **Try it as a guest:** one click, no email. Guests get full dispatcher access to the sample fabs.
+- **Or sign in with your email:** a magic link or a 6-digit code (in a branded email), or a password.
+  Named accounts start as **viewers**; an admin grants **dispatcher**.
+
+Press **?** in the app for help, or **/** to ask the assistant.
 
 ## A 5-minute tour
 
@@ -203,10 +205,15 @@ Where each part of a resource-allocation brief lives, in the app and in the code
 - **Every decision explained.** For any job you can see who was chosen, the runner-up, why other
   engineers were rejected, the cost breakdown, and a **repair-history** prediction (Qdrant) of how
   long the fault will take and who has fixed it before.
+- **Help built in, and an assistant that cites its sources.** A searchable help center, contextual
+  ⓘ links, a first-run tour and keyboard shortcuts. **Ask Dispatch** answers questions about the shift
+  on screen ("why is J006 unassigned?") and the app, from the help articles and the real plans,
+  always with sources. It says "I don't know" rather than guess: measured on an evaluation set in CI.
+  Runs locally with no key; an LLM can optionally reword answers, never add facts.
 - **Works on a phone.** The controls become a drawer, the tabs scroll, the floor plan works by touch,
   and the light theme is the default.
-- **Tested at every layer.** 215 backend tests, 70 frontend component tests rendered against real API
-  responses, and 19 Playwright end-to-end tests that drive the real app on desktop and on a phone.
+- **Tested at every layer.** 276 backend tests, 90 frontend component tests rendered against real API
+  responses, and 25 Playwright end-to-end tests that drive the real app on desktop and on a phone.
 - **Engineered for change.** Versioned database migrations, CI with coverage, security audits and a
   Postgres matrix, a release pipeline that promotes UAT-tested commits to production, and
   post-deploy smoke tests.
@@ -265,6 +272,10 @@ flowchart LR
   LIVE --> ENG
   UI -.->|SSE stream| LIVE
   AUTH -->|POST /api/repairs/*| KN["Repair history<br/>k-NN on Qdrant, per fab"]
+  AUTH -->|POST /api/assistant/ask| AS["Assistant<br/>intents → tools → cited answer"]
+  AS --> PS
+  AS --> HI["Help index<br/>hybrid search on Qdrant"]
+  HELP[("Help articles<br/>Markdown")] --> HI
   PROF[("Fab profiles<br/>JSON")] --> ENG & KN
   PS & LIVE --> DB[("SQLite locally<br/>Postgres / Supabase in prod<br/>versioned migrations")]
 ```
@@ -305,6 +316,8 @@ Interactive OpenAPI docs at **http://127.0.0.1:8000/docs**. Key endpoints:
 | `POST` | `/api/shifts` · `/{id}/advance` · `/{id}/jobs` · `/{id}/engineers/{eid}/off` · `/{id}/release` | dispatcher | Run a live shift (`Idempotency-Key`, `If-Match`, clock lease) |
 | `GET` | `/api/shifts?fab_id=` · `/{id}` · `/{id}/events` · `/{id}/stream` | viewer | Recent shifts, state (ETag), audit log, Server-Sent Events |
 | `POST` | `/api/repairs/similar` · `/api/repairs/predict-durations` | viewer | Repair-history retrieval and duration prediction |
+| `GET` | `/api/help` · `/api/help/{slug}` · `/api/help/search?q=` | public | Help center: contents, an article, search |
+| `POST` | `/api/assistant/ask` | viewer | Grounded answer with citations and actions, for the shift sent as context |
 | `GET` | `/api/health` · `/api/livez` | public | Readiness (database + schema version) and liveness |
 
 Errors share one envelope: `{"error": {"code", "message", "request_id"}}`.
@@ -321,6 +334,8 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
 | `FAB_PROFILES_DIR`, `FAB_DEFAULT_FAB` | bundled, `fab1-300mm-logic` | Where fab profiles live; the fab shown first |
 | `FAB_QDRANT_URL`, `FAB_QDRANT_API_KEY` | unset (in-memory index) | Use a Qdrant server or Qdrant Cloud |
 | `FAB_ALNS_ITERATIONS` / `FAB_PYVRP_ITERATIONS` | `300` / `1000` | Search budgets, sized from the measured quality curve |
+| `FAB_GUEST_ROLE` | `viewer` | Role for one-click guest sign-ins (Supabase anonymous users), or `none` to refuse guests |
+| `FAB_ASSISTANT_LLM` | `none` | Optional model to reword assistant answers: `anthropic` (`ANTHROPIC_API_KEY`) or `ollama` (local) |
 | `CRON_SECRET` | unset | Protects the daily data-retention endpoint |
 
 ## Testing
@@ -329,9 +344,9 @@ Three layers, all run in CI on every pull request:
 
 | Layer | Tool | Count | What it proves |
 |---|---|---|---|
-| Backend | pytest | **215** (4 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store and migrations |
-| Frontend components | Vitest + Testing Library | **70** | Every view and flow renders and behaves correctly against **real API responses** |
-| End-to-end | Playwright | **19** (15 desktop, 4 phone) | The real API and UI together in Chromium, including two browsers on one live shift |
+| Backend | pytest | **276** (4 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store, help, assistant quality |
+| Frontend components | Vitest + Testing Library | **90** | Every view and flow, sign-in paths, help and the assistant, against **real API responses** |
+| End-to-end | Playwright | **25** (20 desktop, 5 phone) | The real API and UI together in Chromium, including two browsers on one live shift |
 
 Coverage: **94%** of the API (with Postgres, as CI measures it) and **88%** of the UI. CI fails below
 90% for the API, or below the UI floors in `frontend/vite.config.js`.
@@ -367,6 +382,9 @@ Postgres database. To reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.
   from those fixtures, so the UI tests can't pass against stale data (`make fixtures` refreshes them).
 - **Phone layout:** the drawer, touch selection, no sideways scrolling on any view, and the user menu
   staying reachable.
+- **Assistant quality:** an evaluation set of real questions must cite the right article (≥ 90%; 100%
+  today), and every off-topic question must get "I don't know". Answers about a job match the plans
+  exactly. The optional LLM is tested to fall back to the grounded answer on any failure.
 - **Every end-to-end test fails on any browser console error.**
 
 ## Delivery: dev → UAT → production
@@ -402,17 +420,21 @@ backend/
     engine.py              run a strategy -> assignments, explanations, metrics
     live.py                rolling-horizon live dispatch, clock lease
     knowledge.py           repair history and Qdrant index, per fab
+    help/                  help center articles (Markdown) and their validation
+    assistant/             grounded assistant: retrieval, intents and tools, optional LLM
     store.py               SQLite / Postgres repository + versioned migrations
     routes/                system · auth · fabs · planning · live (SSE) · repairs
   scripts/benchmark.py     reproduces every table in docs/ANALYSIS.md
   scripts/export_ui_fixtures.py   real API responses for the UI tests
-  tests/                   215 tests (incl. golden fab fingerprints, UI fixture contract)
+  tests/                   276 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval)
 frontend/src/
   App.jsx auth.jsx api.js  workspace, sign-in, API client
   lib/                     fab context, recommendation logic, statistics, progressive planning
   components/              floor plan, frontier chart, schedule, workforce, live dispatch, benchmark
-  test/                    fake API over real fixtures, app-level and live-dispatch tests
-frontend/e2e/              Playwright: planning, live dispatch, roles and fabs, phone
+  components/HelpCenter · Assistant · Tour   in-app help, Ask Dispatch, first-run tour
+  test/                    fake API over real fixtures, app-level, live-dispatch, help and sign-in tests
+frontend/e2e/              Playwright: planning, live dispatch, roles and fabs, help and assistant, phone
+supabase/                  branded auth email templates and how to apply them
 .github/                   CI, release and smoke workflows, Dependabot, templates, CODEOWNERS
 docs/                      ANALYSIS · ARCHITECTURE · DECISIONS · DEPLOYMENT · ENVIRONMENTS · ONBOARDING_A_FAB
 ```
@@ -423,13 +445,15 @@ docs/                      ANALYSIS · ARCHITECTURE · DECISIONS · DEPLOYMENT �
 |---|---|
 | [ANALYSIS.md](docs/ANALYSIS.md) | Benchmark, optimality gaps, budget sizing, when each strategy wins |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, auth and tenancy, live dispatch, repair history, migrations, performance |
-| [DECISIONS.md](docs/DECISIONS.md) | 23 design decisions with context and trade-offs |
+| [DECISIONS.md](docs/DECISIONS.md) | 25 design decisions with context and trade-offs |
 | [ENVIRONMENTS.md](docs/ENVIRONMENTS.md) | Dev → UAT → production, releases, rollback, per-environment config |
 | [ONBOARDING_A_FAB.md](docs/ONBOARDING_A_FAB.md) | Adding a new fab: profile, validation, access, release |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Local, Docker and Vercel + Supabase hosting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, conventions, migrations, releasing |
+| [In-app help](backend/app/help/articles/) | The 16 help-center articles, readable here too |
+| [supabase/README.md](supabase/README.md) | Branded sign-in emails, sender setup, guest access |
 | [SECURITY.md](SECURITY.md) | Threat model and mitigations |
-| [CHANGELOG.md](CHANGELOG.md) | Release history (v0.1.0 → v2.0.1) |
+| [CHANGELOG.md](CHANGELOG.md) | Release history (v0.1.0 → v2.1.0) |
 
 ## Limitations and roadmap
 
