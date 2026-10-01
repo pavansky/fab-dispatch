@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
-import { FAMILY_LABEL, PRIORITY, clock } from '../lib/format.js'
+import { PRIORITY, clock } from '../lib/format.js'
+import { familyLabel } from '../lib/fab.js'
 import { useTooltip, Tooltip } from './Tooltip.jsx'
 
 const PAD = 10
@@ -63,7 +64,7 @@ export default function FloorPlan({
     return (
       <>
         <div className="t">{j.id} · {j.tool}</div>
-        <div className="r">{PRIORITY[j.priority].long} · {FAMILY_LABEL[j.skill]} L{j.min_level}+</div>
+        <div className="r">{PRIORITY[j.priority].long} · {familyLabel(j.skill)} L{j.min_level}+</div>
         <div className="r">Start window {clock(j.earliest)}–{clock(j.latest)} · {j.duration} min</div>
         <div className="r" style={{ marginTop: 4 }}>
           {a ? <>→ <b>{a.tech_id}</b> {engById[a.tech_id]?.name}, starts {clock(a.start)}</> : <b style={{ color: 'var(--critical)' }}>Unassigned</b>}
@@ -77,7 +78,7 @@ export default function FloorPlan({
     return (
       <>
         <div className="t">{e.id} · {e.name}</div>
-        <div className="r">{Object.entries(e.skills).map(([k, v]) => `${FAMILY_LABEL[k]} L${v}`).join(' · ')}</div>
+        <div className="r">{Object.entries(e.skills).map(([k, v]) => `${familyLabel(k)} L${v}`).join(' · ')}</div>
         <div className="r" style={{ marginTop: 4 }}>{off ? 'Off shift' : `${r?.stops.length ?? 0} of ${e.max_jobs} jobs`}{onToggleEngineer ? ' · click to inspect' : ''}</div>
       </>
     )
@@ -104,7 +105,7 @@ export default function FloorPlan({
         {Object.entries(areas).map(([fam, [x0, y0, x1, y1]]) => (
           <g key={fam}>
             <rect className="f-area" x={x0} y={H - y1} width={x1 - x0} height={y1 - y0} rx={2} />
-            <text className="f-area-label" x={x0 + 5} y={H - y1 + 10}>{FAMILY_LABEL[fam].toUpperCase()}</text>
+            <text className="f-area-label" x={x0 + 5} y={H - y1 + 10}>{familyLabel(fam).toUpperCase()}</text>
             {!compact && <text className="f-area-sub" x={x0 + 5} y={H - y1 + 17}>{jobsPerArea[fam] ?? 0} jobs</text>}
           </g>
         ))}

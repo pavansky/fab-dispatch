@@ -1,10 +1,12 @@
-import { PRIORITY, SHIFT_MIN, clock, fmt } from '../lib/format.js'
+import { PRIORITY, clock, fmt } from '../lib/format.js'
+import { shiftLength } from '../lib/fab.js'
 import { useTooltip, Tooltip } from './Tooltip.jsx'
 
-const pct = (m) => `${(m / SHIFT_MIN) * 100}%`
 
 export default function Schedule({ scenario, result, selection, onSelect, offShift, now }) {
   const { tip, show, hide } = useTooltip()
+  const SHIFT_MIN = shiftLength()
+  const pct = (m) => `${(m / SHIFT_MIN) * 100}%`
   const jobs = Object.fromEntries(scenario.jobs.map((j) => [j.id, j]))
   const routes = Object.fromEntries(result.routes.map((r) => [r.tech_id, r]))
   const selJob = selection?.type === 'job' ? jobs[selection.id] : null
@@ -16,7 +18,7 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
       <div className="g-row head" role="row">
         <div className="g-name muted" role="columnheader">Engineer</div>
         <div className="g-head-track">
-          {hours.filter((h) => h % 120 === 0).map((h) => <span key={h} className="g-tick" style={{ left: pct(h) }}>{clock(h)}</span>)}
+          {hours.filter((h) => h % (SHIFT_MIN > 600 ? 120 : 60) === 0).map((h) => <span key={h} className="g-tick" style={{ left: pct(h) }}>{clock(h)}</span>)}
         </div>
         <div className="g-util muted" role="columnheader">Busy</div>
       </div>

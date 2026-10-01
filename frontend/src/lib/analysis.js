@@ -1,5 +1,6 @@
 import { ALGO_ORDER, ALGO_SHORT, METRICS, improvement } from './metrics.js'
 import { fmt } from './format.js'
+import { familyIds } from './fab.js'
 
 export const GOALS = {
   value: {
@@ -70,7 +71,7 @@ function recommendValue(results) {
   }
   why += ` Covers ${m.assigned} of ${m.jobs} jobs, ${fmt(m.critical_coverage_pct)}% of bottleneck downs.`
   const tradeoff = []
-  if (excluded.length) tradeoff.push(`Excluded for losing bottleneck coverage: ${excluded.map((r) => ALGO_SHORT[r.algorithm]).join(', ')}`)
+  if (excluded.length) tradeoff.push(`Not considered because they serve less bottleneck or priority work: ${excluded.map((r) => ALGO_SHORT[r.algorithm]).join(', ')}`)
   const faster = pool.filter((r) => r.metrics.runtime_ms < m.runtime_ms && !nearTie.includes(r))
     .sort((a, b) => a.metrics.objective - b.metrics.objective)[0]
   if (faster) tradeoff.push(`${ALGO_SHORT[faster.algorithm]} answers in ${fmt(faster.metrics.runtime_ms, 0)} ms but costs ${fmt(faster.metrics.objective - m.objective)} pts more`)
@@ -222,7 +223,7 @@ export function insights(results, scenario) {
 /** Demand vs certified supply per tool family, for the selected allocation. */
 export function workforce(scenario, result) {
   const served = new Set(result?.assignments.map((a) => a.job_id) ?? [])
-  return Object.keys(METRICS_FAMILIES).map((fam) => {
+  return familyIds().map((fam) => {
     const jobs = scenario.jobs.filter((j) => j.skill === fam)
     const engs = scenario.engineers.filter((e) => e.skills[fam])
     const maxLevel = Math.max(0, ...jobs.map((j) => j.min_level))
@@ -240,4 +241,3 @@ export function workforce(scenario, result) {
     }
   })
 }
-const METRICS_FAMILIES = { litho: 1, etch: 1, deposition: 1, cmp: 1, implant: 1, metrology: 1 }

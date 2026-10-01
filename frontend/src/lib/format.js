@@ -1,10 +1,9 @@
-// Shift time 0 = 07:00 (day shift of a 12h rotation).
-export const SHIFT_START_HOUR = 7
-export const SHIFT_MIN = 720
+import { shiftStartHour } from './fab.js'
 
+/** Shift-relative minutes as wall-clock time; the start hour comes from the active fab. */
 export function clock(min) {
   const total = Math.round(min)
-  const h = (SHIFT_START_HOUR + Math.floor(total / 60)) % 24
+  const h = (shiftStartHour() + Math.floor(total / 60)) % 24
   return `${String(h).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
@@ -20,9 +19,6 @@ export const PRIORITY = {
   3: { label: 'Bottleneck', long: 'Bottleneck tool down' },
 }
 
-export const FAMILY_LABEL = {
-  litho: 'Lithography', etch: 'Etch', deposition: 'Deposition', cmp: 'CMP', implant: 'Implant', metrology: 'Metrology',
-}
 
 export const REJECTION_LABEL = {
   skill_missing: 'not certified',

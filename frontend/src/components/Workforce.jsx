@@ -1,9 +1,10 @@
 import { workforce } from '../lib/analysis.js'
-import { FAMILY_LABEL, fmt } from '../lib/format.js'
+import { fmt } from '../lib/format.js'
+import { familyIds, familyLabel } from '../lib/fab.js'
 
-const FAMILIES = ['litho', 'etch', 'deposition', 'cmp', 'implant', 'metrology']
 
 export default function Workforce({ scenario, result, offShift, onSelect }) {
+  const FAMILIES = familyIds()
   const onShift = { ...scenario, engineers: scenario.engineers.filter((e) => !offShift.has(e.id)) }
   const rows = workforce(onShift, result)
   const maxDemand = Math.max(...rows.map((r) => r.demandHours), 1)
@@ -24,7 +25,7 @@ export default function Workforce({ scenario, result, offShift, onSelect }) {
                 const topCount = r.maxLevel ? r.byLevel.slice(r.maxLevel - 1).reduce((a, b) => a + b, 0) : 0
                 return (
                   <tr key={r.family} style={{ cursor: 'default' }}>
-                    <td><b>{FAMILY_LABEL[r.family]}</b></td>
+                    <td><b>{familyLabel(r.family)}</b></td>
                     <td className="num">{r.jobs}</td>
                     <td className="num"><span className="inline-bar" style={{ width: `${(r.demandHours / maxDemand) * 90}px` }} />{fmt(r.demandHours)} h</td>
                     <td className="num r">{r.bottleneckJobs}</td>
@@ -47,7 +48,7 @@ export default function Workforce({ scenario, result, offShift, onSelect }) {
         </div>
         <div className="card-b table-wrap">
           <table className="data matrix">
-            <thead><tr><th>Engineer</th>{FAMILIES.map((f) => <th key={f} style={{ textAlign: 'center' }}>{FAMILY_LABEL[f]}</th>)}<th className="r">Jobs</th></tr></thead>
+            <thead><tr><th>Engineer</th>{FAMILIES.map((f) => <th key={f} style={{ textAlign: 'center' }}>{familyLabel(f)}</th>)}<th className="r">Jobs</th></tr></thead>
             <tbody>
               {scenario.engineers.map((e) => (
                 <tr key={e.id} onClick={() => onSelect({ type: 'engineer', id: e.id })} style={offShift.has(e.id) ? { opacity: 0.45 } : undefined}>

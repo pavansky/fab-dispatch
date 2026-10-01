@@ -1,5 +1,6 @@
 import { ALGO_ORDER, ALGO_SHORT } from '../lib/metrics.js'
-import { FAMILY_LABEL, PRIORITY, REJECTION_LABEL, clock, fmt } from '../lib/format.js'
+import { PRIORITY, REJECTION_LABEL, clock, fmt } from '../lib/format.js'
+import { familyLabel } from '../lib/fab.js'
 import RepairHistory from './RepairHistory.jsx'
 
 function JobView({ job, results, active, onSelect }) {
@@ -10,7 +11,7 @@ function JobView({ job, results, active, onSelect }) {
         <h3>{job.id} <span className="muted" style={{ fontWeight: 400 }}>{job.tool}</span>
           <span className={`badge p${job.priority}`}>{PRIORITY[job.priority].label}</span></h3>
         <dl className="facts">
-          <dt>Needs</dt><dd>{FAMILY_LABEL[job.skill]}, level {job.min_level}+</dd>
+          <dt>Needs</dt><dd>{familyLabel(job.skill)}, level {job.min_level}+</dd>
           <dt>Start window</dt><dd className="num">{clock(job.earliest)} – {clock(job.latest)} ({job.latest - job.earliest} min)</dd>
           <dt>Duration</dt><dd className="num">{job.duration} min</dd>
           <dt>Floor position</dt><dd className="num">{fmt(job.x, 0)} m E, {fmt(job.y, 0)} m N</dd>
@@ -69,7 +70,7 @@ function EngineerView({ eng, result, scenario, offShift, onToggleEngineer, onSel
         <h3>{eng.id} <span style={{ fontWeight: 400 }}>{eng.name}</span>{off && <span className="badge">Off shift</span>}</h3>
         <div className="skills">
           {Object.entries(eng.skills).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-            <span key={k} className={`lvl l${v}`}>{FAMILY_LABEL[k]} L{v}</span>
+            <span key={k} className={`lvl l${v}`}>{familyLabel(k)} L{v}</span>
           ))}
         </div>
         <dl className="facts">

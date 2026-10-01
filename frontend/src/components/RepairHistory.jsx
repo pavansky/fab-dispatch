@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { similarRepairs } from '../api.js'
+import { activeFab } from '../lib/fab.js'
 
 /** Nearest past repairs for a tool-down (Qdrant), with a duration prediction to compare
  *  against the planner's standard estimate. */
@@ -12,7 +13,7 @@ export default function RepairHistory({ job }) {
     const c = new AbortController()
     setData(null)
     setError(null)
-    similarRepairs(job.skill, job.symptom, c.signal).then(setData).catch((e) => { if (e.name !== 'AbortError') setError(e.message) })
+    similarRepairs(activeFab()?.id, job.skill, job.symptom, c.signal).then(setData).catch((e) => { if (e.name !== 'AbortError') setError(e.message) })
     return () => c.abort()
   }, [job?.id, job?.skill, job?.symptom, job?.kind])
 

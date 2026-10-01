@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ALGO_BLURB, ALGO_KIND, ALGO_ORDER, ALGO_SHORT, METRICS, improvement } from '../lib/metrics.js'
 import { GOALS, disagreements, insights, paretoFront, recommend } from '../lib/analysis.js'
 import FrontierChart from './FrontierChart.jsx'
@@ -15,7 +15,20 @@ function Delta({ k, value, base }) {
   return <span className={`delta ${gain > 0 ? 'good' : 'bad'}`}>{up ? '▲' : '▼'} {fmt(Math.abs(value - base))} vs Greedy</span>
 }
 
+function useWide(min = 760) {
+  const query = `(min-width: ${min}px)`
+  const [wide, setWide] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const m = window.matchMedia(query)
+    const on = () => setWide(m.matches)
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [query])
+  return wide
+}
+
 export default function Overview({ results, pending, scenario, goal, onGoal, onPickAlgo, onSelect }) {
+  const wide = useWide()
   const [onlyCoverage, setOnlyCoverage] = useState(false)
   const reco = recommend(results, goal)
   const greedy = results.find((r) => r.algorithm === 'greedy')
@@ -47,7 +60,7 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
         <div className="card-h"><div><h2><span className="section-no">01</span>Cost × latency</h2>
           <p>Lower-left is better on both. The line is the efficient frontier: nothing on it is beaten on both cost and speed. The shaded band is the noise margin ({reco.margin ? `±${fmt(reco.margin, 0)} pts` : 'per goal'}) above the cheapest plan; differences inside it aren't counted as wins.</p></div></div>
         <div className="card-b">
-          <FrontierChart wide margin={goal === 'value' ? reco.margin : 0}
+          <FrontierChart wide={wide} margin={goal === 'value' ? reco.margin : 0}
             points={(() => {
               const front = new Set(paretoFront(results).map((r) => r.algorithm))
               return results.map((r) => ({ key: r.algorithm, cost: r.metrics.objective, latency: r.metrics.runtime_ms,

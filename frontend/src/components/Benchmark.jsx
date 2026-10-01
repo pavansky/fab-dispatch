@@ -38,20 +38,20 @@ function Strip({ runs, metric, min, max }) {
   )
 }
 
-function GapPanel({ weights }) {
+function GapPanel({ weights, fabId, canDispatch }) {
   const [gap, setGap] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const run = () => {
     setBusy(true); setError(null)
-    optimalityGap({ seeds: 6, n_engineers: 4, n_jobs: 12, weights }).then(setGap).catch((e) => setError(e.message)).finally(() => setBusy(false))
+    optimalityGap({ fab_id: fabId, seeds: 6, n_engineers: 4, n_jobs: 12, weights }).then(setGap).catch((e) => setError(e.message)).finally(() => setBusy(false))
   }
   return (
     <section className="card">
       <div className="card-h">
         <div><h2><span className="section-no">00</span>Distance from the proven optimum</h2>
           <p>On small shifts (4 engineers, 12 jobs) the exact solver enumerates every feasible route and solves a set-partitioning MILP, so we know the true optimum. Gap = how much worse each strategy's total cost is.</p></div>
-        <button className="btn" onClick={run} disabled={busy}>{busy ? 'Solving to optimality…' : gap ? 'Re-run' : 'Measure gaps'}</button>
+        <button className="btn" onClick={run} disabled={busy || !canDispatch} title={canDispatch ? undefined : 'Dispatcher role required'}>{busy ? 'Solving to optimality…' : gap ? 'Re-run' : 'Measure gaps'}</button>
       </div>
       <div className="card-b">
         {error && <div className="error-bar">{error}</div>}
@@ -71,7 +71,8 @@ function GapPanel({ weights }) {
   )
 }
 
-export default function Benchmark({ meta, weights, size }) {
+export default function Benchmark({ profile, weights, size, canDispatch }) {
+  const meta = { presets: profile.presets }
   const [seeds, setSeeds] = useState(10)
   const [metric, setMetric] = useState('objective')
   const [data, setData] = useState(null)
@@ -89,7 +90,7 @@ export default function Benchmark({ meta, weights, size }) {
     try {
       for (const [i, preset] of presets.entries()) {
         setProgress(`${meta.presets[preset].label} (${i + 1}/${presets.length})`)
-        const out = await runBenchmark({ preset, seeds, weights, n_engineers: size.n_engineers, n_jobs: Math.min(size.n_jobs, 120) })
+        const out = await runBenchmark({ fab_id: profile.id, preset, seeds, weights, n_engineers: size.n_engineers, n_jobs: Math.min(size.n_jobs, 120) })
         runs.push(...out.runs)
         setData({ runs: [...runs] })
       }
@@ -118,13 +119,14 @@ export default function Benchmark({ meta, weights, size }) {
               {COLS.map((k) => <option key={k} value={k}>{METRICS[k].label}</option>)}
             </select>
           </label>
-          <button className="btn primary" onClick={run} disabled={busy}>{busy ? 'Running…' : data ? 'Re-run benchmark' : 'Run benchmark'}</button>
+          <button className="btn primary" onClick={run} disabled={busy || !canDispatch}>{busy ? 'Running…' : data ? 'Re-run benchmark' : 'Run benchmark'}</button>
+          {!canDispatch && <span className="help" style={{ margin: 0 }}>Benchmarks are compute-heavy, so they need the dispatcher role.</span>}
           {progress && <span className="solving"><span className="spinner" />{progress}</span>}
           {error && <span className="error-bar">{error}</span>}
         </div>
       </section>
 
-      <GapPanel weights={weights} />
+      <GapPanel weights={weights} fabId={profile.id} canDispatch={canDispatch} />
 
       {data && presets.filter((p) => data.runs.some((r) => r.preset === p)).map((p, pi) => {
         const runs = data.runs.filter((r) => r.preset === p)

@@ -1,7 +1,8 @@
 const KEY = 'fab-dispatch-theme'
 
 export function loadTheme() {
-  try { return localStorage.getItem(KEY) || 'system' } catch { return 'system' }
+  // Light by default; dark and auto (follow the OS) are opt-in.
+  try { return localStorage.getItem(KEY) || 'light' } catch { return 'light' }
 }
 
 export function applyTheme(mode) {

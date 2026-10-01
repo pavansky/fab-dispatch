@@ -38,7 +38,7 @@ describe('best-value recommendation', () => {
   it('never trades away bottleneck coverage for cost or speed', () => {
     const rec = recommend([r('greedy', 300, 1, 90), r('pyvrp', 500, 1100, 100)], 'value')
     expect(rec.winner.algorithm).toBe('pyvrp')
-    expect(rec.tradeoff.join(' ')).toMatch(/Excluded/)
+    expect(rec.tradeoff.join(' ')).toMatch(/Not considered/)
   })
   it('finds the cost × latency frontier', () => {
     const front = paretoFront([r('a', 500, 1000), r('b', 600, 10), r('c', 700, 2000)]).map((x) => x.algorithm)

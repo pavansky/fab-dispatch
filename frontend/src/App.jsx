@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import { generateScenario, getMeta, predictDurations } from './api.js'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { generateScenario, getFab, getMeta, listFabs, predictDurations } from './api.js'
+import { SignIn, useAuth } from './auth.jsx'
 import { usePlans } from './lib/usePlans.js'
 import { applyTheme, loadTheme } from './lib/theme.js'
 import { ALGO_ORDER, ALGO_SHORT } from './lib/metrics.js'
-import { FAMILY_LABEL, PRIORITY } from './lib/format.js'
+import { PRIORITY } from './lib/format.js'
+import { areasOf, familyAt, familyLabel, familyPrefix, isConstraint, setActiveFab } from './lib/fab.js'
 import FloorPlan from './components/FloorPlan.jsx'
 import Inspector from './components/Inspector.jsx'
 import Overview from './components/Overview.jsx'
@@ -11,19 +13,12 @@ import Schedule from './components/Schedule.jsx'
 import Workforce from './components/Workforce.jsx'
 import Benchmark from './components/Benchmark.jsx'
 import LiveShift from './components/LiveShift.jsx'
+import TopBar from './components/TopBar.jsx'
+import Sidebar from './components/Sidebar.jsx'
 
-const WEIGHTS = [
-  ['priority_reward', 'Priority reward', 'per priority point served', 0, 200, 5],
-  ['travel_100m', 'Walking', 'per 100 m', 0, 20, 0.5],
-  ['wait_min', 'Idle wait', 'per minute', 0, 2, 0.05],
-  ['overqualification', 'Over-qualification', 'per level above need', 0, 40, 1],
-  ['workload_balance', 'Workload balance', 'per job already held', 0, 30, 1],
-]
 const TABS = [['overview', 'Overview'], ['floor', 'Floor plan'], ['schedule', 'Schedule'], ['workforce', 'Workforce'], ['live', 'Live dispatch'], ['benchmark', 'Benchmark']]
 const SLA = { 3: 45, 2: 120, 1: 240 }
-
-const familyAt = (areas, { x, y }) =>
-  Object.entries(areas).find(([, [x0, y0, x1, y1]]) => x >= x0 && x <= x1 && y >= y0 && y <= y1)?.[0]
+const FAB_KEY = 'fab-dispatch-fab'
 
 function AlgoSwitch({ results, active, onChange, pending = new Set() }) {
   return (
@@ -42,7 +37,22 @@ function AlgoSwitch({ results, active, onChange, pending = new Set() }) {
 }
 
 export default function App() {
+  const auth = useAuth()
+  const [theme, setTheme] = useState(loadTheme)
+  useEffect(() => { applyTheme(theme) }, [theme])
+  if (auth.status === 'loading') return <div className="loading"><span className="solving"><span className="spinner" />Loading…</span></div>
+  if (auth.status === 'error') return <div className="loading">Can't reach the API ({auth.error}). Is the backend running on port 8000?</div>
+  if (auth.status !== 'signedIn') return <SignIn />
+  return <Workspace key={auth.user.id} theme={theme} setTheme={setTheme} />
+}
+
+function Workspace({ theme, setTheme }) {
+  const { canDispatch } = useAuth()
   const [meta, setMeta] = useState(null)
+  const [fabs, setFabs] = useState([])
+  const [profile, setProfile] = useState(null)
+  const [drawer, setDrawer] = useState(false)
+  const closeDrawer = useCallback(() => setDrawer(false), [])
   const [params, setParams] = useState({ preset: 'normal', seed: 7, n_engineers: 14, n_jobs: 45 })
   const [scenario, setScenario] = useState(null)
   const [offShift, setOffShift] = useState(() => new Set())
@@ -72,11 +82,9 @@ export default function App() {
   const [showChanges, setShowChanges] = useState(true)
   const [addMode, setAddMode] = useState(false)
   const [newJob, setNewJob] = useState({ priority: 3, at: 120 })
-  const [theme, setTheme] = useState(loadTheme)
   const [error, setError] = useState(null)
   const [predicted, setPredicted] = useState(null) // { original, changes } when history durations are on
 
-  useEffect(() => { applyTheme(theme) }, [theme])
   useEffect(() => {
     const url = new URL(location.href)
     url.searchParams.delete('job')
@@ -84,18 +92,45 @@ export default function App() {
     if (selection) url.searchParams.set(selection.type, selection.id)
     history.replaceState(null, '', url)
   }, [selection])
-  useEffect(() => {
-    getMeta().then((m) => { setMeta(m); setWeights(m.default_weights) }).catch((e) => setError(e.message))
-  }, [])
-
-  const regenerate = (p = params, { keepSelection = false } = {}) => {
+  const regenerate = (p = params, { keepSelection = false, fab = profile } = {}) => {
     setError(null)
-    generateScenario(p)
+    generateScenario({ ...p, fab_id: fab.id })
       .then((s) => { setScenario(s); setOffShift(new Set()); if (!keepSelection) setSelection(null); setPredicted(null) })
       .catch((e) => setError(e.message))
   }
-  // First load keeps a deep-linked ?job= / ?engineer= selection; later regenerations clear it.
-  useEffect(() => { regenerate(params, { keepSelection: true }) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Switching fab: everything site-specific (families, floor, shift, presets) comes from its profile.
+  const openFab = useCallback(async (fabId, { first = false } = {}) => {
+    try {
+      const p = await getFab(fabId)
+      setActiveFab(p)
+      setProfile(p)
+      try { localStorage.setItem(FAB_KEY, p.id) } catch { /* private mode */ }
+      const url = new URL(location.href)
+      url.searchParams.set('fab', p.id)
+      history.replaceState(null, '', url)
+      setParams((prev) => {
+        const next = { ...prev, preset: p.presets[prev.preset] ? prev.preset : Object.keys(p.presets)[0] }
+        regenerate(next, { keepSelection: first, fab: p })
+        return next
+      })
+    } catch (e) { setError(e.message) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    Promise.all([getMeta(), listFabs()]).then(([m, list]) => {
+      setMeta(m)
+      setWeights(m.default_weights)
+      setFabs(list)
+      let remembered = null
+      try { remembered = localStorage.getItem(FAB_KEY) } catch { /* private mode */ }
+      const wanted = [new URLSearchParams(location.search).get('fab'), remembered, m.default_fab]
+        .find((id) => id && list.some((f) => f.id === id)) ?? list[0]?.id
+      if (!wanted) { setError('Your account has no fabs assigned. Ask an admin for access.'); return }
+      // First load keeps a deep-linked ?job= / ?engineer= selection.
+      openFab(wanted, { first: true })
+    }).catch((e) => setError(e.message))
+  }, [openFab])
 
   const effective = useMemo(() => scenario && ({
     ...scenario, engineers: scenario.engineers.filter((e) => !offShift.has(e.id)),
@@ -127,23 +162,24 @@ export default function App() {
     return next
   })
   const addJob = (pt) => {
-    const fam = familyAt(meta.areas, pt)
+    const fam = familyAt(pt)
     if (!fam) { setError('Click inside a tool area to report a job there.'); return }
     const n = Math.max(0, ...scenario.jobs.map((j) => parseInt(j.id.slice(1), 10))) + 1
     const p = newJob.priority
     const job = {
-      id: `J${String(n).padStart(3, '0')}`, x: pt.x, y: pt.y, skill: fam, min_level: fam === 'litho' ? 2 : 1,
+      id: `J${String(n).padStart(3, '0')}`, x: pt.x, y: pt.y, skill: fam, min_level: isConstraint(fam) ? 2 : 1,
       priority: p, kind: p === 1 ? 'pm' : 'down', earliest: newJob.at, latest: newJob.at + SLA[p],
-      duration: p === 1 ? 120 : 60, tool: `${fam.slice(0, 3).toUpperCase()}-NEW`,
+      duration: p === 1 ? 120 : 60, tool: `${familyPrefix(fam)}-NEW`,
     }
     setScenario((s) => ({ ...s, jobs: [...s.jobs, job] }))
     setSelection({ type: 'job', id: job.id })
     setError(null)
   }
 
-  if (!meta || !scenario || !weights) {
-    return <div className="loading">{error ? <>Can't reach the API ({error}). Is the backend running on port 8000?</> : 'Loading shift…'}</div>
+  if (!meta || !profile || !scenario || !weights || scenario.fab_id !== profile.id) {
+    return <div className="loading">{error ? <>{error}</> : <span className="solving"><span className="spinner" />Loading shift…</span>}</div>
   }
+  const areas = areasOf(profile)
 
   const activeResult = results.find((r) => r.algorithm === active) ?? results[results.length - 1]
   const greedy = results.find((r) => r.algorithm === 'greedy')
@@ -151,92 +187,26 @@ export default function App() {
 
   return (
     <>
-      <header className="topbar">
-        <div className="brand"><span className="brand-mark"><span /></span>Fab Dispatch<small>/ allocation engine</small></div>
-        <div className="context" aria-label="Current scenario">
-          <span className="chip">{meta.presets[params.preset].label}</span>
+      <TopBar fabs={fabs} fabId={profile.id} onFab={(id) => openFab(id)} theme={theme} onTheme={setTheme}
+        busy={busy} pending={pending} onMenu={() => setDrawer(true)}
+        solvedNote={`${results.length} strategies solved${Object.values(cacheInfo).some((c) => c !== 'miss') ? ' · cached' : ''}`}
+        chips={<>
+          <span className="chip">{profile.presets[params.preset]?.label}</span>
           <span className="chip"><b>{effective.engineers.length}</b> engineers{offShift.size > 0 && ` (${offShift.size} off)`}</span>
           <span className="chip"><b>{scenario.jobs.length}</b> jobs</span>
           <span className="chip"><b>{scenario.jobs.filter((j) => j.priority === 3).length}</b> bottleneck downs</span>
-          <span className="chip">seed {params.seed}</span>
-        </div>
-        <span className="spacer" />
-        <span className="solve-state" aria-live="polite"><span className={`dot ${busy ? 'busy' : ''}`} />
-          {busy ? `Solving ${[...pending].map((a) => ALGO_SHORT[a]).join(', ')}…`
-            : `${results.length} strategies solved${Object.values(cacheInfo).some((c) => c !== 'miss') ? ' · cached' : ''}`}</span>
-        <div className="seg" role="group" aria-label="Theme">
-          {['system', 'light', 'dark'].map((m) => (
-            <button key={m} aria-pressed={theme === m} onClick={() => setTheme(m)}>{m[0].toUpperCase() + m.slice(1)}</button>
-          ))}
-        </div>
-      </header>
+        </>} />
 
       <div className="layout">
-        <aside className="sidebar">
-          <section className="card card-b">
-            <p className="eyebrow">Shift scenario</p>
-            <label className="field"><span>Preset</span>
-              <select className="input" value={params.preset} onChange={(e) => setParams({ ...params, preset: e.target.value })}>
-                {Object.entries(meta.presets).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
-              </select>
-            </label>
-            <p className="help">{meta.presets[params.preset].description}</p>
-            <div className="row-3">
-              <label className="field"><span>Seed</span><input className="input" type="number" value={params.seed} onChange={(e) => setParams({ ...params, seed: +e.target.value })} /></label>
-              <label className="field"><span>Engineers</span><input className="input" type="number" min={1} max={60} value={params.n_engineers} onChange={(e) => setParams({ ...params, n_engineers: +e.target.value })} /></label>
-              <label className="field"><span>Jobs</span><input className="input" type="number" min={1} max={200} value={params.n_jobs} onChange={(e) => setParams({ ...params, n_jobs: +e.target.value })} /></label>
-            </div>
-            <button className="btn primary block" onClick={() => regenerate()}>Generate shift</button>
-          </section>
-
-          <details className="card card-b section" open>
-            <summary><p className="eyebrow" style={{ margin: 0 }}>Cost weights</p></summary>
-            <p className="help" style={{ marginTop: 8 }}>Soft constraints. Every strategy re-solves as you drag.</p>
-            {WEIGHTS.map(([key, label, unit, min, max, step]) => (
-              <label key={key} className="field">
-                <span>{label} <span className="muted">{unit}</span><b>{weights[key]}</b></span>
-                <input type="range" min={min} max={max} step={step} value={weights[key]}
-                  onChange={(e) => setWeights({ ...weights, [key]: +e.target.value })} aria-label={label} />
-              </label>
-            ))}
-            <button className="btn block" onClick={() => setWeights(meta.default_weights)}>Reset to defaults</button>
-          </details>
-
-          <details className="card card-b section" open>
-            <summary><p className="eyebrow" style={{ margin: 0 }}>What-if</p></summary>
-            <label className="toggle" style={{ marginTop: 10 }}>
-              <input type="checkbox" checked={addMode} onChange={(e) => { setAddMode(e.target.checked); if (e.target.checked) setTab('floor') }} />
-              Report a job by clicking the floor
-            </label>
-            {addMode && (
-              <div className="row-3" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 10 }}>
-                <label className="field"><span>Type</span>
-                  <select className="input" value={newJob.priority} onChange={(e) => setNewJob({ ...newJob, priority: +e.target.value })}>
-                    {[3, 2, 1].map((p) => <option key={p} value={p}>{PRIORITY[p].long}</option>)}
-                  </select>
-                </label>
-                <label className="field"><span>Reported (min)</span>
-                  <input className="input" type="number" min={0} max={660} value={newJob.at} onChange={(e) => setNewJob({ ...newJob, at: +e.target.value })} />
-                </label>
-              </div>
-            )}
-            <label className="toggle" style={{ marginTop: 12 }}>
-              <input type="checkbox" checked={Boolean(predicted)} onChange={(e) => togglePredicted(e.target.checked)} />
-              Plan with history-predicted durations
-            </label>
-            <p className="help" style={{ marginTop: 4 }}>
-              {predicted ? `${predicted.changes.filter((c) => c.predicted !== c.standard).length} tool-down durations replaced by the repair-history prediction (Qdrant nearest neighbours).`
-                : 'Swap each tool-down\'s standard estimate for what similar past repairs actually took.'}
-            </p>
-            <p className="help" style={{ marginTop: 10 }}>Select an engineer to take them off shift (sick call, training) and see who absorbs their work.</p>
-            {offShift.size > 0 && <button className="btn block" onClick={() => setOffShift(new Set())}>Restore all {offShift.size} engineers</button>}
-          </details>
-        </aside>
+        <Sidebar open={drawer} onClose={closeDrawer} profile={profile} params={params} setParams={setParams}
+          onGenerate={() => regenerate()} weights={weights} setWeights={setWeights} defaultWeights={meta.default_weights}
+          addMode={addMode} setAddMode={(v) => { setAddMode(v); if (v) setTab('floor') }} newJob={newJob} setNewJob={setNewJob}
+          predicted={predicted} onTogglePredicted={togglePredicted} offShiftCount={offShift.size} onRestoreAll={() => setOffShift(new Set())} />
 
         <main className="content">
           {error && <div className="error-bar" role="alert">{error} <button className="btn ghost" onClick={() => setError(null)}>Dismiss</button></div>}
           {Object.entries(planErrors).map(([a, msg]) => <div key={a} className="error-bar" role="alert">{ALGO_SHORT[a]}: {msg}</div>)}
-          <nav className="nav" role="tablist">
+          <nav className="nav" role="tablist" aria-label="Views">
             {TABS.map(([k, label], i) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>
                 <span className="idx">{String(i + 1).padStart(2, '0')}</span>{label}{k === 'workforce' && unserved > 0 && <span className="count">{unserved}</span>}
@@ -244,7 +214,7 @@ export default function App() {
             ))}
           </nav>
 
-          {tab === 'live' ? <LiveShift scenario={effective} weights={weights} areas={meta.areas} onError={setError} /> : results.length === 0 ? <div className="card empty"><span className="solving"><span className="spinner" />Solving the shift…</span></div> : (
+          {tab === 'live' ? <LiveShift scenario={effective} weights={weights} areas={areas} profile={profile} canDispatch={canDispatch} onError={setError} /> : results.length === 0 ? <div className="card empty"><span className="solving"><span className="spinner" />Solving the shift…</span></div> : (
             <>
               {tab === 'overview' && (
                 <Overview results={results} pending={pending} scenario={scenario} goal={goal} onGoal={setGoal}
@@ -269,7 +239,7 @@ export default function App() {
                     {floorView === 'single' ? (
                       <div className="floor-wrap">
                         <FloorPlan scenario={scenario} result={activeResult} baseline={active !== 'greedy' ? greedy : null}
-                          areas={meta.areas} selection={selection} onSelect={setSelection} offShift={offShift}
+                          areas={areas} selection={selection} onSelect={setSelection} offShift={offShift}
                           onToggleEngineer={toggleEngineer} addMode={addMode} onFloorClick={addJob} showChanges={showChanges} />
                       </div>
                     ) : (
@@ -283,7 +253,7 @@ export default function App() {
                                 <span className="swatch" /><b>{ALGO_SHORT[a]}</b>
                                 <span className="muted num">{r.metrics.assigned}/{r.metrics.jobs} jobs · cost {r.metrics.objective}</span>
                               </figcaption>
-                              <FloorPlan compact scenario={scenario} result={r} areas={meta.areas} selection={selection} onSelect={setSelection} offShift={offShift} />
+                              <FloorPlan compact scenario={scenario} result={r} areas={areas} selection={selection} onSelect={setSelection} offShift={offShift} />
                             </figure>
                           )
                         })}
@@ -341,7 +311,7 @@ export default function App() {
                                 <tr key={u.job_id} onClick={() => select({ type: 'job', id: u.job_id })}>
                                   <td><b>{u.job_id}</b> <span className="muted">{j.tool}</span></td>
                                   <td><span className={`badge p${j.priority}`}>{PRIORITY[j.priority].label}</span></td>
-                                  <td>{FAMILY_LABEL[j.skill]} L{j.min_level}+</td>
+                                  <td>{familyLabel(j.skill)} L{j.min_level}+</td>
                                   <td>{u.reason}</td>
                                 </tr>
                               )
@@ -354,7 +324,7 @@ export default function App() {
                 </>
               )}
 
-              {tab === 'benchmark' && <Benchmark meta={meta} weights={weights} size={params} />}
+              {tab === 'benchmark' && <Benchmark profile={profile} weights={weights} size={params} canDispatch={canDispatch} />}
             </>
           )}
         </main>
