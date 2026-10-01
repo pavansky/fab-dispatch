@@ -2,6 +2,15 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.3.1] - 2026-10-01
+
+### Added
+- **MIT License** (`LICENSE`), shown in the README, the documentation site, the app's
+  **About & support** panel, both package manifests and the container image labels.
+- **Third-party notices** (`THIRD_PARTY_NOTICES.md`): every runtime dependency with its license,
+  including a note on psycopg (LGPL-3.0, used unmodified). A test fails if a new dependency isn't
+  listed, so the notices can't drift.
+
 ## [2.3.0] - 2026-10-01
 
 ### Added

@@ -1,7 +1,7 @@
 {
   "name": "fab-dispatch-ui",
   "private": true,
-  "version": "2.3.0",
+  "version": "2.3.1",
   "license": "MIT",
   "type": "module",
   "engines": {
