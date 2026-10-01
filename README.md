@@ -99,7 +99,7 @@ optimality**, so each strategy's gap is measured at the size it runs. Full table
 | Regret-2 | constructive | ~6 ms | 0 / 80 | 19.4% | Protects scarce certifications |
 | ALNS | metaheuristic | ~0.2 s | 2 / 80 | 5.7% | Optimises the exact objective, including balance |
 | PyVRP | metaheuristic | ~0.4 s | **78 / 80** | **2.7%** | Lowest operating cost of the five |
-| Exact | set-partitioning MILP | ~20 s (max 138 s) | optimal | 0% | Proven optimum, for planning ahead |
+| Exact | set-partitioning MILP | ~20 s (max 138 s) | optimal | 0% | Proven optimum for planning ahead; ~27 min at 20 × 65, so larger fabs need column generation |
 
 \*Laptop, 14 engineers × 45 jobs. On Vercel's serverless CPU, ALNS and PyVRP take about 0.7–1.3 s.
 A repeated plan is served from cache in under 1 ms of server time.

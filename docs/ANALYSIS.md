@@ -76,6 +76,12 @@ By preset, PyVRP's mean gap is 4.3% (normal), 0.9% (litho crunch), 2.1% (surge) 
 normal shift lowers its gap from 8.1% to 5.2% and then stops: it settles in a local optimum, it isn't
 starved of time. Reproduce: `python -m scripts.benchmark --only gaps-full`.
 
+**Where the proof stops scaling.** Enumeration grows explosively with fab size. At 20 engineers ×
+65 jobs a shift has about 409,000 feasible routes and took **27 minutes** to prove (vs 9–83 s at
+14 × 45); at 30 × 100 it would take hours. The heuristics' gaps barely move with size (PyVRP 3.9%,
+ALNS 6.3% at 20 × 65), so the ranking holds; what doesn't scale is *proving* it. Larger fabs need
+column generation, which prices only the routes that can improve the plan instead of listing them all.
+
 ### Solve time (ms, one shift, an Apple M5 Pro laptop)
 
 | Size | Greedy | Hungarian | Regret-2 | ALNS | PyVRP |
@@ -150,7 +156,7 @@ to the real fix: cross-training or staffing. For a fab manager, that's often the
 | KPI is **time-to-respond** or **fairness** | Hungarian in rounds | Structurally spreads first jobs across everyone. Accept the idle-time cost. |
 | KPI is **total cost or throughput**, and about 0.4 s (about 1 s on serverless) is acceptable | PyVRP | Lowest cost in 78/80 shifts. |
 | The objective has terms a library can't express (balance, stability, custom penalties) | ALNS | Optimises the exact objective; 5.7% from optimal at full size. |
-| The plan is made **ahead of time** (next shift) and a minute or two is acceptable | Exact (set partitioning) | Proven optimal: 2.7% cheaper than PyVRP on average, up to 10%. 20 s typical, 138 s worst. |
+| The plan is made **ahead of time** (next shift) and a minute or two is acceptable | Exact (set partitioning) | Proven optimal: 2.7% cheaper than PyVRP on average, up to 10%. 20 s typical at 14 × 45, but 27 min at 20 × 65; larger fabs need column generation. |
 | **Plenty of engineers** (overstaffed) | Any for bottleneck work; search for the rest | All cover about 98% of bottleneck downs. Greedy still drops PMs (92% vs 98% overall coverage) and costs 70% more than PyVRP. |
 | **Certification shortage** | Fix staffing | All strategies hit the same ceiling. |
 
