@@ -5,7 +5,6 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .DS_Store
-data/
 backend/data/
 .vercel
 .env*
@@ -18,7 +17,6 @@ backend/.vercel/
 .coverage
 coverage.xml
 htmlcov/
-.pytest_cache/
 frontend/coverage/
 frontend/playwright-report/
 frontend/test-results/
