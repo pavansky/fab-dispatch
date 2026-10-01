@@ -11,6 +11,8 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
   for local development, `viewer` and `dispatcher` roles, per-user fab access.
 - **Real-time hardening**: one clock driver at a time (lease), idempotency keys on live actions,
   presence ("who's watching"), recent shifts to rejoin, actor on every event, offline banner, toasts.
+- **Environment isolation**: `FAB_DB_SCHEMA` puts each environment in its own Postgres schema, so
+  UAT (`uat`) and production (`public`) share the free-tier Supabase database without sharing data.
 - **Platform**: versioned database migrations with an advisory lock; `schema_ok` in health;
   daily data retention via Vercel Cron; strict security headers (CSP, HSTS, Permissions-Policy).
 - **Delivery**: CI with lint, format, coverage floor, Python 3.11/3.12/3.14, Postgres, frontend
@@ -24,6 +26,9 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 - **Breaking:** all planning, live and repair endpoints require authentication; scenarios carry a
   `fab_id`; listing shifts needs `fab_id`.
 - Light theme is the default; dark and auto (follow the OS) are opt-in.
+
+### Fixed
+- `PyJWT` declared as a runtime dependency (it was only installed locally).
 
 ### Security
 - Vitest upgraded to 5.x (moderate advisory in the test runner); both dependency trees audit clean.

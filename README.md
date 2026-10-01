@@ -249,7 +249,7 @@ make check     # lint + format + tests with coverage floor + audits + frontend b
 | | Dev | UAT | Production |
 |---|---|---|---|
 | Deploys | locally / every pull request (preview) | every merge to `main` | a release tag `vX.Y.Z` |
-| Database | SQLite / UAT | Supabase UAT | Supabase production |
+| Database | SQLite / schema `uat` | Supabase, schema `uat` | Supabase, schema `public` |
 
 - **CI** on every push and PR: ruff lint and format, tests with an 85% coverage floor, Python
   3.11/3.12/3.14, Postgres migrations, ESLint, Vitest, build, `pip-audit` + `npm audit`, Docker images.

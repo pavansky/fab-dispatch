@@ -6,7 +6,7 @@ Three environments, one codebase, promoted forward only.
 |---|---|---|---|
 | Where | Your machine + a Vercel preview per pull request | Vercel preview of `main` (stable URL: `fab-dispatch-git-main-<team>.vercel.app`) | `fab-dispatch.vercel.app` (Vercel production, branch `production`) |
 | Deploys when | You run it / every push to a PR | Every merge to `main` | A release tag `vX.Y.Z` is pushed |
-| Database | SQLite (local) · UAT database (PR previews) | Supabase **UAT** project | Supabase **production** project |
+| Database | SQLite (local) · schema `uat` (PR previews) | Supabase, schema `uat` | Supabase, schema `public` |
 | Auth | Demo sign-in (local) · Supabase (previews) | Supabase Auth | Supabase Auth |
 | Who uses it | Engineers | Fab key users test before release | Dispatchers on shift |
 
@@ -54,7 +54,16 @@ previews). The Supabase integration injects `POSTGRES_URL`, `SUPABASE_URL`,
 | `FAB_DISPATCHER_EMAILS` | the fab's dispatch leads | the UAT testers |
 | `FAB_DEFAULT_ROLE` | `viewer` | `viewer` |
 | `CRON_SECRET` | random, ≥ 32 chars | random, ≥ 32 chars |
-| Supabase database | production project | UAT project |
+| `FAB_DB_SCHEMA` | unset (`public`) | `uat` |
+
+### Why UAT is a schema, not a second database
+
+Supabase's free tier allows one database per account through the Vercel integration. UAT therefore
+lives in its own Postgres schema (`FAB_DB_SCHEMA=uat`) in the same database: every table the app
+touches is schema-qualified, so UAT and production never see each other's data, and migrations run
+on UAT first. Both share the instance's capacity and the same Supabase Auth user pool. Moving UAT
+to its own project later (on a paid plan) only means pointing Preview's `POSTGRES_URL` at it and
+unsetting `FAB_DB_SCHEMA`.
 
 ## Database migrations
 
