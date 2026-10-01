@@ -47,11 +47,27 @@ export default function App() {
   const [scenario, setScenario] = useState(null)
   const [offShift, setOffShift] = useState(() => new Set())
   const [weights, setWeights] = useState(null)
-  // A shared live-shift link (?shift=…) opens straight into Live dispatch.
-  const [tab, setTab] = useState(() => (new URLSearchParams(location.search).has('shift') ? 'live' : 'overview'))
+  // Deep links: ?tab=floor opens that view; a shared live-shift link (?shift=…) opens Live dispatch.
+  const [tab, setTabState] = useState(() => {
+    const q = new URLSearchParams(location.search)
+    if (q.has('shift')) return 'live'
+    return TABS.some(([k]) => k === q.get('tab')) ? q.get('tab') : 'overview'
+  })
+  const setTab = (t) => {
+    setTabState(t)
+    const url = new URL(location.href)
+    if (t === 'overview') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', t)
+    history.replaceState(null, '', url)
+  }
   const [active, setActive] = useState('pyvrp')
   const [goal, setGoal] = useState('value')
-  const [selection, setSelection] = useState(null)
+  const [selection, setSelection] = useState(() => {
+    const q = new URLSearchParams(location.search)
+    if (q.get('job')) return { type: 'job', id: q.get('job') }
+    if (q.get('engineer')) return { type: 'engineer', id: q.get('engineer') }
+    return null
+  })
   const [floorView, setFloorView] = useState('single')
   const [showChanges, setShowChanges] = useState(true)
   const [addMode, setAddMode] = useState(false)
@@ -62,16 +78,24 @@ export default function App() {
 
   useEffect(() => { applyTheme(theme) }, [theme])
   useEffect(() => {
+    const url = new URL(location.href)
+    url.searchParams.delete('job')
+    url.searchParams.delete('engineer')
+    if (selection) url.searchParams.set(selection.type, selection.id)
+    history.replaceState(null, '', url)
+  }, [selection])
+  useEffect(() => {
     getMeta().then((m) => { setMeta(m); setWeights(m.default_weights) }).catch((e) => setError(e.message))
   }, [])
 
-  const regenerate = (p = params) => {
+  const regenerate = (p = params, { keepSelection = false } = {}) => {
     setError(null)
     generateScenario(p)
-      .then((s) => { setScenario(s); setOffShift(new Set()); setSelection(null); setPredicted(null) })
+      .then((s) => { setScenario(s); setOffShift(new Set()); if (!keepSelection) setSelection(null); setPredicted(null) })
       .catch((e) => setError(e.message))
   }
-  useEffect(() => { regenerate() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // First load keeps a deep-linked ?job= / ?engineer= selection; later regenerations clear it.
+  useEffect(() => { regenerate(params, { keepSelection: true }) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const effective = useMemo(() => scenario && ({
     ...scenario, engineers: scenario.engineers.filter((e) => !offShift.has(e.id)),
