@@ -10,10 +10,12 @@ past repairs (Qdrant) for the nearest neighbours on the same tool family. That g
 * **who has fixed this before**: engineers ranked by how many of the neighbours they fixed.
 * the **likely root cause and fix** to brief the engineer with.
 
-Runs with no key and no server by default: Qdrant embedded in-process (in memory, so any
-number of workers can each hold their own copy) and a dependency-free hashed n-gram
-embedder. In production set
-``FAB_QDRANT_URL`` (and ``FAB_QDRANT_API_KEY``) for a Qdrant server. The history is
+Runs with no key and no server by default: an exact cosine search in NumPy over a
+dependency-free hashed n-gram embedding. At 1,800 repairs per fab that is one ~1 ms matrix
+product, so a vector database would only add a dependency and cold-start time. Real repair
+history grows into the millions; set ``FAB_QDRANT_URL`` (and ``FAB_QDRANT_API_KEY``) and the
+same interface runs on a Qdrant server with approximate (HNSW) search. ``FAB_QDRANT_PATH``
+keeps an embedded on-disk Qdrant for local experiments. The history is
 synthetic but structured: each fault code has root causes with their own duration
 distributions, so retrieval has real signal to find.
 """
@@ -29,6 +31,8 @@ import re
 import statistics
 import threading
 from dataclasses import dataclass
+
+import numpy as np
 
 from .config import Settings
 from .fabs import FabProfile
@@ -108,30 +112,59 @@ class HashEmbedder:
         return [v / norm for v in vec]
 
 
-class RepairIndex:
+class _ExactIndex:
+    """Exact cosine k-NN in NumPy: vectors are L2-normalised, so cosine is a dot product."""
+
+    mode = "exact"
+
+    def __init__(self, embedder: HashEmbedder):
+        self.embedder = embedder
+        self._fabs: dict[str, tuple[np.ndarray, np.ndarray, list[dict]]] = {}
+        self._lock = threading.Lock()
+
+    def ensure(self, profile: FabProfile) -> None:
+        if profile.id in self._fabs:
+            return
+        with self._lock:
+            if profile.id in self._fabs:
+                return
+            history = synthetic_history(profile)
+            vectors = np.array([self.embedder.embed(r.symptom) for r in history], dtype=np.float32)
+            families = np.array([r.family for r in history])
+            self._fabs[profile.id] = (vectors, families, [r.__dict__ for r in history])
+
+    def search(self, profile: FabProfile, family: str, symptom: str, k: int) -> list[tuple[float, dict]]:
+        self.ensure(profile)
+        vectors, families, payloads = self._fabs[profile.id]
+        rows = np.flatnonzero(families == family)
+        if rows.size == 0:
+            return []
+        scores = vectors[rows] @ np.array(self.embedder.embed(symptom), dtype=np.float32)
+        top = np.argsort(-scores, kind="stable")[:k]
+        return [(float(scores[i]), payloads[rows[i]]) for i in top]
+
+
+class _QdrantIndex:
     """One Qdrant collection per fab (``repairs_<fab id>``), built lazily on first use."""
 
-    def __init__(self, settings: Settings):
-        from qdrant_client import QdrantClient  # lazy: keeps cold starts lean when unused
+    def __init__(self, settings: Settings, embedder: HashEmbedder):
+        from qdrant_client import QdrantClient  # lazy: only loaded when a Qdrant mode is configured
 
         if settings.qdrant_url:
             self.client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key, timeout=10)
-            self.mode = "server"
-        elif settings.qdrant_path and settings.env != "test":
+            self.mode = "qdrant-server"
+        else:
             # On-disk embedded mode takes an exclusive lock on the folder, so a second process
             # (reloader, extra worker) can't open it. The history is deterministic and rebuilds
             # in under a second, so fall back to memory rather than fail the request.
             try:
                 self.client = QdrantClient(path=settings.qdrant_path)
-                self.mode = "embedded-disk"
+                self.mode = "qdrant-disk"
             except RuntimeError as e:
                 log.warning("qdrant path %s unavailable (%s); using in-memory index", settings.qdrant_path, e)
                 self.client = QdrantClient(":memory:")
-                self.mode = "embedded"
-        else:
-            self.client = QdrantClient(":memory:")
-            self.mode = "embedded"
-        self.embedder = HashEmbedder()
+                self.mode = "qdrant-memory"
+        self.embedder = embedder
         self._ready: set[str] = set()
         self._lock = threading.Lock()
 
@@ -158,7 +191,7 @@ class RepairIndex:
             self.client.create_collection(
                 name, vectors_config=models.VectorParams(size=DIM, distance=models.Distance.COSINE)
             )
-            if self.mode == "server":
+            if self.mode == "qdrant-server":
                 self.client.create_payload_index(name, "family", models.PayloadSchemaType.KEYWORD)
             batch = [
                 models.PointStruct(id=r.id, vector=self.embedder.embed(r.symptom), payload=r.__dict__) for r in history
@@ -168,7 +201,7 @@ class RepairIndex:
             self._ready.add(name)
             return name
 
-    def similar(self, profile: FabProfile, family: str, symptom: str, k: int = 12) -> dict:
+    def search(self, profile: FabProfile, family: str, symptom: str, k: int) -> list[tuple[float, dict]]:
         from qdrant_client import models
 
         name = self.ensure(profile)
@@ -181,35 +214,53 @@ class RepairIndex:
                 must=[models.FieldCondition(key="family", match=models.MatchValue(value=family))]
             ),
         ).points
+        return [(h.score, h.payload) for h in hits]
+
+
+class RepairIndex:
+    """k-NN over past repairs. Exact NumPy search by default; Qdrant when configured."""
+
+    def __init__(self, settings: Settings):
+        self.embedder = HashEmbedder()
+        use_qdrant = settings.qdrant_url or (settings.qdrant_path and settings.env != "test")
+        self.backend = _QdrantIndex(settings, self.embedder) if use_qdrant else _ExactIndex(self.embedder)
+
+    @property
+    def mode(self) -> str:
+        return self.backend.mode
+
+    def similar(self, profile: FabProfile, family: str, symptom: str, k: int = 12) -> dict:
+        # A neighbour with no shared feature (score 0) says nothing about this fault.
+        hits = [(score, p) for score, p in self.backend.search(profile, family, symptom, k) if score > 0]
         if not hits:
             return {"neighbours": [], "prediction": None}
-        weights = [max(h.score, 0.0) ** 2 for h in hits]
-        minutes = [h.payload["minutes"] for h in hits]
+        weights = [max(score, 0.0) ** 2 for score, _ in hits]
+        minutes = [p["minutes"] for _, p in hits]
         total = sum(weights) or 1.0
         mean = sum(w * m for w, m in zip(weights, minutes, strict=True)) / total
         q = statistics.quantiles(minutes, n=10) if len(minutes) >= 2 else [minutes[0]] * 9
         causes: dict[str, float] = {}
         engineers: dict[str, int] = {}
-        for h, w in zip(hits, weights, strict=True):
-            causes[h.payload["cause"]] = causes.get(h.payload["cause"], 0) + w
-            engineers[h.payload["engineer"]] = engineers.get(h.payload["engineer"], 0) + 1
+        for (_, p), w in zip(hits, weights, strict=True):
+            causes[p["cause"]] = causes.get(p["cause"], 0) + w
+            engineers[p["engineer"]] = engineers.get(p["engineer"], 0) + 1
         top_cause = max(causes, key=causes.get)
         return {
             "prediction": {
                 "minutes": round(mean),
                 "p10": round(q[0]),
                 "p90": round(q[-1]),
-                "confidence": round(statistics.fmean(h.score for h in hits[:5]), 3),
+                "confidence": round(statistics.fmean(score for score, _ in hits[:5]), 3),
                 "likely_cause": top_cause,
                 "cause_share": round(causes[top_cause] / total, 2),
             },
             "experienced_engineers": sorted(engineers.items(), key=lambda kv: -kv[1])[:5],
             "neighbours": [
                 {
-                    "score": round(h.score, 3),
-                    **{k: h.payload[k] for k in ("id", "code", "symptom", "cause", "fix", "minutes", "engineer")},
+                    "score": round(score, 3),
+                    **{k: p[k] for k in ("id", "code", "symptom", "cause", "fix", "minutes", "engineer")},
                 }
-                for h in hits[:6]
+                for score, p in hits[:6]
             ],
             "index": {"mode": self.mode, "embedder": self.embedder.name, "size": HISTORY_SIZE},
         }

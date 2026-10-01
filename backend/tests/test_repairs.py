@@ -60,8 +60,36 @@ def test_locked_disk_index_falls_back_to_memory(tmp_path):
     s = Settings(env="local", qdrant_path=str(tmp_path / "q"))
     first = RepairIndex(s)
     second = RepairIndex(s)  # same folder, already locked by `first`
-    assert first.mode == "embedded-disk"
-    assert second.mode == "embedded"
+    assert first.mode == "qdrant-disk"
+    assert second.mode == "qdrant-memory"
     from app.fabs import get_profile
 
     assert second.similar(get_profile("fab1-300mm-logic"), "etch", "RF reflected power high")["prediction"]
+
+
+def test_exact_search_is_the_default_and_agrees_with_qdrant(tmp_path):
+    """No Qdrant configured: exact NumPy search. Both backends score neighbours identically;
+    the exact one also breaks ties by repair id, so its answer is reproducible."""
+    from app.config import Settings
+    from app.fabs import get_profile
+    from app.knowledge import RepairIndex
+
+    exact = RepairIndex(Settings(env="test"))
+    qdrant = RepairIndex(Settings(env="local", qdrant_path=str(tmp_path / "q")))
+    assert exact.mode == "exact" and qdrant.mode == "qdrant-disk"
+    profile = get_profile("fab1-300mm-logic")
+    for symptom in ("RF reflected power high on chamber B", "endpoint signal drifting during production lot"):
+        a = exact.backend.search(profile, "etch", symptom, 12)
+        b = qdrant.backend.search(profile, "etch", symptom, 12)
+        assert [round(x, 4) for x, _ in a] == [round(x, 4) for x, _ in b]
+    first = exact.similar(profile, "etch", "RF reflected power high")
+    assert first == exact.similar(profile, "etch", "RF reflected power high")
+
+
+def test_a_symptom_with_nothing_in_common_gets_no_prediction():
+    from app.config import Settings
+    from app.fabs import get_profile
+    from app.knowledge import RepairIndex
+
+    out = RepairIndex(Settings(env="test")).similar(get_profile("fab1-300mm-logic"), "etch", "zzqx")
+    assert out == {"neighbours": [], "prediction": None}
