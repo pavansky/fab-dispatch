@@ -25,6 +25,14 @@ class AllocateRequest(BaseModel):
     algorithms: list[str] = list(ALGORITHMS)
 
 
+class BenchmarkRequest(BaseModel):
+    presets: list[str] = list(PRESETS)
+    seeds: int = Field(10, ge=1, le=40)
+    n_engineers: int = Field(14, ge=1, le=60)
+    n_jobs: int = Field(45, ge=1, le=200)
+    weights: Weights = Weights()
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -53,3 +61,19 @@ def run(req: AllocateRequest) -> list[AllocationResult]:
     if unknown:
         raise HTTPException(422, f"unknown algorithm(s): {unknown}")
     return [allocate(req.scenario, req.weights, a) for a in req.algorithms]
+
+
+@app.post("/api/benchmark")
+def benchmark(req: BenchmarkRequest) -> dict:
+    """Run every algorithm over many seeded shifts so the comparison isn't one lucky scenario."""
+    unknown = [p for p in req.presets if p not in PRESETS]
+    if unknown:
+        raise HTTPException(422, f"unknown preset(s): {unknown}")
+    runs = []
+    for preset in req.presets:
+        for seed in range(req.seeds):
+            sc = generate(seed, req.n_engineers, req.n_jobs, preset)
+            for algo in ALGORITHMS:
+                runs.append({"preset": preset, "seed": seed, "algorithm": algo,
+                             "metrics": allocate(sc, req.weights, algo).metrics})
+    return {"runs": runs}

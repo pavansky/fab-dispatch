@@ -14,3 +14,4 @@ async function call(path, body) {
 export const getMeta = () => call('/meta')
 export const generateScenario = (params) => call('/scenario', params)
 export const allocate = (scenario, weights) => call('/allocate', { scenario, weights })
+export const runBenchmark = (params) => call('/benchmark', params)

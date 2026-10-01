@@ -26,3 +26,10 @@ def test_rejects_bad_input():
     assert client.post("/api/allocate", json={"scenario": sc, "algorithms": ["magic"]}).status_code == 422
     sc["jobs"][0]["latest"] = sc["jobs"][0]["earliest"] - 1
     assert client.post("/api/allocate", json={"scenario": sc}).status_code == 422
+
+
+def test_benchmark_runs_every_algorithm_per_seed():
+    body = client.post("/api/benchmark", json={"presets": ["normal"], "seeds": 2, "n_jobs": 10}).json()
+    assert len(body["runs"]) == 2 * 3
+    assert {r["algorithm"] for r in body["runs"]} == {"greedy", "hungarian", "regret"}
+    assert client.post("/api/benchmark", json={"presets": ["nope"]}).status_code == 422
