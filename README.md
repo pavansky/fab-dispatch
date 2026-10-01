@@ -1,22 +1,31 @@
 <div align="center">
 
+<img src="frontend/public/favicon.svg" alt="" width="56" />
+
 # Fab Dispatch
 
-**A resource allocation engine for semiconductor fab maintenance.**
-Assigns equipment engineers to tool-downs and preventive maintenance in real time, across any number
-of fabs, comparing five strategies from a one-pass greedy to a state-of-the-art vehicle-routing solver.
+**The right engineer to every tool-down, in real time.**<br/>
+A resource allocation engine for semiconductor fab maintenance: five strategies, from a one-pass
+greedy to a state-of-the-art vehicle-routing solver, compared live, with every decision explained.
+
+<a href="https://fab-dispatch.vercel.app"><img alt="Try the live app" src="https://img.shields.io/badge/▶_Try_the_live_app-guest,_no_sign--up-ef6f2e?style=for-the-badge" /></a>
+<a href="https://codespaces.new/pavansky/fab-dispatch?quickstart=1"><img alt="Open in GitHub Codespaces" src="https://img.shields.io/badge/Open_in_Codespaces-run_it_in_your_browser-020202?style=for-the-badge&logo=github" /></a>
+<a href="https://pavansky.github.io/fab-dispatch/"><img alt="Documentation" src="https://img.shields.io/badge/Docs-guide,_architecture,_API-020202?style=for-the-badge&logo=materialformkdocs&logoColor=white" /></a>
 
 [![CI](https://github.com/pavansky/fab-dispatch/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pavansky/fab-dispatch/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.14-020202?logo=python&logoColor=white)](#quick-start)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.142-020202?logo=fastapi&logoColor=white)](backend/)
-[![React](https://img.shields.io/badge/React-19-020202?logo=react&logoColor=white)](frontend/)
-[![Tests](https://img.shields.io/badge/tests-391-ef6f2e)](#testing)
+[![Docs](https://github.com/pavansky/fab-dispatch/actions/workflows/docs.yml/badge.svg?branch=main)](https://pavansky.github.io/fab-dispatch/)
+[![Uptime](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml)
+[![Release](https://img.shields.io/github/v/release/pavansky/fab-dispatch?color=020202)](CHANGELOG.md)
+[![Tests](https://img.shields.io/badge/tests-423-ef6f2e)](#testing)
 [![Coverage](https://img.shields.io/badge/coverage-API%2094%25%20%C2%B7%20UI%2088%25-ef6f2e)](#testing)
-[![E2E](https://img.shields.io/badge/e2e-Playwright-ef6f2e?logo=playwright&logoColor=white)](#testing)
-[![Runs locally](https://img.shields.io/badge/runs%20locally-no%20API%20keys-ef6f2e)](#quick-start)
+[![Accessibility](https://img.shields.io/badge/a11y-WCAG%202.1%20AA%20checked-ef6f2e)](#testing)
+[![Assistant eval](https://img.shields.io/badge/assistant%20eval-42%2F42-ef6f2e)](https://pavansky.github.io/fab-dispatch/ai/)
+[![Python](https://img.shields.io/badge/python-3.11–3.14-020202?logo=python&logoColor=white)](#quick-start)
+[![React](https://img.shields.io/badge/React-19-020202?logo=react&logoColor=white)](frontend/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.142-020202?logo=fastapi&logoColor=white)](backend/)
 
-[**Quick start**](#quick-start) · [**Live app**](https://fab-dispatch.vercel.app) · [5-minute tour](#a-5-minute-tour) · [Results](#results) ·
-[Architecture](docs/ARCHITECTURE.md) · [Environments](docs/ENVIRONMENTS.md) · [Onboard a fab](docs/ONBOARDING_A_FAB.md) · [Analysis](docs/ANALYSIS.md)
+[**Quick start**](#quick-start) · [**Review in 10 minutes**](https://pavansky.github.io/fab-dispatch/reviewers/) · [Requirements map](#requirements-map) · [Results](#results) ·
+[Docs](https://pavansky.github.io/fab-dispatch/) · [API](https://fab-dispatch.vercel.app/api/docs) · [Support](#support)
 
 <img src="docs/assets/overview.png" alt="Fab Dispatch overview: recommended plan, cost × latency frontier and strategy scorecards" width="100%" />
 
@@ -27,6 +36,7 @@ of fabs, comparing five strategies from a one-pass greedy to a state-of-the-art 
 ## Contents
 
 - [Quick start](#quick-start) · [A 5-minute tour](#a-5-minute-tour) · [Troubleshooting](#troubleshooting)
+- [Production readiness](#production-readiness)
 - [Why this exists](#why-this-exists)
 - [Requirements map](#requirements-map)
 - [Highlights](#highlights)
@@ -40,72 +50,49 @@ of fabs, comparing five strategies from a one-pass greedy to a state-of-the-art 
 - [Delivery: dev → UAT → production](#delivery-dev--uat--production)
 - [Project structure](#project-structure)
 - [Documentation](#documentation)
+- [Support](#support)
 - [Limitations and roadmap](#limitations-and-roadmap)
 
 ## Quick start
 
-Runs entirely on your machine: no accounts, API keys, Docker or paid services. About three minutes
-from clone to a working app, most of it package downloads.
+| | How | Time |
+|---|---|---|
+| **Live** | Open **[fab-dispatch.vercel.app](https://fab-dispatch.vercel.app)** → **Try it as a guest** | 10 s |
+| **In your browser** | **[Open in GitHub Codespaces](https://codespaces.new/pavansky/fab-dispatch?quickstart=1)**: installs and starts everything, nothing on your machine | ~3 min |
+| **On your machine** | `git clone https://github.com/pavansky/fab-dispatch.git && cd fab-dispatch && python3 run.py` | ~3 min |
 
-**You need** Python **3.11–3.14** and Node.js **20.19+** (22 LTS recommended). Check with:
-
-```bash
-python3 --version && node --version
-```
-
-**1. Get the code**
+**One command, locally.** You need Python **3.11–3.14** and Node.js **20.19+**. Then:
 
 ```bash
 git clone https://github.com/pavansky/fab-dispatch.git
 cd fab-dispatch
+python3 run.py
 ```
 
-**2. Start the API** (terminal 1, from the `fab-dispatch` folder)
+`run.py` checks your versions, installs what's missing (once), starts the API and the UI together and
+opens **http://localhost:5173**. Click **Continue as Dispatcher** (a local one-click sign-in; the
+server refuses it in production). **Ctrl-C** stops both. On Windows: `py run.py`.
 
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --port 8000
-```
+No accounts, API keys, Docker or paid services: locally it uses SQLite (`backend/data/`) and an
+in-memory vector index. Interactive API docs: http://localhost:5173/api/docs.
 
 <details>
-<summary>Windows (PowerShell)</summary>
+<summary><b>Manual steps (two terminals), and other ways to run it</b></summary>
 
-```powershell
-cd backend
-py -m venv .venv
-.venv\Scripts\Activate.ps1
+```bash
+# Terminal 1: the API
+cd backend && python3 -m venv .venv && source .venv/bin/activate   # Windows: py -m venv .venv; .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.main:app --port 8000
+
+# Terminal 2: the UI
+cd frontend && npm install && npm run dev
 ```
 
-</details>
-
-Wait for `Uvicorn running on http://127.0.0.1:8000`. Optional check, from another terminal:
-`curl http://127.0.0.1:8000/api/health` returns `{"status":"ok","db_ok":true,"schema_ok":true,...}`.
-
-**3. Start the UI** (terminal 2, from the `fab-dispatch` folder)
-
 ```bash
-cd frontend
-npm install
-npm run dev
-```
-
-**4. Open http://localhost:5173** and click **Continue as Dispatcher**. That's a local one-click
-sign-in; the server refuses it in production. The first plan appears in about a second.
-
-Locally the app stores data in SQLite (`backend/data/`, created on first run) and keeps the
-repair-history index in memory. Interactive API docs are at http://127.0.0.1:8000/docs.
-
-<details>
-<summary><b>Other ways to run it</b></summary>
-
-```bash
-make setup && make dev           # both apps with one command (macOS / Linux)
+make start                       # same as python3 run.py
 make check                       # everything CI checks, locally
+make docs                        # build the documentation site into site/
 docker compose up --build        # production-like: Postgres + Qdrant + API + nginx on :8080
 ```
 
@@ -119,7 +106,8 @@ https://fab-dispatch.vercel.app runs the same build on Vercel with Supabase (Pos
 - **Or sign in with your email:** a magic link or the code in it (a branded email), or a password.
   Named accounts start as **viewers**; an admin grants **dispatcher**.
 
-Press **?** in the app for help, or **/** to ask the assistant.
+Press **?** in the app for help, **/** to ask the assistant, and open **About & support** in the
+user menu for the version, live status, docs and support links.
 
 ## A 5-minute tour
 
@@ -154,6 +142,22 @@ Press **?** in the app for help, or **/** to ask the assistant.
 | `address already in use` on 8000 or 5173 | Another process holds the port. Stop it (`lsof -i :8000` on macOS/Linux), then restart. |
 | **Run benchmark** or **Start live shift** is disabled | You're signed in as a viewer. Use the avatar menu to sign out, then **Continue as Dispatcher**. |
 | You want a clean slate | Stop the API, delete `backend/data/`, start it again. |
+
+## Production readiness
+
+What a production AI application needs, and where to see it here.
+
+| Area | In place |
+|---|---|
+| **Access** | Supabase Auth (email link, code or password), one-click guest access, `viewer` / `dispatcher` roles, per-user fab access, Cloudflare Turnstile CAPTCHA |
+| **Data security** | Row-level security on every app table (closed to the public API), strict CSP, HSTS, rate limits, request size limits, secrets only in the platform |
+| **Reliability** | Versioned migrations under a lock, optimistic concurrency, idempotent live actions, a clock lease, an SSE stream that resumes, cached plans |
+| **Operations** | Health and liveness endpoints, request ids, structured logs, daily data retention, post-deploy smoke tests, an [uptime check every 30 minutes](.github/workflows/uptime.yml) that opens an incident issue |
+| **Delivery** | CI on every PR (lint, 3 test layers, coverage floors, audits, accessibility, images), branch protection, tagged releases promoted UAT → production, Dependabot |
+| **AI quality** | A grounded assistant with sources and honest refusals, an [evaluation set](backend/tests/eval/assistant_eval.json) in CI (42/42), 👍/👎 feedback with stats, an [AI transparency page](https://pavansky.github.io/fab-dispatch/ai/), an optional LLM that can only reword |
+| **Experience** | Light/dark themes, phone layouts, keyboard shortcuts, a first-run tour, contextual help, WCAG 2.1 AA checks, a crash screen with a prefilled report, link previews |
+| **Documentation** | [Docs site](https://pavansky.github.io/fab-dispatch/) (guide, architecture, decisions, operations), [interactive API reference](https://fab-dispatch.vercel.app/api/docs), in-app help center |
+| **Support** | In-app **About & support**, [Discussions](https://github.com/pavansky/fab-dispatch/discussions), issue templates, a [security policy](SECURITY.md), a [privacy page](https://pavansky.github.io/fab-dispatch/privacy/) |
 
 ## Why this exists
 
@@ -212,8 +216,9 @@ Where each part of a resource-allocation brief lives, in the app and in the code
   Runs locally with no key; an LLM can optionally reword answers, never add facts.
 - **Works on a phone.** The controls become a drawer, the tabs scroll, the floor plan works by touch,
   and the light theme is the default.
-- **Tested at every layer.** 276 backend tests, 90 frontend component tests rendered against real API
-  responses, and 25 Playwright end-to-end tests that drive the real app on desktop and on a phone.
+- **Tested at every layer.** 289 backend tests, 101 frontend component tests rendered against real API
+  responses, and 33 Playwright end-to-end tests that drive the real app on desktop and on a phone,
+  including WCAG 2.1 AA accessibility checks on every screen.
 - **Engineered for change.** Versioned database migrations, CI with coverage, security audits and a
   Postgres matrix, a release pipeline that promotes UAT-tested commits to production, and
   post-deploy smoke tests.
@@ -305,7 +310,7 @@ comparison fair. Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## API
 
-Interactive OpenAPI docs at **http://127.0.0.1:8000/docs**. Key endpoints:
+Interactive OpenAPI docs at **[/api/docs](https://fab-dispatch.vercel.app/api/docs)** (ReDoc at `/api/redoc`, schema at `/api/openapi.json`). Key endpoints:
 
 | Method | Path | Role | Purpose |
 |---|---|---|---|
@@ -318,6 +323,7 @@ Interactive OpenAPI docs at **http://127.0.0.1:8000/docs**. Key endpoints:
 | `POST` | `/api/repairs/similar` · `/api/repairs/predict-durations` | viewer | Repair-history retrieval and duration prediction |
 | `GET` | `/api/help` · `/api/help/{slug}` · `/api/help/search?q=` | public | Help center: contents, an article, search |
 | `POST` | `/api/assistant/ask` | viewer | Grounded answer with citations and actions, for the shift sent as context |
+| `POST` | `/api/assistant/feedback` · `GET /api/assistant/stats` | viewer · dispatcher | Rate an answer; helpful rates by kind of question |
 | `GET` | `/api/health` · `/api/livez` | public | Readiness (database + schema version) and liveness |
 
 Errors share one envelope: `{"error": {"code", "message", "request_id"}}`.
@@ -345,9 +351,9 @@ Three layers, all run in CI on every pull request:
 
 | Layer | Tool | Count | What it proves |
 |---|---|---|---|
-| Backend | pytest | **276** (4 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store, help, assistant quality |
-| Frontend components | Vitest + Testing Library | **90** | Every view and flow, sign-in paths, help and the assistant, against **real API responses** |
-| End-to-end | Playwright | **25** (20 desktop, 5 phone) | The real API and UI together in Chromium, including two browsers on one live shift |
+| Backend | pytest | **289** (5 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency |
+| Frontend components | Vitest + Testing Library | **101** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, the crash screen, against **real API responses** |
+| End-to-end | Playwright | **33** (28 desktop, 5 phone) | The real API and UI together in Chromium: two browsers on one live shift, and axe-core WCAG 2.1 AA checks on every screen and panel |
 
 Coverage: **94%** of the API (with Postgres, as CI measures it) and **88%** of the UI. CI fails below
 90% for the API, or below the UI floors in `frontend/vite.config.js`.
@@ -411,6 +417,9 @@ Runbook: [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md) · Hosting details: [docs/
 ## Project structure
 
 ```
+run.py                     one command: install what's missing, start API + UI, open the browser
+.devcontainer/             GitHub Codespaces: the app running in your browser, nothing installed
+mkdocs.yml                 the documentation site (docs/build.py generates guide, API and project pages)
 backend/
   app/
     fabs/                  fab profile schema, registry, profiles/*.json
@@ -427,7 +436,7 @@ backend/
     routes/                system · auth · fabs · planning · live (SSE) · repairs
   scripts/benchmark.py     reproduces every table in docs/ANALYSIS.md
   scripts/export_ui_fixtures.py   real API responses for the UI tests
-  tests/                   276 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval)
+  tests/                   289 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval)
 frontend/src/
   App.jsx auth.jsx api.js  workspace, sign-in, API client
   lib/                     fab context, recommendation logic, statistics, progressive planning
@@ -436,8 +445,9 @@ frontend/src/
   test/                    fake API over real fixtures, app-level, live-dispatch, help and sign-in tests
 frontend/e2e/              Playwright: planning, live dispatch, roles and fabs, help and assistant, phone
 supabase/                  branded auth email templates and how to apply them
-.github/                   CI, release and smoke workflows, Dependabot, templates, CODEOWNERS
-docs/                      ANALYSIS · ARCHITECTURE · DECISIONS · DEPLOYMENT · ENVIRONMENTS · ONBOARDING_A_FAB
+.github/                   CI, release, smoke, docs and uptime workflows, Dependabot, issue templates, CODEOWNERS
+docs/                      the documentation site: quick start, reviewers' tour, AI transparency, privacy,
+                           support, API reference, plus ANALYSIS · ARCHITECTURE · DECISIONS · operations
 ```
 
 ## Documentation
@@ -446,15 +456,28 @@ docs/                      ANALYSIS · ARCHITECTURE · DECISIONS · DEPLOYMENT �
 |---|---|
 | [ANALYSIS.md](docs/ANALYSIS.md) | Benchmark, optimality gaps, budget sizing, when each strategy wins |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, auth and tenancy, live dispatch, repair history, migrations, performance |
-| [DECISIONS.md](docs/DECISIONS.md) | 25 design decisions with context and trade-offs |
+| [DECISIONS.md](docs/DECISIONS.md) | 27 design decisions with context and trade-offs |
 | [ENVIRONMENTS.md](docs/ENVIRONMENTS.md) | Dev → UAT → production, releases, rollback, per-environment config |
 | [ONBOARDING_A_FAB.md](docs/ONBOARDING_A_FAB.md) | Adding a new fab: profile, validation, access, release |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Local, Docker and Vercel + Supabase hosting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, conventions, migrations, releasing |
-| [In-app help](backend/app/help/articles/) | The 16 help-center articles, readable here too |
+| [Documentation site](https://pavansky.github.io/fab-dispatch/) | User guide, architecture, algorithms, decisions, operations, AI transparency, privacy, support |
+| [API reference](https://fab-dispatch.vercel.app/api/docs) | Interactive OpenAPI docs (also at `/api/docs` locally) |
+| [In-app help](backend/app/help/articles/) | The 17 help-center articles, readable here too |
 | [supabase/README.md](supabase/README.md) | Branded sign-in emails, sender setup, guest access |
-| [SECURITY.md](SECURITY.md) | Threat model and mitigations |
+| [SECURITY.md](SECURITY.md) · [SUPPORT.md](SUPPORT.md) | Threat model and mitigations · where to get help |
 | [CHANGELOG.md](CHANGELOG.md) | Release history (v0.1.0 → v2.1.0) |
+
+## Support
+
+- **In the app:** **?** opens help, **/** asks the assistant, **About & support** (user menu) shows the
+  version, live status and every link below.
+- **Questions and ideas:** [GitHub Discussions](https://github.com/pavansky/fab-dispatch/discussions).
+- **Bugs:** [open an issue](https://github.com/pavansky/fab-dispatch/issues/new/choose), or use
+  **Report a problem** in the app, which prefills your release and browser.
+- **Security:** privately, per [SECURITY.md](SECURITY.md).
+
+More in [SUPPORT.md](SUPPORT.md) and the [support guide](https://pavansky.github.io/fab-dispatch/support/).
 
 ## Limitations and roadmap
 

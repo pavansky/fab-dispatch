@@ -1,0 +1,14 @@
+blank_issues_enabled: true  # the app's "Report a problem" link opens a prefilled issue
+contact_links:
+  - name: Question or idea
+    url: https://github.com/pavansky/fab-dispatch/discussions
+    about: Ask how something works, or suggest an improvement.
+  - name: Documentation
+    url: https://pavansky.github.io/fab-dispatch/
+    about: User guide, architecture, algorithms and API reference.
+  - name: Security vulnerability
+    url: https://github.com/pavansky/fab-dispatch/security/advisories/new
+    about: Report privately. Please don't open a public issue.
+  - name: Try the live app
+    url: https://fab-dispatch.vercel.app
+    about: One click as a guest, no sign-up.

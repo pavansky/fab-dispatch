@@ -18,6 +18,7 @@ keywords: [assistant, ask, ai, agent, chat, chatbot, bot, question, questions, a
   benchmarks?*
 
 Answers come with **sources** (help articles) and **actions**, such as opening a job on the floor plan.
+Rate any answer with 👍 or 👎; a 👎 lets you say what was wrong, and that's how answers improve.
 
 ## Where answers come from
 

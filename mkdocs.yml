@@ -1,0 +1,133 @@
+site_name: Fab Dispatch
+site_description: The right engineer to every tool-down, in real time. Five allocation strategies compared live, with every decision explained.
+site_url: https://pavansky.github.io/fab-dispatch/
+repo_url: https://github.com/pavansky/fab-dispatch
+repo_name: pavansky/fab-dispatch
+edit_uri: edit/main/docs/
+copyright: Fab Dispatch · built by PavanSky
+
+docs_dir: docs
+exclude_docs: |
+  build.py
+  hooks.py
+  requirements.txt
+  __pycache__/
+
+theme:
+  name: material
+  logo: assets/favicon.svg
+  favicon: assets/favicon.svg
+  font:
+    text: Geist
+    code: Geist Mono
+  palette:
+    - media: "(prefers-color-scheme)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle: { icon: material/brightness-auto, name: Switch to light mode }
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle: { icon: material/brightness-7, name: Switch to dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle: { icon: material/brightness-4, name: Follow the system }
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/pavansky/fab-dispatch
+    - icon: material/rocket-launch
+      link: https://fab-dispatch.vercel.app
+      name: Live app
+
+hooks:
+  - docs/hooks.py
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+validation:
+  omitted_files: warn
+  absolute_links: ignore
+  unrecognized_links: warn
+  anchors: warn
+
+nav:
+  - Home: index.md
+  - Get started:
+      - Quick start: quickstart.md
+      - Review in 10 minutes: reviewers.md
+  - User guide:
+      - guide/index.md
+      - Get started:
+          - guide/getting-started.md
+          - guide/views.md
+          - guide/assistant.md
+      - Planning:
+          - guide/recommendation.md
+          - guide/strategies.md
+          - guide/constraints-and-weights.md
+          - guide/floor-plan.md
+          - guide/what-ifs.md
+          - guide/benchmark.md
+      - Live dispatch:
+          - guide/live-dispatch.md
+      - Reference:
+          - guide/metrics.md
+          - guide/glossary.md
+          - guide/roles-and-access.md
+          - guide/fabs.md
+          - guide/keyboard-shortcuts.md
+          - guide/faq.md
+          - guide/support.md
+  - Engineering:
+      - Architecture: ARCHITECTURE.md
+      - Algorithms and analysis: ANALYSIS.md
+      - Design decisions: DECISIONS.md
+      - AI transparency: ai.md
+  - API reference: api/index.md
+  - Operations:
+      - Environments and releases: ENVIRONMENTS.md
+      - Deployment: DEPLOYMENT.md
+      - Onboarding a fab: ONBOARDING_A_FAB.md
+      - Sign-in emails, sender and CAPTCHA: project/supabase.md
+  - Trust:
+      - Privacy and data: privacy.md
+      - Security: project/security.md
+  - Project:
+      - Support: support.md
+      - Contributing: project/contributing.md
+      - Changelog: project/changelog.md

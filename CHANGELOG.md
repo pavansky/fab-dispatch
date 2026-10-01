@@ -2,6 +2,35 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.3.0] - 2026-10-01
+
+### Added
+- **One-command start:** `python3 run.py` checks Python and Node, installs what's missing (once),
+  starts the API and UI together and opens the browser; Ctrl-C stops both. Also `make start`.
+- **GitHub Codespaces:** run the whole app in the browser with nothing installed (`.devcontainer/`).
+- **Documentation site** on GitHub Pages: user guide (generated from the in-app help articles),
+  quick start, a reviewers' tour, architecture, algorithms, decisions, operations, AI transparency,
+  privacy, support, changelog, and an API reference rendered from the live OpenAPI schema. Built
+  strictly on every PR, published from `main`.
+- **API reference in production** at `/api/docs` (and `/api/redoc`, `/api/openapi.json`).
+- **About & support** panel: release, build, environment, live status, and every documentation and
+  support link, including **Report a problem** with the release and browser prefilled.
+- **Crash screen:** a render error shows a way forward and a prefilled report, not a blank page.
+- **Assistant feedback:** 👍/👎 (with an optional note) on every answer, stored with the user id for
+  180 days; dispatchers get helpful rates by kind of question (`/api/assistant/stats`). One structured
+  log line per answer. A "Support and feedback" help article; the evaluation set grows to 42 questions.
+- **Accessibility checks:** axe-core WCAG 2.1 A/AA audits of every screen and panel in the end-to-end suite.
+- **Operations:** an uptime check every 30 minutes that opens an incident issue on failure and closes
+  it on recovery; the assistant evaluation report in every CI summary.
+- **Support:** `SUPPORT.md`, feature-request template, contact links (Discussions, docs, security).
+- One release version everywhere (`app/version.py`, both manifests, this changelog), checked by a test;
+  `/api/health` and `/api/meta` report the release and commit.
+
+### Fixed
+- Accessibility: muted text and the active tab number now meet WCAG AA contrast; contextual help no
+  longer nests a button inside `<summary>`; the floor plan is a labelled group of controls, not an
+  image; scrollable tables are keyboard-reachable; the schedule's rows have proper cells.
+
 ## [2.2.1] - 2026-10-01
 
 ### Fixed
