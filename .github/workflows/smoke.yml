@@ -2,7 +2,8 @@ name: Post-deploy smoke test
 
 # Vercel reports each deployment back to GitHub. When one succeeds (a PR preview, UAT
 # from main, or production), check it is healthy, its schema is current, and it runs
-# real authentication, never demo mode.
+# real authentication, never demo mode. Production is checked on its public domain: the
+# per-deployment URL sits behind Vercel Authentication even when the domain is public.
 on: deployment_status
 
 permissions:
@@ -13,7 +14,11 @@ jobs:
     if: github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
     env:
-      URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+      PRODUCTION: ${{ github.event.deployment.environment == 'Production' }}
+      URL: >-
+        ${{ github.event.deployment.environment == 'Production'
+            && (vars.PRODUCTION_URL || 'https://fab-dispatch.vercel.app')
+            || github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
       BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
       - name: Health and auth mode
@@ -26,7 +31,7 @@ jobs:
           # UAT and PR previews sit behind Vercel Authentication. Without the automation bypass
           # secret we can't reach them, so report that plainly instead of failing.
           if [ "$code" = 401 ] || [ "$code" = 302 ] || [ "$code" = 403 ]; then
-            if [ -z "$BYPASS" ]; then
+            if [ -z "$BYPASS" ] && [ "$PRODUCTION" != true ]; then
               echo "::notice::$URL is protected by Vercel Authentication; add VERCEL_AUTOMATION_BYPASS_SECRET to smoke-test it. Skipped."
               exit 0
             fi

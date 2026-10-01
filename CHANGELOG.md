@@ -2,6 +2,13 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.0.1] - 2026-10-01
+
+### Fixed
+- Post-deploy smoke test checks production on its public domain. It previously targeted the
+  per-deployment URL, which Vercel Authentication protects, so production checks were skipped.
+  A production smoke test can no longer pass by skipping.
+
 ## [2.0.0] - 2026-10-01
 
 ### Added
