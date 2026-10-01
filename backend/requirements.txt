@@ -8,4 +8,5 @@ numpy>=2.3,<3              # range, not a pin: 2.5 dropped Python 3.11
 scipy>=1.16,<2            # Hungarian (linear_sum_assignment) and the exact MILP (HiGHS)
 pyvrp==0.14.0            # state-of-the-art VRPTW iterated local search, MIT
 qdrant-client==1.19.1    # repair-history vector search (embedded locally, server in prod)
+pyjwt[crypto]==2.15.1    # verifies Supabase (ES256/RS256 via JWKS) and demo (HS256) tokens
 psycopg[binary]==3.3.6   # Postgres / Supabase in production; unused with the SQLite default
