@@ -11,7 +11,9 @@ pip install pre-commit && pre-commit install   # format and lint on every commit
 ## Before you push
 
 ```bash
-make check            # lint + format check + tests with coverage floor + audits + frontend build
+make check            # lint, format, backend + component + e2e tests with coverage floors, audits, build
+make e2e              # Playwright only (starts the API and UI itself)
+make fixtures         # refresh UI test fixtures after changing an API response
 ```
 
 CI runs the same checks, plus the suite on Python 3.11/3.12/3.14 and against Postgres.

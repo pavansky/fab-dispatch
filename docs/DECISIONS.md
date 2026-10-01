@@ -160,3 +160,14 @@ A SemVer tag re-runs CI on that commit, must already be on `main`, and fast-forw
 `production` branch that Vercel deploys from. Every deployment is smoke-tested.
 **Why.** Nothing reaches production without passing UAT and CI on the exact commit. Rollback is
 promoting the previous deployment, and production can't move backwards by accident.
+
+### D23. Three test layers; the UI is tested against captured API responses
+**Decision.** pytest for the engine and API; Vitest + Testing Library for components, rendering JSON
+exported from the real API (`scripts/export_ui_fixtures.py`) behind a fake `fetch`; Playwright for
+end-to-end flows against the real API and UI on desktop and a phone viewport. A backend test
+compares the committed fixtures' shape with live responses. Tests query by role and accessible name,
+not CSS classes.
+**Why.** Hand-written mocks drift silently from the API, so component tests pass against data that
+no longer exists; the contract test turns that drift into a failure. Component tests are fast and
+precise; only a browser proves SSE, the Vite proxy, layout and touch work together. Querying by role
+keeps the UI accessible: the floor plan's jobs became real buttons because the tests needed them to be.
