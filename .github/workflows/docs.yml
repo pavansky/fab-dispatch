@@ -28,7 +28,7 @@ jobs:
         run: python docs/build.py
       - run: mkdocs build --strict
         env: { NO_MKDOCS_2_WARNING: "1" }
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request'
         with: { path: site }
 
