@@ -4,14 +4,25 @@ from __future__ import annotations
 import statistics
 import time
 
-from .algorithms import ALGORITHMS
+from .algorithms import ALGORITHMS, Decision
 from .models import AllocationResult, Assignment, Route, RouteStop, Scenario, Unassigned, Weights
-from .planner import LEVEL_TOO_LOW, SKILL_MISSING, Planner, describe_rejections
+from .planner import LEVEL_TOO_LOW, SKILL_MISSING, Frozen, Planner, describe_rejections
 
 
-def allocate(scenario: Scenario, weights: Weights, algorithm: str) -> AllocationResult:
+def allocate(
+    scenario: Scenario,
+    weights: Weights,
+    algorithm: str,
+    frozen: dict[str, Frozen] | None = None,
+    open_jobs: set[str] | None = None,
+    time_limit_s: float | None = None,
+    previous_owner: dict[str, str] | None = None,
+) -> AllocationResult:
+    """Plan a shift. In live mode, ``frozen`` holds work already started and
+    ``open_jobs`` the jobs known so far that may still be (re)assigned."""
     label, fn = ALGORITHMS[algorithm]
-    planner = Planner(scenario, weights)
+    planner = Planner(scenario, weights, frozen=frozen, open_jobs=open_jobs,
+                      time_limit_s=time_limit_s, previous_owner=previous_owner)
     t0 = time.perf_counter()
     decisions = fn(planner)
     runtime_ms = (time.perf_counter() - t0) * 1000
@@ -21,10 +32,12 @@ def allocate(scenario: Scenario, weights: Weights, algorithm: str) -> Allocation
     for tid, route in planner.routes.items():
         sim = planner.sim(tid)
         stops = []
+        n_locked = len(planner.frozen[tid].route)
         for i, jid in enumerate(route):
-            d = decisions[jid]
+            d = decisions.get(jid) or Decision(tid, 0.0, {}, f"Locked: {tid} had already started this job when the plan was revised.")
             assert d.tech_id == tid
-            stops.append(RouteStop(job_id=jid, arrival=round(sim.arrivals[i], 1), start=round(sim.starts[i], 1), end=round(sim.ends[i], 1)))
+            stops.append(RouteStop(job_id=jid, arrival=round(sim.arrivals[i], 1), start=round(sim.starts[i], 1),
+                                   end=round(sim.ends[i], 1), locked=i < n_locked))
             assignments.append(Assignment(
                 job_id=jid, tech_id=tid, sequence=i + 1,
                 arrival=round(sim.arrivals[i], 1), start=round(sim.starts[i], 1), end=round(sim.ends[i], 1),
@@ -33,10 +46,10 @@ def allocate(scenario: Scenario, weights: Weights, algorithm: str) -> Allocation
             ))
         routes.append(Route(tech_id=tid, stops=stops, metres=round(sim.metres, 1), end_time=round(sim.end_time, 1)))
 
-    unassigned = [_why_unassigned(planner, jid) for jid in planner.jobs if jid not in decisions]
+    unassigned = [_why_unassigned(planner, jid) for jid in planner.open_jobs if jid not in decisions]
     return AllocationResult(
         algorithm=algorithm, label=label, assignments=assignments, unassigned=unassigned, routes=routes,
-        metrics=_metrics(planner, runtime_ms),
+        metrics=_metrics(planner, runtime_ms), solver=planner.meta.get("solver", {}),
     )
 
 
@@ -55,7 +68,9 @@ def _why_unassigned(p: Planner, job_id: str) -> Unassigned:
 
 
 def _metrics(p: Planner, runtime_ms: float) -> dict[str, float]:
-    jobs = list(p.jobs.values())
+    # Only jobs known to the planner count; in live mode future tool-downs aren't known yet.
+    known = set(p.open_jobs) | {j for r in p.frozen.values() for j in r.route}
+    jobs = [p.jobs[j] for j in sorted(known)]
     served = p.assigned_jobs()
     served_jobs = [j for j in jobs if j.id in served]
     critical = [j for j in jobs if j.priority == 3]

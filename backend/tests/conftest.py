@@ -1,3 +1,13 @@
+import os
+
+# Keep search-based solvers fast and the store in memory for the test run.
+os.environ.setdefault("FAB_SOLVER_TIME_LIMIT_S", "10")
+os.environ.setdefault("FAB_ALNS_ITERATIONS", "60")
+os.environ.setdefault("FAB_PYVRP_ITERATIONS", "300")
+os.environ.setdefault("FAB_LIVE_TIME_LIMIT_S", "0.1")
+os.environ.setdefault("FAB_DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("FAB_ENV", "test")
+os.environ.setdefault("FAB_SSE_WINDOW_S", "1")
 import pytest
 
 from app.models import Engineer, Job, Scenario

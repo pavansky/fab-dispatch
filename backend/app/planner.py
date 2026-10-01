@@ -61,16 +61,48 @@ class Insertion:
     breakdown: dict[str, float] = field(default_factory=dict)
 
 
+@dataclass
+class Frozen:
+    """Live-shift state for one engineer: jobs already started can't move, and new
+    work can't start before ``not_before`` (the current shift clock)."""
+
+    route: list[str] = field(default_factory=list)
+    not_before: float = 0.0
+
+
 class Planner:
-    def __init__(self, scenario: Scenario, weights: Weights):
+    def __init__(
+        self,
+        scenario: Scenario,
+        weights: Weights,
+        frozen: dict[str, Frozen] | None = None,
+        open_jobs: set[str] | None = None,
+        time_limit_s: float | None = None,
+        previous_owner: dict[str, str] | None = None,
+    ):
         self.scenario = scenario
         self.w = weights
         self.techs: dict[str, Engineer] = {t.id: t for t in scenario.engineers}
         self.jobs: dict[str, Job] = {j.id: j for j in scenario.jobs}
-        self.routes: dict[str, list[str]] = {t: [] for t in self.techs}
+        self.frozen: dict[str, Frozen] = {t: (frozen or {}).get(t, Frozen()) for t in self.techs}
+        locked = {j for f in self.frozen.values() for j in f.route}
+        # Jobs the algorithms may place. Defaults to everything not already locked in.
+        candidates = set(self.jobs) if open_jobs is None else set(open_jobs)
+        self.open_jobs: dict[str, Job] = {j: self.jobs[j] for j in sorted(candidates - locked)}
+        self.routes: dict[str, list[str]] = {t: list(self.frozen[t].route) for t in self.techs}
         self._speed = scenario.settings.walk_m_per_min
-        self._sims: dict[str, RouteSim] = {t: self._simulate(t, [])[0] for t in self.techs}  # type: ignore[misc]
+        self._sims: dict[str, RouteSim] = {}
+        for t in self.techs:
+            sim, why = self._simulate(t, self.routes[t])
+            if sim is None:
+                raise ValueError(f"frozen route for {t} is infeasible: {why}")
+            self._sims[t] = sim
         self._ins_cache: dict[tuple[str, str], Insertion] = {}
+        self.meta: dict = {}
+        self.time_limit_s = time_limit_s  # search budget override (live mode uses a shorter one)
+        # Live re-plans: who held each job in the previous plan. Moving it costs w.stability,
+        # so a new tool-down doesn't reshuffle every engineer's afternoon.
+        self.previous_owner = previous_owner or {}
 
     # ------------------------------------------------------------------ geometry
     def metres(self, a: str, b: str) -> float:
@@ -82,11 +114,14 @@ class Planner:
     def _simulate(self, tech_id: str, route: list[str]) -> tuple[RouteSim | None, str | None]:
         """Walk the route from the home bay; return the timing or the first hard violation."""
         tech = self.techs[tech_id]
+        frozen = self.frozen[tech_id]
         t, here = float(tech.shift_start), tech_id
         starts, arrivals, ends, legs = [], [], [], []
         wait = 0.0
         overq = 0
-        for jid in route:
+        for i, jid in enumerate(route):
+            if i == len(frozen.route):
+                t = max(t, frozen.not_before)  # open work starts no earlier than "now"
             job = self.jobs[jid]
             d = self.metres(here, jid)
             arrival = t + d / self._speed
@@ -100,7 +135,7 @@ class Planner:
             starts.append(start)
             ends.append(t)
             legs.append(d)
-            if t > tech.shift_end:
+            if t > tech.shift_end and i >= len(frozen.route):
                 return None, SHIFT_OVERRUN
         return RouteSim(starts, arrivals, ends, legs, wait, overq, t), None
 
@@ -130,7 +165,7 @@ class Planner:
         before = self._soft(self._sims[tech_id])
         best: Insertion | None = None
         fails: Counter[str] = Counter()
-        for pos in range(len(route) + 1):
+        for pos in range(len(self.frozen[tech_id].route), len(route) + 1):
             sim, why = self._simulate(tech_id, route[:pos] + [job_id] + route[pos:])
             if sim is None:
                 fails[why] += 1  # type: ignore[index]
@@ -139,6 +174,9 @@ class Planner:
             breakdown = {k: round(after[k] - before[k], 2) for k in after}
             breakdown["workload"] = self.w.workload_balance * len(route)
             breakdown["priority"] = -self.w.priority_reward * job.priority
+            moved = self._moved(tech_id, job_id)
+            if moved:
+                breakdown["reassignment"] = moved
             cost = sum(breakdown.values())
             if best is None or cost < best.cost:
                 best = Insertion(tech_id, job_id, True, None, pos, cost, breakdown)
@@ -169,8 +207,95 @@ class Planner:
         for key in [k for k in self._ins_cache if k[0] == ins.tech_id or k[1] == ins.job_id]:
             del self._ins_cache[key]
 
+    def append(self, tech_id: str, job_id: str) -> Insertion | None:
+        """Put a job at the end of a route (used to replay an external solver's
+        sequence). Returns None if that breaks a hard constraint."""
+        tech, job, route = self.techs[tech_id], self.jobs[job_id], self.routes[tech_id]
+        if self.tech_can_do(tech_id, job_id) is not None or len(route) >= tech.max_jobs:
+            return None
+        sim, _ = self._simulate(tech_id, route + [job_id])
+        if sim is None:
+            return None
+        before, after = self._soft(self._sims[tech_id]), self._soft(sim)
+        breakdown = {k: round(after[k] - before[k], 2) for k in after}
+        breakdown["workload"] = self.w.workload_balance * len(route)
+        breakdown["priority"] = -self.w.priority_reward * job.priority
+        if self._moved(tech_id, job_id):
+            breakdown["reassignment"] = self._moved(tech_id, job_id)
+        ins = Insertion(tech_id, job_id, True, None, len(route), sum(breakdown.values()), breakdown)
+        self.commit(ins)
+        return ins
+
+    def _moved(self, tech_id: str, job_id: str) -> float:
+        prev = self.previous_owner.get(job_id)
+        return self.w.stability if prev is not None and prev != tech_id else 0.0
+
+    def remove(self, job_id: str) -> str:
+        """Take an open job off its route (frozen work can't be removed). Returns the engineer."""
+        for tid, route in self.routes.items():
+            if job_id in route:
+                idx = route.index(job_id)
+                if idx < len(self.frozen[tid].route):
+                    raise ValueError(f"{job_id} is frozen on {tid}")
+                route.pop(idx)
+                self._refresh(tid)
+                return tid
+        raise KeyError(job_id)
+
+    def snapshot(self) -> dict[str, tuple[str, ...]]:
+        return {t: tuple(r) for t, r in self.routes.items()}
+
+    def restore(self, snap: dict[str, tuple[str, ...]]) -> None:
+        for tid, route in snap.items():
+            if tuple(self.routes[tid]) != route:
+                self.routes[tid] = list(route)
+                self._refresh(tid)
+
+    def _refresh(self, tech_id: str) -> None:
+        sim, why = self._simulate(tech_id, self.routes[tech_id])
+        assert sim is not None, why
+        self._sims[tech_id] = sim
+        for key in [k for k in self._ins_cache if k[0] == tech_id]:
+            del self._ins_cache[key]
+
+    def total_cost(self) -> float:
+        """The full objective every search method minimises: route soft costs, the convex
+        workload term each insertion pays, and the reward forgone for every unserved job."""
+        total = 0.0
+        placed = self.assigned_jobs()
+        for tid, route in self.routes.items():
+            k = len(route)
+            total += self.route_soft_cost(tid) + self.w.workload_balance * k * (k - 1) / 2
+            total += sum(self._moved(tid, j) for j in route)
+        total += sum(self.w.priority_reward * j.priority for jid, j in self.open_jobs.items() if jid not in placed)
+        return total
+
+    def tech_can_do(self, tech_id: str, job_id: str) -> str | None:
+        tech, job = self.techs[tech_id], self.jobs[job_id]
+        if job.skill not in tech.skills:
+            return SKILL_MISSING
+        if tech.skills[job.skill] < job.min_level:
+            return LEVEL_TOO_LOW
+        return None
+
+    def clone(self) -> "Planner":
+        """Independent copy with the same committed routes (for warm starts and search)."""
+        other = Planner.__new__(Planner)
+        other.__dict__.update(self.__dict__)
+        other.routes = {t: list(r) for t, r in self.routes.items()}
+        other.open_jobs = dict(self.open_jobs)
+        other._sims = dict(self._sims)
+        other._ins_cache = dict(self._ins_cache)
+        other.meta = {}
+        return other
+
     def sim(self, tech_id: str) -> RouteSim:
         return self._sims[tech_id]
+
+    def unplaced(self) -> list[str]:
+        """Open jobs not yet on any route, in stable order."""
+        placed = self.assigned_jobs()
+        return [j for j in self.open_jobs if j not in placed]
 
     def assigned_jobs(self) -> set[str]:
         return {j for r in self.routes.values() for j in r}

@@ -24,7 +24,7 @@ def run_hungarian(p: Planner) -> dict[str, Decision]:
     techs = list(p.techs)
     rnd = 0
     while True:
-        open_jobs = [j for j in p.jobs if j not in decisions]
+        open_jobs = p.unplaced()
         if not open_jobs:
             break
         rnd += 1

@@ -11,7 +11,7 @@ from .base import Decision, decision
 
 
 def run_greedy(p: Planner) -> dict[str, Decision]:
-    order = sorted(p.jobs.values(), key=lambda j: (-j.priority, j.latest, j.earliest, j.id))
+    order = sorted((p.jobs[j] for j in p.unplaced()), key=lambda j: (-j.priority, j.latest, j.earliest, j.id))
     decisions: dict[str, Decision] = {}
     for n, job in enumerate(order, 1):
         feasible, rejected = p.scan(job.id)

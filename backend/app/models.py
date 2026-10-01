@@ -47,6 +47,13 @@ class Job(BaseModel):
     latest: int = Field(description="latest start, minutes")
     duration: int = Field(60, gt=0)
     tool: str = ""
+    symptom: str = Field("", description="free-text fault description, used for repair-history retrieval")
+
+    @property
+    def reported_at(self) -> int:
+        """When the job becomes known: PMs are on the schedule from shift start,
+        tool-downs are reported when their window opens."""
+        return 0 if self.kind == "pm" else self.earliest
 
     @model_validator(mode="after")
     def _check(self) -> "Job":
@@ -63,6 +70,7 @@ class Weights(BaseModel):
     overqualification: float = Field(8.0, ge=0, description="per level above the job's need")
     workload_balance: float = Field(5.0, ge=0, description="per job the engineer already holds")
     priority_reward: float = Field(60.0, ge=0, description="reward per priority point served")
+    stability: float = Field(25.0, ge=0, description="live mode: per job moved to a different engineer on re-plan")
 
 
 class Settings(BaseModel):
@@ -116,6 +124,7 @@ class RouteStop(BaseModel):
     arrival: float
     start: float
     end: float
+    locked: bool = False
 
 
 class Route(BaseModel):
@@ -132,3 +141,4 @@ class AllocationResult(BaseModel):
     unassigned: list[Unassigned]
     routes: list[Route]
     metrics: dict[str, float]
+    solver: dict = Field(default_factory=dict, description="search statistics, e.g. iterations")

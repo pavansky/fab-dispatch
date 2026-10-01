@@ -1,79 +1,56 @@
-from fastapi import FastAPI, HTTPException
+"""FastAPI application factory. ``app`` is the ASGI entrypoint for uvicorn and Vercel."""
+from __future__ import annotations
+
+import logging
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from fastapi.middleware.gzip import GZipMiddleware
+from starlette.responses import JSONResponse
 
-from .algorithms import ALGORITHMS
-from .engine import allocate
-from .generator import AREAS, PRESETS, generate
-from .models import AllocationResult, Scenario, Weights
+from .cache import ENGINE_VERSION
+from .config import get_settings
+from .http import error_body
+from .observability import RequestContext, configure_logging, request_id
+from .routes import live, planning, system
 
-app = FastAPI(title="Fab Maintenance Allocation Engine", version="1.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-                   allow_methods=["*"], allow_headers=["*"])
-
-
-class GenerateRequest(BaseModel):
-    seed: int = 7
-    n_engineers: int = Field(14, ge=1, le=60)
-    n_jobs: int = Field(45, ge=1, le=200)
-    preset: str = "normal"
+log = logging.getLogger("fab")
 
 
-class AllocateRequest(BaseModel):
-    scenario: Scenario
-    weights: Weights = Weights()
-    algorithms: list[str] = list(ALGORITHMS)
+def create_app() -> FastAPI:
+    settings = get_settings()
+    configure_logging(settings.log_level, settings.log_json)
+    app = FastAPI(
+        title="Fab Dispatch API",
+        version=ENGINE_VERSION,
+        description="Allocates equipment engineers to tool-downs and PMs in a semiconductor fab. "
+                    "Five strategies, from greedy to PyVRP, plus live re-dispatch.",
+    )
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
+    app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"],
+                       allow_headers=["*"], expose_headers=["ETag", "X-Cache", "X-Request-ID", "Server-Timing"])
+    app.add_middleware(RequestContext)
+
+    @app.exception_handler(HTTPException)
+    async def http_error(_: Request, exc: HTTPException):
+        code = {404: "not_found", 409: "conflict", 413: "too_large", 422: "invalid", 429: "rate_limited"}.get(
+            exc.status_code, "error")
+        return JSONResponse(error_body(code, str(exc.detail), request_id.get()), status_code=exc.status_code,
+                            headers=getattr(exc, "headers", None))
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(_: Request, exc: RequestValidationError):
+        first = exc.errors()[0] if exc.errors() else {}
+        where = ".".join(str(x) for x in first.get("loc", []) if x != "body")
+        msg = f"{where}: {first.get('msg', 'invalid input')}" if where else first.get("msg", "invalid input")
+        details = [{k: v for k, v in e.items() if k in ("loc", "msg", "type")} for e in exc.errors()]
+        return JSONResponse({**error_body("invalid", msg, request_id.get()), "details": details}, status_code=422)
+
+    for r in (system.router, planning.router, live.router):
+        app.include_router(r)
+    log.info("fab-dispatch %s ready (env=%s)", ENGINE_VERSION, settings.env)
+    return app
 
 
-class BenchmarkRequest(BaseModel):
-    presets: list[str] = list(PRESETS)
-    seeds: int = Field(10, ge=1, le=40)
-    n_engineers: int = Field(14, ge=1, le=60)
-    n_jobs: int = Field(45, ge=1, le=200)
-    weights: Weights = Weights()
-
-
-@app.get("/api/health")
-def health() -> dict:
-    return {"status": "ok"}
-
-
-@app.get("/api/meta")
-def meta() -> dict:
-    return {
-        "algorithms": {k: label for k, (label, _) in ALGORITHMS.items()},
-        "presets": {k: {"label": p.label, "description": p.description} for k, p in PRESETS.items()},
-        "areas": AREAS,
-        "default_weights": Weights().model_dump(),
-    }
-
-
-@app.post("/api/scenario", response_model=Scenario)
-def make_scenario(req: GenerateRequest) -> Scenario:
-    if req.preset not in PRESETS:
-        raise HTTPException(422, f"unknown preset {req.preset!r}")
-    return generate(req.seed, req.n_engineers, req.n_jobs, req.preset)
-
-
-@app.post("/api/allocate", response_model=list[AllocationResult])
-def run(req: AllocateRequest) -> list[AllocationResult]:
-    unknown = [a for a in req.algorithms if a not in ALGORITHMS]
-    if unknown:
-        raise HTTPException(422, f"unknown algorithm(s): {unknown}")
-    return [allocate(req.scenario, req.weights, a) for a in req.algorithms]
-
-
-@app.post("/api/benchmark")
-def benchmark(req: BenchmarkRequest) -> dict:
-    """Run every algorithm over many seeded shifts so the comparison isn't one lucky scenario."""
-    unknown = [p for p in req.presets if p not in PRESETS]
-    if unknown:
-        raise HTTPException(422, f"unknown preset(s): {unknown}")
-    runs = []
-    for preset in req.presets:
-        for seed in range(req.seeds):
-            sc = generate(seed, req.n_engineers, req.n_jobs, preset)
-            for algo in ALGORITHMS:
-                runs.append({"preset": preset, "seed": seed, "algorithm": algo,
-                             "metrics": allocate(sc, req.weights, algo).metrics})
-    return {"runs": runs}
+app = create_app()

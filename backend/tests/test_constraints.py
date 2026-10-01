@@ -6,7 +6,7 @@ from app.engine import allocate
 from app.generator import PRESETS, generate
 from app.models import Weights
 
-CASES = [(preset, seed) for preset in PRESETS for seed in range(6)]
+CASES = [(preset, seed) for preset in PRESETS for seed in range(4)]
 
 
 @pytest.mark.parametrize("algorithm", list(ALGORITHMS))

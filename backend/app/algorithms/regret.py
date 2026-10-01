@@ -19,7 +19,7 @@ SOLE_OPTION_REGRET = 1e6
 
 def run_regret(p: Planner) -> dict[str, Decision]:
     decisions: dict[str, Decision] = {}
-    open_jobs = set(p.jobs)
+    open_jobs = set(p.unplaced())
     step = 0
     while open_jobs:
         best_job, best_key, best_scan = None, None, None
