@@ -2,6 +2,26 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.1.0] - 2026-10-01
+
+### Added
+- **Help center:** 16 searchable articles (getting started, every view, strategies, constraints,
+  metrics, live dispatch, roles, fabs, glossary, FAQ, shortcuts), contextual ⓘ links next to controls,
+  a first-run tour, keyboard shortcuts (`?` help, `/` assistant, `1`–`6` views) and `?help=` deep links.
+- **Ask Dispatch,** an assistant that answers about the shift on screen and the app from the help
+  articles and the real plans, with sources and actions, and says "I don't know" otherwise. Local and
+  keyless; an optional LLM (`anthropic` or local `ollama`) can reword answers. Its quality is measured on
+  an evaluation set in CI.
+- **Guest access:** "Try it as a guest" (Supabase anonymous sign-in), role set by `FAB_GUEST_ROLE`.
+- **Sign in with a 6-digit code** from the email, as well as the link.
+- **Branded auth emails** (six templates, generated from one layout) and setup guide in `supabase/`.
+- **Brand assets:** favicon, app icons, web manifest and a link-preview card for shared links.
+
+### Fixed
+- On phones, several views were wider than the screen and scrolled sideways (grid columns couldn't
+  shrink below their content). The phone end-to-end test now measures against the real screen width.
+- Contextual help never sits inside a label or heading, keeping their accessible names clean.
+
 ## [2.0.3] - 2026-10-01
 
 ### Security
