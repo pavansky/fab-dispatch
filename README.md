@@ -13,6 +13,7 @@ greedy to a state-of-the-art vehicle-routing solver, compared live, with every d
 <a href="https://pavansky.github.io/fab-dispatch/"><img alt="Documentation" src="https://img.shields.io/badge/Docs-guide,_architecture,_API-020202?style=for-the-badge&logo=materialformkdocs&logoColor=white" /></a>
 
 [![CI](https://github.com/pavansky/fab-dispatch/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pavansky/fab-dispatch/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/pavansky/fab-dispatch/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/pavansky/fab-dispatch/actions/workflows/codeql.yml)
 [![Docs](https://github.com/pavansky/fab-dispatch/actions/workflows/docs.yml/badge.svg?branch=main)](https://pavansky.github.io/fab-dispatch/)
 [![Uptime](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml)
 [![Release](https://img.shields.io/github/v/release/pavansky/fab-dispatch?color=020202)](CHANGELOG.md)
@@ -149,7 +150,7 @@ cd frontend && npm install && npm run dev
 make start                       # same as python3 run.py
 make check                       # everything CI checks, locally
 make docs                        # build the documentation site into site/
-docker compose up --build        # production-like: Postgres + Qdrant + API + nginx on :8080
+docker compose up --build        # production-like: Postgres + Qdrant + API + nginx on :8080 (demo sign-in)
 ```
 
 </details>
@@ -405,11 +406,14 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
 
 - **Branch protection:** `main` only accepts changes that pass CI; `production` can't be force-pushed
   or deleted, and only moves forward through a release.
-- **CI** on every push and PR: ruff lint and format, API tests with a 90% coverage floor (Postgres
-  included), Python 3.11/3.12/3.14, Postgres migrations, ESLint, component tests with coverage floors,
-  Playwright end-to-end on desktop and phone, build, `pip-audit` + `npm audit`, Docker images.
+- **CI** on every push and PR: ruff and ESLint, **CodeQL** security analysis, API tests with a 90%
+  coverage floor on Python 3.11/3.12/3.14 and Postgres, component tests with coverage floors,
+  Playwright end-to-end on desktop and phone with WCAG audits, `pip-audit` + `npm audit`,
+  **dependency review** (no vulnerable or GPL-family additions), the **full Docker stack started and
+  signed into**, **Trivy** image scans, **actionlint**, and Conventional Commits.
 - **Release:** pushing a tag re-runs CI on that exact commit, requires it to be on `main` (UAT-tested),
-  fast-forwards the `production` branch, and publishes release notes from the changelog.
+  publishes **signed images to GHCR** with an SBOM and build provenance, fast-forwards `production`,
+  **waits until production serves the new version**, then publishes release notes from the changelog.
 - **Smoke tests** after every deployment: healthy, schema current, real auth (never demo).
 - **Rollback:** promote the previous deployment in Vercel; migrations are additive so it keeps working.
 

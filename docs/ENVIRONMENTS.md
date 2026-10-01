@@ -17,22 +17,52 @@ flowchart LR
   F[feature branch] -->|pull request: CI + preview deploy| M[main]
   M -->|auto deploy| U[UAT]
   U -->|key users sign off| T[tag vX.Y.Z]
-  T -->|Release workflow: CI again, must be on main| P[production branch]
+  T -->|Release workflow: CI again, must be on main| I[signed images on GHCR]
+  I --> P[production branch]
   P -->|auto deploy| PR[Production]
+  PR -->|serves the new release?| R[GitHub release]
 ```
 
-1. **Develop** on a short-lived branch. Open a pull request: CI runs (lint, format, tests on Python
-   3.11/3.12/3.14, Postgres store and migrations, coverage ≥ 85%, frontend lint/tests/build,
-   dependency audit, Docker build) and Vercel builds a preview.
+1. **Develop** on a short-lived branch. Open a pull request: CI runs every check in the
+   [pipeline table](#pipeline) below and Vercel builds a preview.
 2. **Merge to `main`**: UAT redeploys automatically. Its migrations run on the UAT database first,
    so a bad migration is caught there, not in production.
 3. **Sign off in UAT** with the fab's key users. Add the release notes under a new version
    heading in `CHANGELOG.md`.
 4. **Release**: `git tag -a v2.1.0 -m v2.1.0 && git push origin v2.1.0`. The *Release* workflow re-runs CI
-   on that exact commit, refuses tags that aren't on `main`, fast-forwards `production`, and
-   publishes a GitHub release from the changelog. Vercel deploys production.
+   on that exact commit, refuses tags that aren't on `main`, publishes the images to GHCR (SBOM,
+   signed provenance, vulnerability scan), fast-forwards `production`, waits until production
+   reports the new release, and only then publishes the GitHub release from the changelog.
 5. **Smoke test**: every successful deployment (preview, UAT, production) is checked automatically:
    `/api/health` must report `status: ok` and `schema_ok: true`, and auth must be `supabase`, never demo.
+
+## Pipeline
+
+| Stage | Check | Fails the build when |
+|---|---|---|
+| Code | ruff lint and format, ESLint | any finding |
+| Code | CodeQL (Python, JavaScript; `security-extended`) | a security finding; also weekly on old code |
+| Tests | pytest on Python 3.11, 3.12, 3.14 and against Postgres 16 | any failure; API coverage < 90% |
+| Tests | Vitest component tests | any failure; UI coverage below its floors |
+| Tests | Playwright end-to-end, desktop and phone, with axe WCAG 2.1 AA audits | any failure or violation |
+| Tests | Assistant evaluation (job summary) | wrong article cited or off-topic answered |
+| Supply chain | `pip-audit`, `npm audit` | a known vulnerability (npm: high and above) |
+| Supply chain | Dependency review (pull requests) | a new dependency with a high vulnerability or a GPL/AGPL/SSPL license |
+| Images | Build, start the full stack, sign in, scan with Trivy | the stack doesn't serve the app, or a fixable critical/high CVE |
+| Workflows | actionlint with shellcheck | a broken workflow or shell bug |
+| Hygiene | Conventional Commits, single author (pull requests) | a non-conventional commit or a co-author trailer |
+| Release | Images to GHCR with SBOM and signed provenance; scan | a fixable critical/high CVE in the published image |
+| Release | Production serves the tagged release, healthy, schema current | it doesn't within 10 minutes |
+| Deploy | Smoke test on every deployment | unhealthy, stale schema, demo auth, or app tables open to the public API |
+| Ongoing | Uptime every 30 minutes | production down: opens an incident issue, closes it on recovery |
+
+Every job has a timeout. `main` requires the CI, CodeQL, workflow, image and hygiene checks.
+
+Verify a published image's provenance:
+
+```bash
+gh attestation verify oci://ghcr.io/pavansky/fab-dispatch-api:latest -R pavansky/fab-dispatch
+```
 
 ## Rollback
 
