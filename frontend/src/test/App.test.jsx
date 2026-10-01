@@ -203,3 +203,22 @@ describe('views', () => {
     expect(screen.getByRole('button', { name: 'Restore all 1 engineers' })).toBeInTheDocument()
   })
 })
+
+describe('guest access', () => {
+  const supabaseConfig = (guest_role) => ({ mode: 'supabase', supabase_url: 'https://example.supabase.co', supabase_publishable_key: 'sb_publishable_test', guest_role })
+
+  it('offers a one-click guest sign-in when guests are welcome', async () => {
+    mockApi({ ...workspaceRoutes(), 'GET /auth/config': supabaseConfig('dispatcher') })
+    renderApp()
+    expect(await screen.findByRole('button', { name: 'Try it as a guest' })).toBeEnabled()
+    expect(screen.getByText(/Guests get full dispatcher access/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Work email')).toBeInTheDocument() // email still available
+  })
+
+  it('hides it when guest access is off', async () => {
+    mockApi({ ...workspaceRoutes(), 'GET /auth/config': supabaseConfig(null) })
+    renderApp()
+    expect(await screen.findByLabelText('Work email')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Try it as a guest' })).not.toBeInTheDocument()
+  })
+})

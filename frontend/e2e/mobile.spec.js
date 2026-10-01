@@ -1,7 +1,9 @@
 // Phone layout (Pixel 7 viewport, touch): drawer controls and no sideways scrolling.
 import { expect, test } from './fixtures.js'
 
-const noSidewaysScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
+// Compare with the device's screen, not innerWidth: on phones the layout viewport grows to fit
+// overflowing content, so innerWidth would hide exactly the bug this checks for.
+const noSidewaysScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= screen.width + 1)
 
 test('controls live in a drawer that opens and closes', async ({ page, signIn }) => {
   await signIn()
@@ -44,4 +46,16 @@ test('the top bar fits, and theme and sign-out stay reachable from the user menu
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await menu.getByRole('menuitem', { name: 'Sign out' }).tap()
   await expect(page.getByRole('button', { name: 'Continue as Dispatcher' })).toBeVisible()
+})
+
+test('the assistant fills the phone screen and answers', async ({ page, signIn }) => {
+  await signIn()
+  await page.getByRole('button', { name: 'Ask the assistant' }).tap()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  const box = await panel.boundingBox()
+  expect(box.width).toBeGreaterThanOrEqual(page.viewportSize().width - 1)
+  await panel.getByRole('button', { name: 'Which jobs are unassigned?' }).tap()
+  await expect(panel.getByRole('list', { name: 'Conversation' }).getByText(/unassigned|serves every job/).first()).toBeVisible()
+  await panel.getByRole('button', { name: 'Close assistant' }).tap()
+  await expect(panel).toHaveCount(0)
 })

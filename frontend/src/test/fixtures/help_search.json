@@ -1,0 +1,45 @@
+{
+ "query": "idle wait",
+ "results": [
+  {
+   "slug": "metrics",
+   "title": "Metrics reference",
+   "heading": "Speed and effort",
+   "anchor": "speed-and-effort",
+   "snippet": "- **Response to tool-downs** (\u2193, min): mean time from a tool-down's window opening to an engineer   starting work on it. - **Walking per job** (\u2193, m): metres walked per job served.\u2026",
+   "score": 0.9835
+  },
+  {
+   "slug": "constraints-and-weights",
+   "title": "Constraints and cost weights",
+   "heading": "Soft constraints: the cost weights",
+   "anchor": "soft-constraints-the-cost-weights",
+   "snippet": "Everything else is a cost, in points. The **Cost weights** sliders set how much each one matters, and every strategy re-solves as you drag.  | Weight | Default | Charged | |---|---\u2026",
+   "score": 0.9052
+  },
+  {
+   "slug": "views",
+   "title": "The six views",
+   "heading": "Schedule",
+   "anchor": "schedule",
+   "snippet": "A timeline per engineer for the chosen strategy: walking, idle waiting and hands-on work, in time order. Useful for spotting idle gaps and overloaded engineers.",
+   "score": 0.5389
+  },
+  {
+   "slug": "assistant",
+   "title": "The assistant",
+   "heading": "What it can answer",
+   "anchor": "what-it-can-answer",
+   "snippet": "- **About your shift:** *Why is J006 unassigned?* \u00b7 *What is E03 doing?* \u00b7 *Why is PyVRP   recommended?* \u00b7 *Compare Greedy and Hungarian.* - **About the app:** *How do I report a t\u2026",
+   "score": 0.4339
+  },
+  {
+   "slug": "strategies",
+   "title": "The five strategies",
+   "heading": "PyVRP",
+   "anchor": "pyvrp",
+   "snippet": "A state-of-the-art vehicle-routing solver (iterated local search, C++ core), warm-started from Regret-2. The **lowest operating cost at full scale**, mostly by cutting idle wait.",
+   "score": 0.42
+  }
+ ]
+}

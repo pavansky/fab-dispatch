@@ -1,0 +1,22 @@
+{
+ "answer": "Turn on **Tap floor to report a bottleneck down** and click inside a tool area. The job enters the\nshift with a 45-minute response window, the plan re-optimises, and everyone gets an alert.",
+ "intent": "docs",
+ "citations": [
+  {
+   "slug": "live-dispatch",
+   "title": "Live dispatch",
+   "heading": "Report a bottleneck down",
+   "anchor": "report-a-bottleneck-down"
+  }
+ ],
+ "actions": [
+  {
+   "label": "Read: Live dispatch",
+   "kind": "help",
+   "target": "live-dispatch#report-a-bottleneck-down"
+  }
+ ],
+ "suggestions": [],
+ "grounded": true,
+ "provider": "local"
+}

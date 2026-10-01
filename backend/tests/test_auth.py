@@ -130,3 +130,52 @@ def test_supabase_tokens_map_roles_and_fabs():
     )
     with pytest.raises(jwt.InvalidIssuerError):
         _verify_supabase(bad, s)
+
+
+def _anonymous_token(s: Settings, extra: dict | None = None) -> str:
+    claims = {
+        "sub": "8f2c1e9a-0000-4000-8000-000000000001",
+        "is_anonymous": True,
+        "aud": "authenticated",
+        "iss": "https://abc.supabase.co/auth/v1",
+        "exp": time.time() + 60,
+        **(extra or {}),
+    }
+    return jwt.encode(claims, s.supabase_jwt_secret)
+
+
+@pytest.mark.parametrize("guest_role", ["viewer", "dispatcher"])
+def test_guests_get_the_configured_role_and_a_label_not_an_email(guest_role):
+    s = Settings(
+        auth_mode="supabase",
+        supabase_url="https://abc.supabase.co",
+        supabase_jwt_secret="super-secret-jwt-key-for-tests-only-123456",
+        guest_role=guest_role,
+    )
+    u = _verify_supabase(_anonymous_token(s), s)
+    assert (u.role, u.provider, u.email) == (guest_role, "guest", "guest-8f2c1e")
+    assert u.fabs == s.default_fabs
+
+
+def test_guests_cannot_raise_their_own_role_and_can_be_refused():
+    s = Settings(
+        auth_mode="supabase",
+        supabase_url="https://abc.supabase.co",
+        supabase_jwt_secret="super-secret-jwt-key-for-tests-only-123456",
+        guest_role="viewer",
+        dispatcher_emails=["anyone@x.com"],
+    )
+    sneaky = _anonymous_token(s, {"email": "anyone@x.com", "app_metadata": {"role": "dispatcher"}})
+    assert _verify_supabase(sneaky, s).role == "viewer"
+    with pytest.raises(ValueError, match="guest access is disabled"):
+        _verify_supabase(_anonymous_token(s), Settings(**{**s.model_dump(), "guest_role": "none"}))
+
+
+def test_auth_config_tells_the_ui_whether_guests_are_welcome(monkeypatch):
+    from app.routes import auth as auth_routes
+
+    base = {"auth_mode": "supabase", "supabase_url": "https://abc.supabase.co", "supabase_publishable_key": "pk"}
+    monkeypatch.setattr(auth_routes, "get_settings", lambda: Settings(**base, guest_role="dispatcher"))
+    assert auth_routes.auth_config()["guest_role"] == "dispatcher"
+    monkeypatch.setattr(auth_routes, "get_settings", lambda: Settings(**base, guest_role="none"))
+    assert auth_routes.auth_config()["guest_role"] is None

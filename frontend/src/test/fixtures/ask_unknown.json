@@ -1,0 +1,25 @@
+{
+ "answer": "I don't know that one. I only answer from the help articles and the shift on your screen, and I couldn't find anything that covers it. Try rephrasing, or browse help.",
+ "intent": "unknown",
+ "citations": [
+  {
+   "slug": "benchmark",
+   "title": "Benchmark and optimality",
+   "heading": "Distance from the proven optimum",
+   "anchor": "distance-from-the-proven-optimum"
+  },
+  {
+   "slug": "benchmark",
+   "title": "Benchmark and optimality",
+   "heading": "Run a benchmark",
+   "anchor": "run-a-benchmark"
+  }
+ ],
+ "actions": [],
+ "suggestions": [
+  "What does idle wait mean?",
+  "How do I report a tool-down?"
+ ],
+ "grounded": true,
+ "provider": "local"
+}
