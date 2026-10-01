@@ -1,5 +1,6 @@
 import { ALGO_ORDER, ALGO_SHORT } from '../lib/metrics.js'
 import { FAMILY_LABEL, PRIORITY, REJECTION_LABEL, clock, fmt } from '../lib/format.js'
+import RepairHistory from './RepairHistory.jsx'
 
 function JobView({ job, results, active, onSelect }) {
   return (
@@ -15,6 +16,7 @@ function JobView({ job, results, active, onSelect }) {
           <dt>Floor position</dt><dd className="num">{fmt(job.x, 0)} m E, {fmt(job.y, 0)} m N</dd>
         </dl>
       </div>
+      <RepairHistory job={job} />
       {ALGO_ORDER.map((key) => {
         const r = results.find((x) => x.algorithm === key)
         if (!r) return null

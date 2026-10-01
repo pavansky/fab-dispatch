@@ -13,13 +13,17 @@ export const METRICS = {
   runtime_ms: { label: 'Solve time', unit: 'ms', better: 'min' },
 }
 
-export const ALGO_ORDER = ['greedy', 'hungarian', 'regret']
-export const ALGO_SHORT = { greedy: 'Greedy', hungarian: 'Hungarian', regret: 'Regret-2' }
+export const ALGO_ORDER = ['greedy', 'hungarian', 'regret', 'alns', 'pyvrp']
+export const ALGO_SHORT = { greedy: 'Greedy', hungarian: 'Hungarian', regret: 'Regret-2', alns: 'ALNS', pyvrp: 'PyVRP' }
 export const ALGO_BLURB = {
   greedy: 'Jobs in priority → deadline order; each takes the cheapest engineer. Never revisits a choice.',
   hungarian: 'Optimal engineer × job matching per round (Kuhn–Munkres), repeated until no feasible pair is left.',
   regret: 'Places the job with most to lose first (largest best-vs-second-best gap). Protects scarce certifications.',
+  alns: 'Adaptive large neighbourhood search: destroy and repair the plan hundreds of times, keeping what works. Optimises the exact objective, incl. balance.',
+  pyvrp: 'State-of-the-art iterated local search (PyVRP, C++ core). Searches tens of thousands of route changes per second.',
 }
+
+export const ALGO_KIND = { greedy: 'Constructive', hungarian: 'Assignment', regret: 'Constructive', alns: 'Metaheuristic', pyvrp: 'Metaheuristic' }
 
 export function bestOf(results, key) {
   const vals = results.map((r) => r.metrics[key])

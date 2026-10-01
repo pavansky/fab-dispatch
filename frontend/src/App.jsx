@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { allocate, generateScenario, getMeta } from './api.js'
+import { generateScenario, getMeta, predictDurations } from './api.js'
+import { usePlans } from './lib/usePlans.js'
 import { applyTheme, loadTheme } from './lib/theme.js'
 import { ALGO_ORDER, ALGO_SHORT } from './lib/metrics.js'
 import { FAMILY_LABEL, PRIORITY } from './lib/format.js'
@@ -9,6 +10,7 @@ import Overview from './components/Overview.jsx'
 import Schedule from './components/Schedule.jsx'
 import Workforce from './components/Workforce.jsx'
 import Benchmark from './components/Benchmark.jsx'
+import LiveShift from './components/LiveShift.jsx'
 
 const WEIGHTS = [
   ['priority_reward', 'Priority reward', 'per priority point served', 0, 200, 5],
@@ -17,21 +19,21 @@ const WEIGHTS = [
   ['overqualification', 'Over-qualification', 'per level above need', 0, 40, 1],
   ['workload_balance', 'Workload balance', 'per job already held', 0, 30, 1],
 ]
-const TABS = [['overview', 'Overview'], ['floor', 'Floor plan'], ['schedule', 'Schedule'], ['workforce', 'Workforce'], ['benchmark', 'Benchmark']]
+const TABS = [['overview', 'Overview'], ['floor', 'Floor plan'], ['schedule', 'Schedule'], ['workforce', 'Workforce'], ['live', 'Live dispatch'], ['benchmark', 'Benchmark']]
 const SLA = { 3: 45, 2: 120, 1: 240 }
 
 const familyAt = (areas, { x, y }) =>
   Object.entries(areas).find(([, [x0, y0, x1, y1]]) => x >= x0 && x <= x1 && y >= y0 && y <= y1)?.[0]
 
-function AlgoSwitch({ results, active, onChange }) {
+function AlgoSwitch({ results, active, onChange, pending = new Set() }) {
   return (
     <div className="seg" role="group" aria-label="Strategy">
       {ALGO_ORDER.map((a) => {
         const r = results.find((x) => x.algorithm === a)
-        if (!r) return null
         return (
-          <button key={a} aria-pressed={active === a} onClick={() => onChange(a)}>
-            <span className={`swatch sw-${a}`} />{ALGO_SHORT[a]}<span className="muted num">{r.metrics.assigned}/{r.metrics.jobs}</span>
+          <button key={a} aria-pressed={active === a} onClick={() => onChange(a)} disabled={!r}>
+            <span className={`swatch sw-${a}`} />{ALGO_SHORT[a]}
+            {pending.has(a) ? <span className="spinner" aria-label="solving" /> : r && <span className="muted num">{r.metrics.assigned}/{r.metrics.jobs}</span>}
           </button>
         )
       })}
@@ -45,9 +47,9 @@ export default function App() {
   const [scenario, setScenario] = useState(null)
   const [offShift, setOffShift] = useState(() => new Set())
   const [weights, setWeights] = useState(null)
-  const [results, setResults] = useState([])
-  const [tab, setTab] = useState('overview')
-  const [active, setActive] = useState('regret')
+  // A shared live-shift link (?shift=…) opens straight into Live dispatch.
+  const [tab, setTab] = useState(() => (new URLSearchParams(location.search).has('shift') ? 'live' : 'overview'))
+  const [active, setActive] = useState('pyvrp')
   const [goal, setGoal] = useState('cost')
   const [selection, setSelection] = useState(null)
   const [floorView, setFloorView] = useState('single')
@@ -56,7 +58,7 @@ export default function App() {
   const [newJob, setNewJob] = useState({ priority: 3, at: 120 })
   const [theme, setTheme] = useState(loadTheme)
   const [error, setError] = useState(null)
-  const [busy, setBusy] = useState(false)
+  const [predicted, setPredicted] = useState(null) // { original, changes } when history durations are on
 
   useEffect(() => { applyTheme(theme) }, [theme])
   useEffect(() => {
@@ -66,7 +68,7 @@ export default function App() {
   const regenerate = (p = params) => {
     setError(null)
     generateScenario(p)
-      .then((s) => { setScenario(s); setOffShift(new Set()); setSelection(null) })
+      .then((s) => { setScenario(s); setOffShift(new Set()); setSelection(null); setPredicted(null) })
       .catch((e) => setError(e.message))
   }
   useEffect(() => { regenerate() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -75,17 +77,21 @@ export default function App() {
     ...scenario, engineers: scenario.engineers.filter((e) => !offShift.has(e.id)),
   }), [scenario, offShift])
 
-  useEffect(() => {
-    if (!effective || !weights) return
-    const t = setTimeout(() => {
-      setBusy(true)
-      allocate(effective, weights)
-        .then((r) => { setResults(r); setError(null) })
-        .catch((e) => setError(e.message))
-        .finally(() => setBusy(false))
-    }, 180)
-    return () => clearTimeout(t)
-  }, [effective, weights])
+  const { results, pending, errors: planErrors, cacheInfo } = usePlans(effective, weights)
+  const busy = pending.size > 0
+
+  const togglePredicted = async (on) => {
+    if (!on) {
+      setScenario(predicted.original)
+      setPredicted(null)
+      return
+    }
+    try {
+      const out = await predictDurations(scenario)
+      setPredicted({ original: scenario, changes: out.changes })
+      setScenario(out.scenario)
+    } catch (e) { setError(e.message) }
+  }
 
   const select = (sel) => {
     setSelection(sel)
@@ -115,7 +121,7 @@ export default function App() {
     return <div className="loading">{error ? <>Can't reach the API ({error}). Is the backend running on port 8000?</> : 'Loading shift…'}</div>
   }
 
-  const activeResult = results.find((r) => r.algorithm === active)
+  const activeResult = results.find((r) => r.algorithm === active) ?? results[results.length - 1]
   const greedy = results.find((r) => r.algorithm === 'greedy')
   const unserved = activeResult?.unassigned.length ?? 0
 
@@ -131,7 +137,9 @@ export default function App() {
           <span className="chip">seed {params.seed}</span>
         </div>
         <span className="spacer" />
-        <span className="solve-state"><span className={`dot ${busy ? 'busy' : ''}`} />{busy ? 'Solving…' : `${results.length} strategies solved`}</span>
+        <span className="solve-state" aria-live="polite"><span className={`dot ${busy ? 'busy' : ''}`} />
+          {busy ? `Solving ${[...pending].map((a) => ALGO_SHORT[a]).join(', ')}…`
+            : `${results.length} strategies solved${Object.values(cacheInfo).some((c) => c !== 'miss') ? ' · cached' : ''}`}</span>
         <div className="seg" role="group" aria-label="Theme">
           {['system', 'light', 'dark'].map((m) => (
             <button key={m} aria-pressed={theme === m} onClick={() => setTheme(m)}>{m[0].toUpperCase() + m.slice(1)}</button>
@@ -188,13 +196,22 @@ export default function App() {
                 </label>
               </div>
             )}
+            <label className="toggle" style={{ marginTop: 12 }}>
+              <input type="checkbox" checked={Boolean(predicted)} onChange={(e) => togglePredicted(e.target.checked)} />
+              Plan with history-predicted durations
+            </label>
+            <p className="help" style={{ marginTop: 4 }}>
+              {predicted ? `${predicted.changes.filter((c) => c.predicted !== c.standard).length} tool-down durations replaced by the repair-history prediction (Qdrant nearest neighbours).`
+                : 'Swap each tool-down\'s standard estimate for what similar past repairs actually took.'}
+            </p>
             <p className="help" style={{ marginTop: 10 }}>Select an engineer to take them off shift (sick call, training) and see who absorbs their work.</p>
             {offShift.size > 0 && <button className="btn block" onClick={() => setOffShift(new Set())}>Restore all {offShift.size} engineers</button>}
           </details>
         </aside>
 
         <main className="content">
-          {error && <div className="error-bar" role="alert">{error}</div>}
+          {error && <div className="error-bar" role="alert">{error} <button className="btn ghost" onClick={() => setError(null)}>Dismiss</button></div>}
+          {Object.entries(planErrors).map(([a, msg]) => <div key={a} className="error-bar" role="alert">{ALGO_SHORT[a]}: {msg}</div>)}
           <nav className="nav" role="tablist">
             {TABS.map(([k, label]) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>
@@ -203,10 +220,10 @@ export default function App() {
             ))}
           </nav>
 
-          {results.length === 0 ? <div className="card empty">Solving…</div> : (
+          {tab === 'live' ? <LiveShift scenario={effective} weights={weights} areas={meta.areas} onError={setError} /> : results.length === 0 ? <div className="card empty"><span className="solving"><span className="spinner" />Solving the shift…</span></div> : (
             <>
               {tab === 'overview' && (
-                <Overview results={results} scenario={scenario} goal={goal} onGoal={setGoal}
+                <Overview results={results} pending={pending} scenario={scenario} goal={goal} onGoal={setGoal}
                   onPickAlgo={(a) => { setActive(a); setTab('floor') }} onSelect={select} />
               )}
 
@@ -214,7 +231,7 @@ export default function App() {
                 <div className="floor-layout">
                   <section className="card">
                     <div className="floor-toolbar">
-                      <AlgoSwitch results={results} active={active} onChange={setActive} />
+                      <AlgoSwitch results={results} active={active} onChange={setActive} pending={pending} />
                       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                         {floorView === 'single' && active !== 'greedy' && (
                           <label className="toggle"><input type="checkbox" checked={showChanges} onChange={(e) => setShowChanges(e.target.checked)} />Coverage changes vs Greedy</label>
@@ -232,9 +249,10 @@ export default function App() {
                           onToggleEngineer={toggleEngineer} addMode={addMode} onFloorClick={addJob} showChanges={showChanges} />
                       </div>
                     ) : (
-                      <div className="floor-wrap grid-3" style={{ gap: 12 }}>
+                      <div className="floor-wrap cards" style={{ gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
                         {ALGO_ORDER.map((a) => {
                           const r = results.find((x) => x.algorithm === a)
+                          if (!r) return <div key={a} className="skeleton" style={{ minHeight: 180 }} />
                           return (
                             <figure key={a} style={{ margin: 0 }}>
                               <figcaption style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, marginBottom: 6 }}>
@@ -266,7 +284,7 @@ export default function App() {
                 <div className="floor-layout">
                   <section className="card">
                     <div className="floor-toolbar">
-                      <AlgoSwitch results={results} active={active} onChange={setActive} />
+                      <AlgoSwitch results={results} active={active} onChange={setActive} pending={pending} />
                       <div className="legend-row" style={{ padding: 0 }}>
                         <span><i className="lg o3" style={{ borderRadius: 3 }} />Bottleneck</span>
                         <span><i className="lg o2" style={{ borderRadius: 3 }} />Tool down</span>
@@ -284,7 +302,7 @@ export default function App() {
 
               {tab === 'workforce' && activeResult && (
                 <>
-                  <div><AlgoSwitch results={results} active={active} onChange={setActive} /></div>
+                  <div><AlgoSwitch results={results} active={active} onChange={setActive} pending={pending} /></div>
                   <Workforce scenario={scenario} result={activeResult} offShift={offShift} onSelect={select} />
                   {activeResult.unassigned.length > 0 && (
                     <section className="card">

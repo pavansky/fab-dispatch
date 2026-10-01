@@ -21,7 +21,7 @@ function JobMark({ job, H }) {
 
 export default function FloorPlan({
   scenario, result, baseline, areas, selection, onSelect, offShift, onToggleEngineer,
-  addMode, onFloorClick, showChanges, compact = false,
+  addMode, onFloorClick, showChanges, compact = false, status,
 }) {
   const svgRef = useRef(null)
   const { tip, show, hide } = useTooltip()
@@ -122,7 +122,9 @@ export default function FloorPlan({
           const changed = showChanges && baseline && Boolean(baseOwner[j.id]) !== Boolean(a)
           const selected = selection?.type === 'job' && selection.id === j.id
           const dim = focusEng && !focusStops.includes(j.id) && !selected
-          const cls = ['f-job', `p${j.priority}`, a ? '' : 'un', changed ? 'changed' : '', selected ? 'sel' : '', dim ? 'dim' : ''].join(' ')
+          const st = status?.[j.id]
+          const cls = ['f-job', `p${j.priority}`, a ? '' : 'un', changed ? 'changed' : '', selected ? 'sel' : '', dim ? 'dim' : '',
+            st === 'done' ? 'done' : '', st === 'in_progress' ? 'active' : ''].join(' ')
           return (
             <g key={j.id} className={cls}
               onClick={(e) => { e.stopPropagation(); onSelect?.({ type: 'job', id: j.id }) }}

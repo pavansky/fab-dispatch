@@ -45,6 +45,7 @@ def meta(request: Request):
         "areas": AREAS,
         "default_weights": Weights().model_dump(),
         "store": get_store().kind,
+        "vector_index": "qdrant-server" if s.qdrant_url else "qdrant-embedded",
         "solver_budget": {"alns_iterations": s.alns_iterations, "pyvrp_iterations": s.pyvrp_iterations,
                           "time_cap_s": s.solver_time_limit_s},
     }

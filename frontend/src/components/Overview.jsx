@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ALGO_BLURB, ALGO_ORDER, ALGO_SHORT, METRICS, improvement } from '../lib/metrics.js'
+import { ALGO_BLURB, ALGO_KIND, ALGO_ORDER, ALGO_SHORT, METRICS, improvement } from '../lib/metrics.js'
 import { GOALS, disagreements, insights, recommend } from '../lib/analysis.js'
 import { PRIORITY, fmt } from '../lib/format.js'
 import MetricBars from './MetricBars.jsx'
@@ -14,7 +14,7 @@ function Delta({ k, value, base }) {
   return <span className={`delta ${gain > 0 ? 'good' : 'bad'}`}>{up ? '▲' : '▼'} {fmt(Math.abs(value - base))} vs Greedy</span>
 }
 
-export default function Overview({ results, scenario, goal, onGoal, onPickAlgo, onSelect }) {
+export default function Overview({ results, pending, scenario, goal, onGoal, onPickAlgo, onSelect }) {
   const [onlyCoverage, setOnlyCoverage] = useState(false)
   const reco = recommend(results, goal)
   const greedy = results.find((r) => r.algorithm === 'greedy')
@@ -26,7 +26,7 @@ export default function Overview({ results, scenario, goal, onGoal, onPickAlgo, 
     <>
       <section className="card reco" aria-label="Recommendation">
         <div>
-          <p className="eyebrow">Recommended dispatch plan</p>
+          <p className="eyebrow">Recommended dispatch plan{pending.size > 0 && <span className="solving" style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}><span className="spinner" />waiting for {[...pending].map((a) => ALGO_SHORT[a]).join(', ')}</span>}</p>
           <h2><span className={`swatch sw-${reco.winner.algorithm}`} style={{ width: 14, height: 14 }} />{reco.winner.label}</h2>
           <p>{reco.why}</p>
           {reco.tradeoff.length > 0 && <p className="tradeoff">Trade-off: {reco.tradeoff.join('; ')}.</p>}
@@ -42,17 +42,17 @@ export default function Overview({ results, scenario, goal, onGoal, onPickAlgo, 
         </div>
       </section>
 
-      <div className="grid-3">
+      <div className="cards algos">
         {ALGO_ORDER.map((key) => {
           const r = results.find((x) => x.algorithm === key)
-          if (!r) return null
+          if (!r) return <div key={key} className="card score skeleton" style={{ minHeight: 260 }} aria-label={`${ALGO_SHORT[key]} solving`} />
           return (
             <section key={key} className={`card score ${reco.winner.algorithm === key ? 'recommended' : ''}`}>
               <div className="score-h">
-                <span className={`swatch sw-${key}`} />{r.label}
+                <span className={`swatch sw-${key}`} style={{ marginTop: 4 }} />{ALGO_SHORT[key]}
                 {reco.winner.algorithm === key && <span className="badge brand">Recommended</span>}
               </div>
-              <p className="help">{ALGO_BLURB[key]}</p>
+              <p className="help"><span className="badge" style={{ marginRight: 6 }}>{ALGO_KIND[key]}</span>{ALGO_BLURB[key]}</p>
               <div className="kpis">
                 {KPI_KEYS.map((k) => (
                   <div key={k} className="kpi">

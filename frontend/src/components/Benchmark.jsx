@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { runBenchmark } from '../api.js'
+import { optimalityGap, runBenchmark } from '../api.js'
 import { ALGO_ORDER, ALGO_SHORT, METRICS } from '../lib/metrics.js'
 import { fmt } from '../lib/format.js'
 import { useTooltip, Tooltip } from './Tooltip.jsx'
@@ -36,18 +36,67 @@ function Strip({ runs, metric, min, max }) {
   )
 }
 
+function GapPanel({ weights }) {
+  const [gap, setGap] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const run = () => {
+    setBusy(true); setError(null)
+    optimalityGap({ seeds: 6, n_engineers: 4, n_jobs: 12, weights }).then(setGap).catch((e) => setError(e.message)).finally(() => setBusy(false))
+  }
+  return (
+    <section className="card">
+      <div className="card-h">
+        <div><h2>Distance from the proven optimum</h2>
+          <p>On small shifts (4 engineers, 12 jobs) the exact solver enumerates every feasible route and solves a set-partitioning MILP, so we know the true optimum. Gap = how much worse each strategy's total cost is.</p></div>
+        <button className="btn" onClick={run} disabled={busy}>{busy ? 'Solving to optimality…' : gap ? 'Re-run' : 'Measure gaps'}</button>
+      </div>
+      <div className="card-b">
+        {error && <div className="error-bar">{error}</div>}
+        {gap && (() => {
+          const max = Math.max(...Object.values(gap.mean_gap_pct), 1)
+          return ALGO_ORDER.map((a) => (
+            <div key={a} className="mbar" style={{ gridTemplateColumns: '90px 1fr 70px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span className={`swatch sw-${a}`} />{ALGO_SHORT[a]}</span>
+              <span className="track"><span className="fill" style={{ width: `${(gap.mean_gap_pct[a] / max) * 100}%`, background: `var(--s-${a})` }} /></span>
+              <span className="v">{fmt(gap.mean_gap_pct[a])}%</span>
+            </div>
+          ))
+        })()}
+        {gap && <p className="help" style={{ marginTop: 10 }}>Mean over {gap.rows.length} shifts. 0% = optimal. {gap.note}</p>}
+      </div>
+    </section>
+  )
+}
+
 export default function Benchmark({ meta, weights, size }) {
-  const [seeds, setSeeds] = useState(20)
+  const [seeds, setSeeds] = useState(10)
   const [metric, setMetric] = useState('objective')
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(null)
   const [error, setError] = useState(null)
 
-  const run = () => {
+  // One request per preset keeps each call short (serverless-friendly) and lets results
+  // appear progressively. Plans are cached server-side, so a re-run is near-instant.
+  const run = async () => {
     setBusy(true)
     setError(null)
-    runBenchmark({ seeds, weights, n_engineers: size.n_engineers, n_jobs: size.n_jobs, presets: Object.keys(meta.presets) })
-      .then(setData).catch((e) => setError(e.message)).finally(() => setBusy(false))
+    const runs = []
+    const presets = Object.keys(meta.presets)
+    try {
+      for (const [i, preset] of presets.entries()) {
+        setProgress(`${meta.presets[preset].label} (${i + 1}/${presets.length})`)
+        const out = await runBenchmark({ preset, seeds, weights, n_engineers: size.n_engineers, n_jobs: Math.min(size.n_jobs, 120) })
+        runs.push(...out.runs)
+        setData({ runs: [...runs] })
+      }
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+      setProgress(null)
+    }
   }
 
   const presets = Object.keys(meta.presets)
@@ -56,11 +105,11 @@ export default function Benchmark({ meta, weights, size }) {
       <section className="card">
         <div className="card-h">
           <div><h2>Benchmark across many shifts</h2>
-            <p>One scenario can be luck. This runs every strategy on {seeds} seeded shifts for each of the {presets.length} presets ({size.n_engineers} engineers, {size.n_jobs} jobs, current weights).</p></div>
+            <p>One scenario can be luck. This runs all five strategies on {seeds} seeded shifts for each of the {presets.length} presets ({size.n_engineers} engineers, {Math.min(size.n_jobs, 120)} jobs, current weights). Takes about {Math.round(seeds * presets.length * 2.2)} s the first time; cached after.</p></div>
         </div>
         <div className="card-b" style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap' }}>
           <label className="field" style={{ margin: 0, width: 140 }}><span>Seeds per preset</span>
-            <select className="input" value={seeds} onChange={(e) => setSeeds(+e.target.value)}>{[5, 10, 20, 30].map((n) => <option key={n}>{n}</option>)}</select>
+            <select className="input" value={seeds} onChange={(e) => setSeeds(+e.target.value)}>{[5, 10, 20].map((n) => <option key={n}>{n}</option>)}</select>
           </label>
           <label className="field" style={{ margin: 0, width: 240 }}><span>Distribution of</span>
             <select className="input" value={metric} onChange={(e) => setMetric(e.target.value)}>
@@ -68,11 +117,14 @@ export default function Benchmark({ meta, weights, size }) {
             </select>
           </label>
           <button className="btn primary" onClick={run} disabled={busy}>{busy ? 'Running…' : data ? 'Re-run benchmark' : 'Run benchmark'}</button>
+          {progress && <span className="solving"><span className="spinner" />{progress}</span>}
           {error && <span className="error-bar">{error}</span>}
         </div>
       </section>
 
-      {data && presets.map((p) => {
+      <GapPanel weights={weights} />
+
+      {data && presets.filter((p) => data.runs.some((r) => r.preset === p)).map((p) => {
         const runs = data.runs.filter((r) => r.preset === p)
         const vals = runs.map((r) => r.metrics[metric])
         const seedsRun = [...new Set(runs.map((r) => r.seed))]

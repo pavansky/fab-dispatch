@@ -9,6 +9,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
+from .knowledge import PM_TASKS, fault_symptom
 from .models import SKILLS, Engineer, Job, Scenario, Settings
 
 # x0, y0, x1, y1 in metres
@@ -86,12 +87,16 @@ def generate(seed: int = 7, n_engineers: int = 14, n_jobs: int = 45, preset: str
             earliest = rng.randint(0, 600)
             priority = 3 if critical else 2
             latest = earliest + (cfg.sla_critical if critical else cfg.sla_down)
-            duration = rng.choice([30, 45, 60, 90, 120])
+            # The planner's duration is the standard estimate for the fault code; the
+            # repair history (knowledge.py) can predict a better one from the symptom.
+            _, symptom, duration = fault_symptom(rng, fam)
             kind = "down"
         else:
             earliest = rng.randint(0, 420)
             priority, latest, duration, kind = 1, earliest + 240, rng.choice([90, 120, 180, 240]), "pm"
+            symptom = PM_TASKS[fam]
         min_level = rng.choice([2, 2, 3]) if fam == "litho" else rng.choice([1, 1, 2])
         jobs.append(Job(id=f"J{i + 1:03d}", x=x, y=y, skill=fam, min_level=min_level, priority=priority,
-                        kind=kind, earliest=earliest, latest=latest, duration=duration, tool=tool))
+                        kind=kind, earliest=earliest, latest=latest, duration=duration, tool=tool,
+                        symptom=symptom))
     return Scenario(engineers=engineers, jobs=jobs, settings=Settings())

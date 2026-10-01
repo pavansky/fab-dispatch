@@ -17,6 +17,13 @@ def get_store() -> Store:
 
 
 @lru_cache
+def get_repairs():
+    from .knowledge import RepairIndex
+
+    return RepairIndex(get_settings())
+
+
+@lru_cache
 def get_planning() -> PlanningService:
     return PlanningService(get_store(), get_settings())
 

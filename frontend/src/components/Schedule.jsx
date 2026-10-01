@@ -3,7 +3,7 @@ import { useTooltip, Tooltip } from './Tooltip.jsx'
 
 const pct = (m) => `${(m / SHIFT_MIN) * 100}%`
 
-export default function Schedule({ scenario, result, selection, onSelect, offShift }) {
+export default function Schedule({ scenario, result, selection, onSelect, offShift, now }) {
   const { tip, show, hide } = useTooltip()
   const jobs = Object.fromEntries(scenario.jobs.map((j) => [j.id, j]))
   const routes = Object.fromEntries(result.routes.map((r) => [r.tech_id, r]))
@@ -25,10 +25,11 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
         const off = offShift.has(e.id)
         const busy = r?.stops.reduce((s, x) => s + (x.end - x.start), 0) ?? 0
         return (
-          <div key={e.id} className={`g-row ${off ? 'off' : ''}`} role="row">
+          <div key={e.id} className={`g-row ${off ? 'off' : ''}`} role="row" style={!r && !off ? { opacity: 0.6 } : undefined}>
             <div className="g-name" onClick={() => onSelect({ type: 'engineer', id: e.id })}>{e.id}<small>{e.name}</small></div>
             <div className="g-track">
               {hours.map((h) => <span key={h} className="g-grid" style={{ left: pct(h) }} />)}
+              {now !== undefined && <span className="g-now" style={{ left: pct(now) }} />}
               {selJob && <span className="g-window" style={{ left: pct(selJob.earliest), width: pct(selJob.latest - selJob.earliest) }} />}
               {r?.stops.map((s, i) => {
                 const j = jobs[s.job_id]
@@ -39,7 +40,7 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
                     {walk > 0.5 && <span className="g-walk" style={{ left: pct(prevEnd), width: pct(walk) }} />}
                     {s.start > s.arrival + 0.5 && <span className="g-wait" style={{ left: pct(s.arrival), width: pct(s.start - s.arrival) }} />}
                     <button
-                      className={`g-bar p${j.priority} ${selection?.id === s.job_id ? 'sel' : ''}`}
+                      className={`g-bar p${j.priority} ${selection?.id === s.job_id ? 'sel' : ''} ${s.locked ? 'locked' : ''}`}
                       style={{ left: pct(s.start), width: pct(s.end - s.start) }}
                       onClick={() => onSelect({ type: 'job', id: s.job_id })}
                       onMouseMove={(ev) => show(ev, (
