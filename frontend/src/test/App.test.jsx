@@ -18,14 +18,15 @@ describe('sign-in', () => {
     expect(screen.getByRole('button', { name: 'Continue as Viewer' })).toBeEnabled()
   })
 
-  it('asks for an email, with a password option, when Supabase Auth is on', async () => {
+  it('asks only for an email when Supabase Auth is on: no password to have forgotten', async () => {
     mockApi({ ...workspaceRoutes(), 'GET /auth/config': { mode: 'supabase', supabase_url: 'https://example.supabase.co', supabase_publishable_key: 'sb_publishable_test' } })
     const user = renderApp()
-    expect(await screen.findByLabelText('Work email')).toBeRequired()
+    expect(await screen.findByLabelText('Email')).toBeRequired()
     expect(screen.queryByRole('button', { name: /Continue as/ })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Use a password instead' }))
-    expect(screen.getByLabelText('Password')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /password/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Email me a sign-in code' })).toHaveAccessibleDescription(/No password and no sign-up/)
+    expect(user).toBeTruthy()
   })
 
   it('signs in as a dispatcher, remembers the session and lands on the workspace', async () => {
@@ -212,13 +213,13 @@ describe('guest access', () => {
     renderApp()
     expect(await screen.findByRole('button', { name: 'Try it as a guest' })).toBeEnabled()
     expect(screen.getByText(/Guests get full dispatcher access/)).toBeInTheDocument()
-    expect(screen.getByLabelText('Work email')).toBeInTheDocument() // email still available
+    expect(screen.getByLabelText('Email')).toBeInTheDocument() // email still available
   })
 
   it('hides it when guest access is off', async () => {
     mockApi({ ...workspaceRoutes(), 'GET /auth/config': supabaseConfig(null) })
     renderApp()
-    expect(await screen.findByLabelText('Work email')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Email')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Try it as a guest' })).not.toBeInTheDocument()
   })
 })

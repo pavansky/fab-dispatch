@@ -4,8 +4,9 @@ import { loadTurnstile } from './lib/captcha.js'
 import { LINKS } from './lib/links.js'
 
 // Two sign-in modes behind one context:
-//  - supabase (UAT/prod): Supabase Auth in the browser (magic link or password); the API
-//    verifies Supabase's token. No password ever touches this app's servers.
+//  - supabase (UAT/prod): Supabase Auth in the browser, passwordless: a one-time code (and link)
+//    by email, or guest access. There is no sign-up and no password to forget: the first
+//    sign-in creates the account. The API verifies Supabase's token.
 //  - demo (local dev): one click as Dispatcher or Viewer; the API refuses this in production.
 
 const AuthContext = createContext(null)
@@ -94,10 +95,6 @@ export function AuthProvider({ children }) {
       const { error } = await supabase.current.auth.signInAnonymously(captchaToken ? { options: { captchaToken } } : undefined)
       if (error) throw error
     },
-    async signInWithPassword(email, password, captchaToken) {
-      const { error } = await supabase.current.auth.signInWithPassword({ email, password, ...(captchaToken && { options: { captchaToken } }) })
-      if (error) throw error
-    },
     async signOut() {
       store.set(null)
       await supabase.current?.auth.signOut()
@@ -135,8 +132,6 @@ function Captcha({ siteKey, onToken, resetRef }) {
 export function SignIn() {
   const auth = useAuth()
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [usePassword, setUsePassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState(null)
   const [sentTo, setSentTo] = useState(null) // email a link and code were sent to
@@ -181,20 +176,15 @@ export function SignIn() {
 
         {auth.config?.mode === 'supabase' && (
           <form onSubmit={(e) => { e.preventDefault(); run(async () => {
-            if (usePassword) await auth.signInWithPassword(email, password, captcha)
-            else { await auth.sendMagicLink(email, captcha); setSentTo(email); setMessage(`Check ${email} for a sign-in link, or enter the code from it.`) }
+            await auth.sendMagicLink(email, captcha); setSentTo(email); setCode('')
+            setMessage(`Code sent to ${email}. Enter it below, or open the link in the email.`)
           }) }}>
-            <label className="field" style={{ marginTop: 18 }}><span>Work email</span>
+            <label className="field" style={{ marginTop: 18 }}><span>Email</span>
               <input className="input" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </label>
-            {usePassword && (
-              <label className="field"><span>Password</span>
-                <input className="input" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-              </label>
-            )}
-            <button className={`btn block ${auth.config.guest_role ? '' : 'primary'}`} disabled={busy || needsCaptcha}>{usePassword ? 'Sign in' : 'Email me a sign-in link'}</button>
-            <button type="button" className="btn ghost block" style={{ marginTop: 6 }} onClick={() => setUsePassword((v) => !v)}>
-              {usePassword ? 'Use a magic link instead' : 'Use a password instead'}
+            <p className="help" id="signin-how">New or returning, it&rsquo;s the same step: we email you a one-time code. No password and no sign-up.</p>
+            <button className={`btn block ${auth.config.guest_role ? '' : 'primary'}`} disabled={busy || needsCaptcha} aria-describedby="signin-how">
+              {sentTo ? 'Send a new code' : 'Email me a sign-in code'}
             </button>
           </form>
         )}
