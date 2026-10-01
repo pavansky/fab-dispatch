@@ -6,5 +6,5 @@ newest CHANGELOG entry. COMMIT is the deployed git commit (Vercel sets VERCEL_GI
 
 import os
 
-APP_VERSION = "2.3.1"
+APP_VERSION = "2.4.0"
 COMMIT = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("GIT_COMMIT") or "local")[:7]
