@@ -15,7 +15,7 @@ from app.main import app
 from tests.conftest import auth_headers
 
 client = TestClient(app, headers=auth_headers("viewer"))
-EVAL = json.loads((Path(__file__).parent / "data" / "assistant_eval.json").read_text())
+EVAL = json.loads((Path(__file__).parent / "eval" / "assistant_eval.json").read_text())
 MIN_RETRIEVAL_ACCURACY = 0.9
 
 
