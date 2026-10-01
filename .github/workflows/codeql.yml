@@ -1,0 +1,34 @@
+name: CodeQL
+
+# Static security analysis of the API (Python) and the web app (JavaScript) on every pull
+# request, every push to main, and weekly, so new vulnerability queries reach old code too.
+# Findings appear under Security → Code scanning.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: codeql · ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions: { contents: read, security-events: write }
+    strategy:
+      fail-fast: false
+      matrix: { language: [python, javascript-typescript] }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v3
+        with: { languages: "${{ matrix.language }}", queries: security-extended }
+      - uses: github/codeql-action/analyze@v3
+        with: { category: "/language:${{ matrix.language }}" }

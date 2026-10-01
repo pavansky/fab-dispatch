@@ -19,6 +19,7 @@ jobs:
   backend-quality:
     name: backend · lint, format, coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Postgres here too, so coverage counts the production store, not only SQLite.
     services:
       postgres:
@@ -45,6 +46,7 @@ jobs:
   backend-matrix:
     name: backend · Python ${{ matrix.python }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix: { python: ["3.11", "3.12", "3.14"] }
@@ -59,6 +61,7 @@ jobs:
   backend-postgres:
     name: backend · Postgres store + migrations
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16-alpine
@@ -79,6 +82,7 @@ jobs:
   frontend:
     name: frontend · lint, test, build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults: { run: { working-directory: frontend } }
     steps:
       - uses: actions/checkout@v7
@@ -93,6 +97,7 @@ jobs:
   e2e:
     name: e2e · Playwright
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -120,6 +125,7 @@ jobs:
   security:
     name: security · dependency audit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -130,9 +136,81 @@ jobs:
       - run: npm ci --prefix frontend && npm audit --prefix frontend --audit-level=high
 
   docker:
-    name: images · build
+    name: images · build, run, scan
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     needs: [backend-quality, frontend, e2e]
     steps:
       - uses: actions/checkout@v7
-      - run: docker compose build
+      - name: Build and start the production-like stack
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - name: The stack serves the app, the API and sign-in
+        run: |
+          until curl -sf -o /dev/null localhost:8080/; do sleep 2; done
+          curl -sf localhost:8080/api/health | tee health.json
+          python3 -c "import json; h=json.load(open('health.json')); assert h['status']=='ok' and h['schema_ok'], h"
+          token=$(curl -sf -X POST localhost:8080/api/auth/demo -H 'content-type: application/json' \
+            -d '{"role":"dispatcher"}' | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+          curl -sf -o /dev/null -H "Authorization: Bearer $token" localhost:8080/api/fabs
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Scan images (critical and high vulnerabilities that have a fix)
+        run: |
+          for image in fab-dispatch-api:local fab-dispatch-ui:local; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.67.0 image \
+              --quiet --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$image"
+          done
+
+  workflows:
+    name: workflows · actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint GitHub Actions workflows (with shellcheck)
+        run: |
+          bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+
+  dependency-review:
+    name: security · dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: New dependencies must be free of known vulnerabilities and MIT-compatible
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: AGPL-1.0-only, AGPL-1.0-or-later, AGPL-3.0-only, AGPL-3.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, SSPL-1.0
+
+  pr-hygiene:
+    name: pr · conventional commits
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - name: Title and every commit follow Conventional Commits, one author per commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          types='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert'
+          pattern="^($types)(\([a-z0-9-]+\))?!?: .+"
+          bad=0
+          if ! grep -qE "$pattern" <<<"$TITLE"; then
+            echo "::warning::PR title is not a Conventional Commit: $TITLE (it isn't used for merges; commits are)"
+          fi
+          while read -r sha; do
+            subject=$(git log -1 --format=%s "$sha")
+            grep -qE "$pattern" <<<"$subject" || { echo "::error::$sha: '$subject' is not a Conventional Commit"; bad=1; }
+            if git log -1 --format=%B "$sha" | grep -qi '^co-authored-by:'; then
+              echo "::error::$sha has a Co-authored-by trailer; commits here have a single author"; bad=1
+            fi
+          done < <(git rev-list --no-merges "$BASE..$HEAD")
+          exit $bad
