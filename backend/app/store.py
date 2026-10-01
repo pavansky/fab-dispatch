@@ -18,6 +18,12 @@ What is stored:
 * ``idempotency_keys`` responses to mutating requests, so a retried request (flaky
                       network, double click) is answered once, not applied twice.
 * ``shift_presence``  who has a live shift open right now.
+* ``assignments``     read model: one row per known job of each live shift (engineer, times,
+                      status), projected from the shift state in the same transaction as each
+                      write. The JSON document stays the write model; this makes the domain
+                      queryable ("what did E03 work on?") without parsing documents.
+* ``rate_limits``     per-minute request counters shared by every instance, so a quota holds
+                      on serverless, where each instance would otherwise count alone.
 """
 
 from __future__ import annotations
@@ -28,6 +34,7 @@ import sqlite3
 import threading
 import zlib
 from abc import ABC, abstractmethod
+from collections.abc import Collection
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -153,6 +160,42 @@ MIGRATIONS: list[tuple[int, str, dict[str, list[str]]]] = [
         },
     ),
 ]
+MIGRATIONS.append(
+    (
+        5,
+        "assignments read model, shared rate limits",
+        {
+            "sqlite": [
+                """CREATE TABLE IF NOT EXISTS assignments (shift_id TEXT NOT NULL, job_id TEXT NOT NULL,
+               fab_id TEXT NOT NULL, engineer_id TEXT, status TEXT NOT NULL, skill TEXT NOT NULL,
+               priority INTEGER NOT NULL, tool TEXT NOT NULL DEFAULT '', start_min REAL, end_min REAL,
+               updated_at TEXT NOT NULL, PRIMARY KEY (shift_id, job_id))""",
+                "CREATE INDEX IF NOT EXISTS assignments_by_engineer ON assignments (fab_id, engineer_id, updated_at)",
+                """CREATE TABLE IF NOT EXISTS rate_limits (key TEXT NOT NULL, window_start INTEGER NOT NULL,
+               hits INTEGER NOT NULL, PRIMARY KEY (key, window_start))""",
+            ],
+            "postgres": [
+                """CREATE TABLE IF NOT EXISTS assignments (shift_id TEXT NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+               job_id TEXT NOT NULL, fab_id TEXT NOT NULL, engineer_id TEXT, status TEXT NOT NULL,
+               skill TEXT NOT NULL, priority INTEGER NOT NULL, tool TEXT NOT NULL DEFAULT '',
+               start_min DOUBLE PRECISION, end_min DOUBLE PRECISION,
+               updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (shift_id, job_id))""",
+                "CREATE INDEX IF NOT EXISTS assignments_by_engineer ON assignments (fab_id, engineer_id, updated_at DESC)",
+                """CREATE TABLE IF NOT EXISTS rate_limits (key TEXT NOT NULL, window_start BIGINT NOT NULL,
+               hits INTEGER NOT NULL, PRIMARY KEY (key, window_start))""",
+                "ALTER TABLE assignments ENABLE ROW LEVEL SECURITY",
+                "ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY",
+                """DO $$
+                BEGIN
+                  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')
+                     AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    REVOKE ALL ON assignments, rate_limits FROM anon, authenticated;
+                  END IF;
+                END $$""",
+            ],
+        },
+    )
+)
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 # Every table the app owns: schema-qualified on Postgres, and closed to the Supabase Data API.
 APP_TABLES = (
@@ -162,10 +205,14 @@ APP_TABLES = (
     "idempotency_keys",
     "shift_presence",
     "assistant_feedback",
+    "assignments",
+    "rate_limits",
     "schema_migrations",
 )
 PRESENCE_WINDOW_S = 30
 FEEDBACK_DAYS = 180  # assistant feedback retention
+DELETED_USER = "a deleted user"
+ASSIGNMENT_COLUMNS = ("job_id", "engineer_id", "status", "skill", "priority", "tool", "start_min", "end_min")
 
 
 class VersionConflict(Exception):
@@ -194,11 +241,34 @@ class Store(ABC):
     @abstractmethod
     def ping(self) -> bool: ...
     @abstractmethod
-    def create_shift(self, shift_id: str, state: dict, fab_id: str, created_by: str) -> None: ...
+    def create_shift(
+        self, shift_id: str, state: dict, fab_id: str, created_by: str, assignments: list[dict] | None = None
+    ) -> None: ...
     @abstractmethod
-    def get_shift(self, shift_id: str) -> tuple[dict, int]: ...
+    def get_shift(self, shift_id: str, fabs: Collection[str] | None = None) -> tuple[dict, int]:
+        """The shift's state and version. ``fabs`` scopes the read in SQL to the caller's fabs
+        (None = unscoped, for trusted internal use): a shift in another fab is NotFound."""
+
     @abstractmethod
-    def save_shift(self, shift_id: str, state: dict, expected_version: int) -> int: ...
+    def save_shift(
+        self, shift_id: str, state: dict, expected_version: int, assignments: list[dict] | None = None
+    ) -> int:
+        """Version-checked write. ``assignments`` replaces the shift's read-model rows in the
+        same transaction, so the read model never disagrees with the document."""
+
+    @abstractmethod
+    def shift_assignments(self, shift_id: str) -> list[dict]: ...
+    @abstractmethod
+    def engineer_assignments(self, fab_id: str, engineer_id: str, limit: int = 100) -> list[dict]: ...
+    @abstractmethod
+    def hit_rate(self, key: str, window_s: int = 60) -> int:
+        """Count one request against ``key`` in the current window; return the window's total."""
+
+    @abstractmethod
+    def delete_user_data(self, user_id: str, email: str) -> dict[str, int]:
+        """Erase a user's personal data: their feedback, presence and pending replays are
+        deleted; their email in shift history is replaced, keeping the audit trail's shape."""
+
     @abstractmethod
     def list_shifts(self, fab_id: str, limit: int = 20) -> list[dict]: ...
     @abstractmethod
@@ -225,6 +295,10 @@ class Store(ABC):
 
     @abstractmethod
     def feedback_stats(self, days: int = 30) -> list[dict]: ...
+
+    def delete_auth_user(self, user_id: str) -> bool:
+        """Remove the sign-in account itself, where the store also holds accounts (Supabase)."""
+        return False
 
     def init_schema(self) -> None:
         """Alias kept for call sites written before versioned migrations."""
@@ -280,29 +354,120 @@ class SQLiteStore(Store):
     def ping(self) -> bool:
         return self._q("SELECT 1")[0][0] == 1
 
-    def create_shift(self, shift_id: str, state: dict, fab_id: str, created_by: str) -> None:
+    def _project(self, shift_id: str, fab_id: str, rows: list[dict]) -> None:
+        """Replace the shift's read-model rows. Caller holds the lock inside a transaction."""
+        self._conn.execute("DELETE FROM assignments WHERE shift_id = ?", (shift_id,))
         now = _now()
-        self._q(
-            "INSERT INTO shifts (id, version, created_at, updated_at, state, fab_id, created_by) "
-            "VALUES (?, 1, ?, ?, ?, ?, ?)",
-            (shift_id, now, now, json.dumps(state), fab_id, created_by),
+        self._conn.executemany(
+            "INSERT INTO assignments (shift_id, fab_id, updated_at, " + ", ".join(ASSIGNMENT_COLUMNS) + ") "
+            "VALUES (?, ?, ?, " + ", ".join("?" * len(ASSIGNMENT_COLUMNS)) + ")",
+            [(shift_id, fab_id, now, *(r[c] for c in ASSIGNMENT_COLUMNS)) for r in rows],
         )
 
-    def get_shift(self, shift_id: str) -> tuple[dict, int]:
-        rows = self._q("SELECT state, version FROM shifts WHERE id = ?", (shift_id,))
+    def create_shift(
+        self, shift_id: str, state: dict, fab_id: str, created_by: str, assignments: list[dict] | None = None
+    ) -> None:
+        now = _now()
+        with self._lock:
+            self._conn.execute("BEGIN")
+            try:
+                self._conn.execute(
+                    "INSERT INTO shifts (id, version, created_at, updated_at, state, fab_id, created_by) "
+                    "VALUES (?, 1, ?, ?, ?, ?, ?)",
+                    (shift_id, now, now, json.dumps(state), fab_id, created_by),
+                )
+                if assignments is not None:
+                    self._project(shift_id, fab_id, assignments)
+                self._conn.execute("COMMIT")
+            except Exception:
+                self._conn.execute("ROLLBACK")
+                raise
+
+    def get_shift(self, shift_id: str, fabs: Collection[str] | None = None) -> tuple[dict, int]:
+        sql, args = "SELECT state, version FROM shifts WHERE id = ?", [shift_id]
+        if fabs is not None and "*" not in fabs:
+            sql += f" AND fab_id IN ({', '.join('?' * len(fabs))})" if fabs else " AND 0"
+            args += list(fabs)
+        rows = self._q(sql, tuple(args))
         if not rows:
             raise NotFound(shift_id)
         return json.loads(rows[0]["state"]), rows[0]["version"]
 
-    def save_shift(self, shift_id: str, state: dict, expected_version: int) -> int:
+    def save_shift(
+        self, shift_id: str, state: dict, expected_version: int, assignments: list[dict] | None = None
+    ) -> int:
         with self._lock:
-            cur = self._conn.execute(
-                "UPDATE shifts SET state = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
-                (json.dumps(state), _now(), shift_id, expected_version),
-            )
-            if cur.rowcount != 1:
-                raise VersionConflict(shift_id)
+            self._conn.execute("BEGIN")
+            try:
+                cur = self._conn.execute(
+                    "UPDATE shifts SET state = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ? "
+                    "RETURNING fab_id",
+                    (json.dumps(state), _now(), shift_id, expected_version),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise VersionConflict(shift_id)
+                if assignments is not None:
+                    self._project(shift_id, row["fab_id"], assignments)
+                self._conn.execute("COMMIT")
+            except Exception:
+                self._conn.execute("ROLLBACK")
+                raise
         return expected_version + 1
+
+    def shift_assignments(self, shift_id: str) -> list[dict]:
+        rows = self._q(
+            "SELECT " + ", ".join(ASSIGNMENT_COLUMNS) + " FROM assignments WHERE shift_id = ? ORDER BY job_id",
+            (shift_id,),
+        )
+        return [dict(r) for r in rows]
+
+    def engineer_assignments(self, fab_id: str, engineer_id: str, limit: int = 100) -> list[dict]:
+        rows = self._q(
+            "SELECT shift_id, updated_at, " + ", ".join(ASSIGNMENT_COLUMNS) + " FROM assignments "
+            "WHERE fab_id = ? AND engineer_id = ? ORDER BY updated_at DESC, start_min LIMIT ?",
+            (fab_id, engineer_id, limit),
+        )
+        return [dict(r) for r in rows]
+
+    def hit_rate(self, key: str, window_s: int = 60) -> int:
+        window = int(datetime.now(UTC).timestamp()) // window_s * window_s
+        rows = self._q(
+            "INSERT INTO rate_limits (key, window_start, hits) VALUES (?, ?, 1) "
+            "ON CONFLICT (key, window_start) DO UPDATE SET hits = hits + 1 RETURNING hits",
+            (key, window),
+        )
+        return rows[0]["hits"]
+
+    def delete_user_data(self, user_id: str, email: str) -> dict[str, int]:
+        replace_actor = (
+            "json_set(payload, '$.actor', ?, '$.message', replace(json_extract(payload, '$.message'), ?, ?))"
+        )
+        with self._lock:
+            out = {
+                "assistant_feedback": self._conn.execute(
+                    "DELETE FROM assistant_feedback WHERE user_id = ?", (user_id,)
+                ).rowcount,
+                "shift_presence": self._conn.execute(
+                    "DELETE FROM shift_presence WHERE user_id = ?", (user_id,)
+                ).rowcount,
+                "idempotency_keys": self._conn.execute(
+                    "DELETE FROM idempotency_keys WHERE key LIKE ?", (f"{user_id}:%",)
+                ).rowcount,
+                "shift_events": self._conn.execute(
+                    f"UPDATE shift_events SET payload = {replace_actor} WHERE json_extract(payload, '$.actor') = ?",
+                    (DELETED_USER, email, DELETED_USER, email),
+                ).rowcount,
+                "shifts": self._conn.execute(
+                    "UPDATE shifts SET created_by = ?, state = json_set(state, '$.created_by', ?) WHERE created_by = ?",
+                    (DELETED_USER, DELETED_USER, email),
+                ).rowcount,
+            }
+            self._conn.execute(
+                "UPDATE shifts SET state = json_set(state, '$.driver', NULL) WHERE json_extract(state, '$.driver') = ?",
+                (email,),
+            )
+        return out
 
     def list_shifts(self, fab_id: str, limit: int = 20) -> list[dict]:
         rows = self._q(
@@ -389,6 +554,12 @@ class SQLiteStore(Store):
             ).rowcount
             out["assistant_feedback"] = self._conn.execute(
                 "DELETE FROM assistant_feedback WHERE created_at < ?", (_ago(FEEDBACK_DAYS * 86400),)
+            ).rowcount
+            out["assignments"] = self._conn.execute(
+                "DELETE FROM assignments WHERE shift_id NOT IN (SELECT id FROM shifts)"
+            ).rowcount
+            out["rate_limits"] = self._conn.execute(
+                "DELETE FROM rate_limits WHERE window_start < ?", (int(datetime.now(UTC).timestamp()) - 3600,)
             ).rowcount
         return out
 
@@ -483,27 +654,122 @@ class PostgresStore(Store):
     def ping(self) -> bool:
         return self._q("SELECT 1 AS ok")[0]["ok"] == 1
 
-    def create_shift(self, shift_id: str, state: dict, fab_id: str, created_by: str) -> None:
-        self._q(
-            "INSERT INTO shifts (id, version, state, fab_id, created_by) VALUES (%s, 1, %s, %s, %s)",
-            (shift_id, json.dumps(state), fab_id, created_by),
-        )
+    def _project(self, cur, shift_id: str, fab_id: str, rows: list[dict]) -> None:
+        """Replace the shift's read-model rows on the caller's transaction."""
+        cur.execute(self._sql("DELETE FROM assignments WHERE shift_id = %s"), (shift_id,))
+        if rows:
+            cur.executemany(
+                self._sql(
+                    "INSERT INTO assignments (shift_id, fab_id, " + ", ".join(ASSIGNMENT_COLUMNS) + ") "
+                    "VALUES (%s, %s, " + ", ".join(["%s"] * len(ASSIGNMENT_COLUMNS)) + ")"
+                ),
+                [(shift_id, fab_id, *(r[c] for c in ASSIGNMENT_COLUMNS)) for r in rows],
+            )
 
-    def get_shift(self, shift_id: str) -> tuple[dict, int]:
-        rows = self._q("SELECT state, version FROM shifts WHERE id = %s", (shift_id,))
+    def create_shift(
+        self, shift_id: str, state: dict, fab_id: str, created_by: str, assignments: list[dict] | None = None
+    ) -> None:
+        with self._conn(autocommit=False) as c, c.cursor() as cur:
+            cur.execute(
+                self._sql("INSERT INTO shifts (id, version, state, fab_id, created_by) VALUES (%s, 1, %s, %s, %s)"),
+                (shift_id, json.dumps(state), fab_id, created_by),
+            )
+            if assignments is not None:
+                self._project(cur, shift_id, fab_id, assignments)
+            c.commit()
+
+    def get_shift(self, shift_id: str, fabs: Collection[str] | None = None) -> tuple[dict, int]:
+        if fabs is None or "*" in fabs:
+            rows = self._q("SELECT state, version FROM shifts WHERE id = %s", (shift_id,))
+        else:
+            rows = self._q(
+                "SELECT state, version FROM shifts WHERE id = %s AND fab_id = ANY(%s)", (shift_id, list(fabs))
+            )
         if not rows:
             raise NotFound(shift_id)
         return rows[0]["state"], rows[0]["version"]
 
-    def save_shift(self, shift_id: str, state: dict, expected_version: int) -> int:
-        rows = self._q(
-            "UPDATE shifts SET state = %s, version = version + 1, updated_at = now() "
-            "WHERE id = %s AND version = %s RETURNING version",
-            (json.dumps(state), shift_id, expected_version),
+    def save_shift(
+        self, shift_id: str, state: dict, expected_version: int, assignments: list[dict] | None = None
+    ) -> int:
+        with self._conn(autocommit=False) as c, c.cursor() as cur:
+            cur.execute(
+                self._sql(
+                    "UPDATE shifts SET state = %s, version = version + 1, updated_at = now() "
+                    "WHERE id = %s AND version = %s RETURNING version, fab_id"
+                ),
+                (json.dumps(state), shift_id, expected_version),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise VersionConflict(shift_id)
+            if assignments is not None:
+                self._project(cur, shift_id, row["fab_id"], assignments)
+            c.commit()
+        return row["version"]
+
+    def shift_assignments(self, shift_id: str) -> list[dict]:
+        return self._q(
+            "SELECT " + ", ".join(ASSIGNMENT_COLUMNS) + " FROM assignments WHERE shift_id = %s ORDER BY job_id",
+            (shift_id,),
         )
-        if not rows:
-            raise VersionConflict(shift_id)
-        return rows[0]["version"]
+
+    def engineer_assignments(self, fab_id: str, engineer_id: str, limit: int = 100) -> list[dict]:
+        rows = self._q(
+            "SELECT shift_id, updated_at, " + ", ".join(ASSIGNMENT_COLUMNS) + " FROM assignments "
+            "WHERE fab_id = %s AND engineer_id = %s ORDER BY updated_at DESC, start_min LIMIT %s",
+            (fab_id, engineer_id, limit),
+        )
+        return [{**r, "updated_at": r["updated_at"].isoformat()} for r in rows]
+
+    def hit_rate(self, key: str, window_s: int = 60) -> int:
+        rows = self._q(
+            "INSERT INTO rate_limits AS r (key, window_start, hits) "
+            "VALUES (%s, (extract(epoch FROM now())::bigint / %s) * %s, 1) "
+            "ON CONFLICT (key, window_start) DO UPDATE SET hits = r.hits + 1 RETURNING hits",
+            (key, window_s, window_s),
+        )
+        return rows[0]["hits"]
+
+    def delete_user_data(self, user_id: str, email: str) -> dict[str, int]:
+        out = {}
+        with self._conn(autocommit=False) as c, c.cursor() as cur:
+            for table, sql, args in (
+                ("assistant_feedback", "DELETE FROM assistant_feedback WHERE user_id = %s", (user_id,)),
+                ("shift_presence", "DELETE FROM shift_presence WHERE user_id = %s", (user_id,)),
+                ("idempotency_keys", "DELETE FROM idempotency_keys WHERE key LIKE %s", (f"{user_id}:%",)),
+                (
+                    "shift_events",
+                    "UPDATE shift_events SET payload = payload || jsonb_build_object('actor', %s::text, "
+                    "'message', replace(payload->>'message', %s, %s)) WHERE payload->>'actor' = %s",
+                    (DELETED_USER, email, DELETED_USER, email),
+                ),
+                (
+                    "shifts",
+                    "UPDATE shifts SET created_by = %s, state = state || jsonb_build_object('created_by', %s::text) "
+                    "WHERE created_by = %s",
+                    (DELETED_USER, DELETED_USER, email),
+                ),
+            ):
+                cur.execute(self._sql(sql), args)
+                out[table] = cur.rowcount
+            cur.execute(
+                self._sql("UPDATE shifts SET state = state || '{\"driver\": null}'::jsonb WHERE state->>'driver' = %s"),
+                (email,),
+            )
+            c.commit()
+        return out
+
+    def delete_auth_user(self, user_id: str) -> bool:
+        """On Supabase, remove the sign-in account itself (auth.users). False elsewhere."""
+        if not re.fullmatch(r"[0-9a-f-]{36}", user_id):
+            return False
+        with self._conn() as c, c.cursor() as cur:
+            cur.execute("SELECT to_regclass('auth.users') IS NOT NULL AS ok")
+            if not cur.fetchone()["ok"]:
+                return False
+            cur.execute("DELETE FROM auth.users WHERE id = %s::uuid", (user_id,))
+            return cur.rowcount == 1
 
     def list_shifts(self, fab_id: str, limit: int = 20) -> list[dict]:
         rows = self._q(
@@ -588,6 +854,11 @@ class PostgresStore(Store):
                     "assistant_feedback",
                     "DELETE FROM assistant_feedback WHERE created_at < now() - make_interval(days => %s)",
                     FEEDBACK_DAYS,
+                ),
+                (
+                    "rate_limits",
+                    "DELETE FROM rate_limits WHERE window_start < extract(epoch FROM now())::bigint - %s",
+                    3600,
                 ),
             ):
                 cur.execute(self._sql(sql), (arg,))
