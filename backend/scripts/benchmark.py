@@ -7,6 +7,7 @@ Three studies:
 2. optimality gap against the exact MILP on small shifts
 3. runtime scaling with problem size
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,9 +18,12 @@ from collections import defaultdict
 from app.algorithms import ALGORITHMS
 from app.algorithms.exact import run_exact
 from app.engine import allocate
-from app.generator import PRESETS, generate
+from app.fabs import get_profile
+from app.generator import generate
 from app.models import Weights
 from app.planner import Planner
+
+PRESETS = get_profile("fab1-300mm-logic").presets
 
 COLUMNS = [
     ("coverage_pct", "Coverage %"),

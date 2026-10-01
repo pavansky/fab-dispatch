@@ -1,0 +1,67 @@
+{
+  "id": "fab2-200mm-analog",
+  "name": "Fab 2 · 200mm analog & power",
+  "description": "Illustrative 200mm analog/power fab with diffusion furnaces and wet benches; photo is the constraint. 8-hour shifts.",
+  "floor": {"width": 300, "height": 180},
+  "shift": {"start_hour": 6, "length_min": 480},
+  "walk_m_per_min": 55,
+  "constraint_family": "photo",
+  "families": [
+    {"id": "photo", "label": "Photolithography", "prefix": "PHO", "area": [110, 60, 190, 120],
+     "pm_task": "scheduled stepper PM: lamp, reticle stage and alignment check",
+     "faults": {
+       "ALIGN": {"symptoms": ["alignment marks not found", "stepper alignment error", "overlay out of spec"],
+                 "causes": [{"cause": "reticle stage drift", "fix": "recalibrate reticle stage", "mean_min": 80, "sd_min": 15},
+                            {"cause": "alignment optics contaminated", "fix": "clean alignment optics", "mean_min": 50, "sd_min": 10}]},
+       "LAMP": {"symptoms": ["exposure dose low", "lamp intensity alarm", "illumination non-uniform"],
+                "causes": [{"cause": "mercury lamp at end of life", "fix": "replace i-line lamp", "mean_min": 60, "sd_min": 12},
+                           {"cause": "shutter timing fault", "fix": "replace shutter controller", "mean_min": 110, "sd_min": 20}]}}},
+    {"id": "diffusion", "label": "Diffusion & furnaces", "prefix": "FUR", "area": [10, 10, 100, 80],
+     "pm_task": "scheduled furnace PM: tube clean and thermocouple profile",
+     "faults": {
+       "TEMP": {"symptoms": ["furnace temperature profile out of spec", "zone overshoot alarm", "slow ramp to setpoint"],
+                "causes": [{"cause": "thermocouple drift", "fix": "replace and profile thermocouples", "mean_min": 120, "sd_min": 25},
+                           {"cause": "heater element failing", "fix": "replace heater element", "mean_min": 240, "sd_min": 40}]},
+       "BOAT": {"symptoms": ["boat elevator stalled", "wafer boat transfer error", "boat position alarm"],
+                "causes": [{"cause": "elevator belt worn", "fix": "replace elevator belt", "mean_min": 90, "sd_min": 15},
+                           {"cause": "position sensor misaligned", "fix": "realign position sensor", "mean_min": 45, "sd_min": 10}]}}},
+    {"id": "thinfilm", "label": "Thin film", "prefix": "TFM", "area": [200, 10, 290, 80],
+     "pm_task": "scheduled sputter PM: shields, target inspection and leak check",
+     "faults": {
+       "VAC": {"symptoms": ["chamber base pressure high", "leak check failed", "pump down too slow"],
+               "causes": [{"cause": "door seal leaking", "fix": "replace chamber door seal", "mean_min": 70, "sd_min": 15},
+                          {"cause": "cryo pump needs regeneration", "fix": "regenerate cryo pump", "mean_min": 150, "sd_min": 25}]},
+       "THK": {"symptoms": ["film thickness drift", "sheet resistance out of spec", "deposition rate unstable"],
+               "causes": [{"cause": "target erosion", "fix": "replace sputter target", "mean_min": 180, "sd_min": 30},
+                          {"cause": "power supply arcing", "fix": "service DC power supply", "mean_min": 100, "sd_min": 20}]}}},
+    {"id": "wet", "label": "Wet etch & clean", "prefix": "WET", "area": [10, 100, 100, 170],
+     "pm_task": "scheduled wet bench PM: bath change and filter replacement",
+     "faults": {
+       "CHEM": {"symptoms": ["bath concentration out of range", "etch rate drift on monitor", "chemical dispense alarm"],
+                "causes": [{"cause": "dispense pump failing", "fix": "replace dispense pump", "mean_min": 90, "sd_min": 15},
+                           {"cause": "bath exhausted early", "fix": "dump and refill bath", "mean_min": 40, "sd_min": 8}]},
+       "ROBOT": {"symptoms": ["wafer handler collision alarm", "cassette transfer error", "robot homing failed"],
+                 "causes": [{"cause": "end effector misaligned", "fix": "reteach robot positions", "mean_min": 60, "sd_min": 12},
+                            {"cause": "robot axis encoder fault", "fix": "replace axis encoder", "mean_min": 140, "sd_min": 25}]}}},
+    {"id": "test", "label": "Parametric test", "prefix": "PTS", "area": [200, 100, 290, 170],
+     "pm_task": "scheduled tester PM: probe card clean and calibration",
+     "faults": {
+       "PROBE": {"symptoms": ["probe contact resistance high", "yield drop on test wafers", "probe card alarm"],
+                 "causes": [{"cause": "probe tips contaminated", "fix": "clean probe card", "mean_min": 35, "sd_min": 8},
+                            {"cause": "probe card damaged", "fix": "swap probe card", "mean_min": 75, "sd_min": 15}]},
+       "CAL": {"symptoms": ["tester calibration failed", "measurement offset on reference", "SMU self-test error"],
+               "causes": [{"cause": "reference standard drifted", "fix": "recalibrate against new standard", "mean_min": 50, "sd_min": 10},
+                          {"cause": "SMU module failing", "fix": "replace SMU module", "mean_min": 110, "sd_min": 20}]}}}
+  ],
+  "presets": {
+    "normal": {"label": "Normal shift", "description": "Typical mix of PMs and tool-downs; staffing roughly matches load.",
+               "family_mix": {"photo": 0.2, "diffusion": 0.25, "thinfilm": 0.2, "wet": 0.2, "test": 0.15},
+               "constraint_engineer_share": 0.2, "down_share": 0.5, "sla_critical": 40, "sla_down": 120},
+    "photo_crunch": {"label": "Photo crunch", "description": "Stepper problems pile up while few engineers are certified on photo.",
+                     "family_mix": {"photo": 0.45, "diffusion": 0.2, "thinfilm": 0.15, "wet": 0.1, "test": 0.1},
+                     "constraint_engineer_share": 0.12, "down_share": 0.7, "sla_critical": 40, "sla_down": 120},
+    "excursion": {"label": "Excursion / surge", "description": "Mostly unplanned downs with tight response targets.",
+                  "family_mix": {"photo": 0.25, "diffusion": 0.25, "thinfilm": 0.2, "wet": 0.15, "test": 0.15},
+                  "constraint_engineer_share": 0.2, "down_share": 0.9, "sla_critical": 25, "sla_down": 60}
+  }
+}

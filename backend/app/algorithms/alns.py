@@ -24,6 +24,7 @@ It stops after a fixed number of iterations, with the time limit only as a safet
 so the same input always gives the same plan. Users don't see plans change on refresh,
 and results can be cached safely.
 """
+
 from __future__ import annotations
 
 import math
@@ -35,13 +36,14 @@ from ..planner import Planner
 from .base import Decision, decision
 from .regret import run_regret
 
-SCORES = (12.0, 6.0, 2.0)     # new global best, improved current, accepted worse
-REACTION = 0.2                # how fast operator weights follow recent success
-SEGMENT = 50                  # iterations between weight updates
+SCORES = (12.0, 6.0, 2.0)  # new global best, improved current, accepted worse
+REACTION = 0.2  # how fast operator weights follow recent success
+SEGMENT = 50  # iterations between weight updates
 
 
-def run_alns(p: Planner, runtime_s: float | None = None, seed: int = 0,
-             max_iterations: int | None = None) -> dict[str, Decision]:
+def run_alns(
+    p: Planner, runtime_s: float | None = None, seed: int = 0, max_iterations: int | None = None
+) -> dict[str, Decision]:
     if not p.open_jobs:
         return {}
     settings = get_settings()
@@ -95,8 +97,12 @@ def run_alns(p: Planner, runtime_s: float | None = None, seed: int = 0,
                 scores[k], uses[k] = 0.0, 0
 
     p.restore(best_snap)
-    p.meta["solver"] = {"iterations": it, "best_iteration": best_it, "hit_time_cap": it < max_iterations,
-                        "operator_weights": {k: round(v, 2) for k, v in weights.items()}}
+    p.meta["solver"] = {
+        "iterations": it,
+        "best_iteration": best_it,
+        "hit_time_cap": it < max_iterations,
+        "operator_weights": {k: round(v, 2) for k, v in weights.items()},
+    }
     return explain_final(p, f"ALNS kept this assignment: best plan found at iteration {best_it} of {it}.")
 
 
@@ -105,7 +111,7 @@ def explain_final(p: Planner, prefix: str) -> dict[str, Decision]:
     and at what cost, then put it back. Used by the whole-plan search methods."""
     out: dict[str, Decision] = {}
     for tid, route in p.routes.items():
-        for jid in route[len(p.frozen[tid].route):]:
+        for jid in route[len(p.frozen[tid].route) :]:
             scratch = p.clone()
             scratch.remove(jid)
             feasible, rejected = scratch.scan(jid)
@@ -172,7 +178,7 @@ def _route(p: Planner, rng: random.Random, q: int) -> None:
     candidates = [t for t, r in p.routes.items() if len(r) > len(p.frozen[t].route)]
     if candidates:
         tid = rng.choice(candidates)
-        for j in p.routes[tid][len(p.frozen[tid].route):]:
+        for j in p.routes[tid][len(p.frozen[tid].route) :]:
             p.remove(j)
 
 

@@ -8,6 +8,7 @@ os.environ.setdefault("FAB_LIVE_TIME_LIMIT_S", "0.1")
 os.environ.setdefault("FAB_DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("FAB_ENV", "test")
 os.environ.setdefault("FAB_SSE_WINDOW_S", "1")
+os.environ.setdefault("FAB_AUTH_MODE", "demo")
 import pytest
 
 from app.models import Engineer, Job, Scenario
@@ -28,3 +29,18 @@ def greedy_trap() -> Scenario:
             Job(id="J2", x=0, y=50, skill="etch", priority=2, earliest=0, latest=5, duration=60),
         ],
     )
+
+
+def auth_headers(role: str = "dispatcher") -> dict:
+    """Bearer header for a demo-mode user (tests run in demo auth mode)."""
+    from app.auth import issue_demo_token
+    from app.config import get_settings
+
+    return {"Authorization": f"Bearer {issue_demo_token(role, get_settings())}"}
+
+
+@pytest.fixture
+def fab1():
+    from app.fabs import get_profile
+
+    return get_profile("fab1-300mm-logic")

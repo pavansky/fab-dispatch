@@ -22,6 +22,7 @@ point. The one term it can't express is the convex workload-balance penalty, so 
 result is re-simulated and re-costed by our own planner. Every reported number therefore
 comes from the same engine the other algorithms use.
 """
+
 from __future__ import annotations
 
 import time
@@ -35,14 +36,14 @@ from ..planner import Planner
 from .base import Decision
 from .regret import run_regret
 
-T = 10        # time units per minute
-C = 100       # cost units per point
+T = 10  # time units per minute
+C = 100  # cost units per point
 FORBIDDEN = 10**9
 
 
-
-def run_pyvrp(p: Planner, runtime_s: float | None = None, max_iterations: int | None = None,
-              seed: int = 0) -> dict[str, Decision]:
+def run_pyvrp(
+    p: Planner, runtime_s: float | None = None, max_iterations: int | None = None, seed: int = 0
+) -> dict[str, Decision]:
     if not p.open_jobs:
         return {}
     settings = get_settings()
@@ -74,11 +75,18 @@ def run_pyvrp(p: Planner, runtime_s: float | None = None, max_iterations: int | 
     for j in jobs:
         # Duration cost also charges service minutes; add them back to the prize so they net out.
         prize = w.priority_reward * j.priority + w.wait_min * j.duration
-        clients.append(m.add_client(
-            m.add_location(j.x, j.y, name=j.id), delivery=[1], service_duration=round(j.duration * T),
-            tw_early=round(j.earliest * T), tw_late=round(j.latest * T),
-            prize=round(prize * C), required=False, name=j.id,
-        ))
+        clients.append(
+            m.add_client(
+                m.add_location(j.x, j.y, name=j.id),
+                delivery=[1],
+                service_duration=round(j.duration * T),
+                tw_early=round(j.earliest * T),
+                tw_late=round(j.latest * T),
+                prize=round(prize * C),
+                required=False,
+                name=j.id,
+            )
+        )
 
     # One profile per certification set keeps the matrix count small.
     profiles: dict[tuple, object] = {}
@@ -90,10 +98,17 @@ def run_pyvrp(p: Planner, runtime_s: float | None = None, max_iterations: int | 
         if capacity[e.id] <= 0 or start_time[e.id] >= e.shift_end:
             continue
         m.add_vehicle_type(
-            1, capacity=[capacity[e.id]], start_depot=starts[e.id], end_depot=sink,
-            tw_early=round(start_time[e.id] * T), start_late=round(start_time[e.id] * T),
-            tw_late=round(e.shift_end * T), unit_distance_cost=1,
-            unit_duration_cost=round(w.wait_min * C / T), profile=profiles[key], name=e.id,
+            1,
+            capacity=[capacity[e.id]],
+            start_depot=starts[e.id],
+            end_depot=sink,
+            tw_early=round(start_time[e.id] * T),
+            start_late=round(start_time[e.id] * T),
+            tw_late=round(e.shift_end * T),
+            unit_distance_cost=1,
+            unit_duration_cost=round(w.wait_min * C / T),
+            profile=profiles[key],
+            name=e.id,
         )
         vt_order.append(e.id)
     if not vt_order:
@@ -117,17 +132,24 @@ def run_pyvrp(p: Planner, runtime_s: float | None = None, max_iterations: int | 
             if ins is None:
                 continue  # infeasible under our exact rules (e.g. a FORBIDDEN arc); repaired below
             decisions[jid] = Decision(
-                tech_id=tech_id, cost=round(ins.cost, 2), breakdown=ins.breakdown,
-                explanation=(f"Placed by PyVRP iterated local search over the whole shift "
-                             f"({res.num_iterations} iterations) as stop "
-                             f"{len(p.routes[tech_id])} of {tech_id}'s route, at marginal cost {ins.cost:.1f}."),
+                tech_id=tech_id,
+                cost=round(ins.cost, 2),
+                breakdown=ins.breakdown,
+                explanation=(
+                    f"Placed by PyVRP iterated local search over the whole shift "
+                    f"({res.num_iterations} iterations) as stop "
+                    f"{len(p.routes[tech_id])} of {tech_id}'s route, at marginal cost {ins.cost:.1f}."
+                ),
             )
     # Anything PyVRP left out that still fits gets a regret-insertion pass.
     for jid, d in run_regret(p).items():
         d.explanation = "Added after PyVRP by regret repair: " + d.explanation
         decisions[jid] = d
-    p.meta["solver"] = {"iterations": res.num_iterations, "hit_time_cap": res.num_iterations < max_iterations,
-                        "runtime_ms": round((time.perf_counter() - t0) * 1000, 1)}
+    p.meta["solver"] = {
+        "iterations": res.num_iterations,
+        "hit_time_cap": res.num_iterations < max_iterations,
+        "runtime_ms": round((time.perf_counter() - t0) * 1000, 1),
+    }
     return decisions
 
 
@@ -138,7 +160,7 @@ def _warm_start(p: Planner, data, vt_order: list[str], client_names: list[str]) 
     index = {n: i for i, n in enumerate(client_names)}
     routes = []
     for vt, tech in enumerate(vt_order):
-        visits = [j for j in scratch.routes[tech][len(p.frozen[tech].route):] if j in index]
+        visits = [j for j in scratch.routes[tech][len(p.frozen[tech].route) :] if j in index]
         if visits:
             routes.append(Route(data, [Activity(ActivityType.CLIENT, index[j]) for j in visits], vt))
     try:
@@ -160,7 +182,7 @@ def _with_matrices(data: ProblemData, techs, jobs, profiles: dict, p: Planner) -
     walk = metres / speed
     duration = np.rint(walk * T).astype(np.int64)
 
-    n_fixed = 1 + len(techs)                    # sink + starts come before the jobs
+    n_fixed = 1 + len(techs)  # sink + starts come before the jobs
     base = w.travel_100m * metres / 100 - w.wait_min * walk
     dist_mats, dur_mats = [], []
     for key in profiles:
@@ -172,11 +194,11 @@ def _with_matrices(data: ProblemData, techs, jobs, profiles: dict, p: Planner) -
             if level >= job.min_level:
                 pts = base[:, col] + w.overqualification * (level - job.min_level)
                 cost[:, col] = np.maximum(0, np.rint(pts * C)).astype(np.int64)
-        cost[:, 0] = 0                           # anything -> sink is free (open routes)
+        cost[:, 0] = 0  # anything -> sink is free (open routes)
         np.fill_diagonal(cost, 0)
         dur = duration.copy()
         dur[:, 0] = 0
-        dur[0, :] = FORBIDDEN // 1000            # never leave the sink
+        dur[0, :] = FORBIDDEN // 1000  # never leave the sink
         dur[0, 0] = 0
         dist_mats.append(cost)
         dur_mats.append(dur)

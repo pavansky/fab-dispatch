@@ -3,7 +3,9 @@ from app.config import Settings, libpq_url
 
 def test_supabase_integration_url_is_cleaned_for_libpq():
     raw = "postgres://postgres.abc:pw@aws-0-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x"
-    assert libpq_url(raw) == "postgres://postgres.abc:pw@aws-0-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=require"
+    assert (
+        libpq_url(raw) == "postgres://postgres.abc:pw@aws-0-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=require"
+    )
 
 
 def test_supabase_gets_tls_even_without_sslmode():

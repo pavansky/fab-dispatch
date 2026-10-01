@@ -1,4 +1,5 @@
 """Behavioural tests: hand-built cases where the algorithms *should* differ."""
+
 import statistics
 
 from app.engine import allocate
@@ -40,8 +41,10 @@ def test_uncertified_family_is_reported_not_assigned():
 
 def test_level_requirement_respected():
     sc = Scenario(
-        engineers=[Engineer(id="Junior", name="a", x=0, y=0, skills={"litho": 1}),
-                   Engineer(id="Senior", name="b", x=900, y=0, skills={"litho": 3})],
+        engineers=[
+            Engineer(id="Junior", name="a", x=0, y=0, skills={"litho": 1}),
+            Engineer(id="Senior", name="b", x=900, y=0, skills={"litho": 3}),
+        ],
         jobs=[Job(id="J1", x=5, y=0, skill="litho", min_level=3, earliest=0, latest=100)],
     )
     for algo in ("greedy", "hungarian", "regret"):
@@ -51,8 +54,10 @@ def test_level_requirement_respected():
 def test_overqualification_penalty_saves_the_expert():
     """Same distance, so the level-1 engineer should take the level-1 job."""
     sc = Scenario(
-        engineers=[Engineer(id="Expert", name="a", x=0, y=0, skills={"cmp": 3}),
-                   Engineer(id="Generalist", name="b", x=20, y=0, skills={"cmp": 1})],
+        engineers=[
+            Engineer(id="Expert", name="a", x=0, y=0, skills={"cmp": 3}),
+            Engineer(id="Generalist", name="b", x=20, y=0, skills={"cmp": 1}),
+        ],
         jobs=[Job(id="J1", x=10, y=0, skill="cmp", min_level=1, earliest=0, latest=100)],
     )
     assert allocate(sc, Weights(), "greedy").assignments[0].tech_id == "Generalist"
@@ -64,8 +69,10 @@ def test_insertion_reorders_route_by_time():
     """A job added later but due earlier is inserted in front, not appended."""
     sc = Scenario(
         engineers=[Engineer(id="E1", name="a", x=0, y=0, skills={"etch": 2})],
-        jobs=[Job(id="Late", x=50, y=0, skill="etch", priority=3, earliest=200, latest=300, duration=30),
-              Job(id="Early", x=60, y=0, skill="etch", priority=1, earliest=0, latest=60, duration=30)],
+        jobs=[
+            Job(id="Late", x=50, y=0, skill="etch", priority=3, earliest=200, latest=300, duration=30),
+            Job(id="Early", x=60, y=0, skill="etch", priority=1, earliest=0, latest=60, duration=30),
+        ],
     )
     res = allocate(sc, Weights(), "greedy")
     assert [s.job_id for s in res.routes[0].stops] == ["Early", "Late"]

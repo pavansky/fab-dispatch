@@ -1,4 +1,5 @@
 """Structured logging, request IDs, timing, security headers and a rate limiter."""
+
 from __future__ import annotations
 
 import json
@@ -19,8 +20,13 @@ log = logging.getLogger("fab")
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        out = {"ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"), "level": record.levelname,
-               "logger": record.name, "msg": record.getMessage(), "request_id": request_id.get()}
+        out = {
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+            "request_id": request_id.get(),
+        }
         out.update(getattr(record, "fields", {}))
         if record.exc_info:
             out["exc"] = self.formatException(record.exc_info)
@@ -29,8 +35,9 @@ class JsonFormatter(logging.Formatter):
 
 def configure_logging(level: str, as_json: bool) -> None:
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter() if as_json else
-                         logging.Formatter("%(asctime)s %(levelname)-5s %(name)s %(message)s"))
+    handler.setFormatter(
+        JsonFormatter() if as_json else logging.Formatter("%(asctime)s %(levelname)-5s %(name)s %(message)s")
+    )
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)
@@ -49,8 +56,9 @@ class RequestContext(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             log.exception("unhandled error", extra={"fields": {"path": request.url.path}})
-            response = JSONResponse({"error": {"code": "internal", "message": "Internal error", "request_id": rid}},
-                                    status_code=500)
+            response = JSONResponse(
+                {"error": {"code": "internal", "message": "Internal error", "request_id": rid}}, status_code=500
+            )
         ms = (time.perf_counter() - t0) * 1000
         response.headers["X-Request-ID"] = rid
         response.headers.setdefault("Server-Timing", f"app;dur={ms:.1f}")
@@ -58,9 +66,21 @@ class RequestContext(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-Frame-Options"] = "DENY"
         if request.url.path != "/api/livez":
-            log.info("%s %s %s %.1fms", request.method, request.url.path, response.status_code, ms,
-                     extra={"fields": {"method": request.method, "path": request.url.path,
-                                       "status": response.status_code, "ms": round(ms, 1)}})
+            log.info(
+                "%s %s %s %.1fms",
+                request.method,
+                request.url.path,
+                response.status_code,
+                ms,
+                extra={
+                    "fields": {
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status": response.status_code,
+                        "ms": round(ms, 1),
+                    }
+                },
+            )
         request_id.reset(token)
         return response
 

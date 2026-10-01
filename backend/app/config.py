@@ -5,13 +5,15 @@ in-memory Qdrant collection, so the brief's "no API keys, runs locally" rule hol
 Production sets ``FAB_DATABASE_URL`` (Supabase/any Postgres) and, optionally,
 ``FAB_QDRANT_URL``.
 """
+
 from __future__ import annotations
 
 import os
 from functools import lru_cache
+from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,15 +25,41 @@ class Settings(BaseSettings):
     qdrant_url: str | None = Field(None, description="Qdrant server URL; unset = embedded local mode")
     qdrant_api_key: str | None = None
     qdrant_path: str | None = Field(
-        None, description="optional on-disk path for embedded Qdrant; unset = in-memory per process")
+        None, description="optional on-disk path for embedded Qdrant; unset = in-memory per process"
+    )
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     solver_time_limit_s: float = Field(3.0, gt=0, le=20, description="safety cap for ALNS and PyVRP")
     alns_iterations: int = Field(300, ge=1, description="ALNS iteration budget (deterministic stop); see ANALYSIS §1")
-    pyvrp_iterations: int = Field(1000, ge=1, description="PyVRP iteration budget (deterministic stop); see ANALYSIS §1")
+    pyvrp_iterations: int = Field(
+        1000, ge=1, description="PyVRP iteration budget (deterministic stop); see ANALYSIS §1"
+    )
     live_time_limit_s: float = Field(0.6, gt=0, le=10, description="budget per live re-dispatch")
     sse_window_s: float = Field(25.0, gt=0, description="seconds an SSE response stays open (serverless-safe)")
     log_json: bool = False
     log_level: str = "INFO"
+    profiles_dir: str | None = Field(None, description="directory of fab profile JSON files; unset = bundled")
+    default_fab: str = Field("fab1-300mm-logic", description="fab used when a request doesn't name one")
+
+    # ---- authentication ------------------------------------------------------------
+    auth_mode: Literal["demo", "supabase"] = Field(
+        "demo", description="demo = one-click local sign-in (refused in production); supabase = Supabase Auth"
+    )
+    auth_secret: str = Field("local-demo-signing-secret-not-for-production-use", description="signs demo-mode tokens")
+    allow_demo_auth_in_production: bool = Field(False, description="explicit opt-in for a public demo deployment")
+    supabase_url: str | None = Field(None, validation_alias=AliasChoices("FAB_SUPABASE_URL", "SUPABASE_URL"))
+    supabase_publishable_key: str | None = Field(
+        None,
+        validation_alias=AliasChoices("FAB_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY"),
+    )
+    supabase_jwt_secret: str | None = Field(
+        None, validation_alias=AliasChoices("FAB_SUPABASE_JWT_SECRET", "SUPABASE_JWT_SECRET")
+    )
+    dispatcher_emails: list[str] = Field(default_factory=list, description="bootstrap dispatchers by email")
+    default_role: Literal["viewer", "dispatcher"] = "viewer"
+    default_fabs: list[str] = Field(
+        default_factory=lambda: ["*"], description="fabs a user can access unless their profile says otherwise"
+    )
+    cron_secret: str | None = Field(None, validation_alias=AliasChoices("FAB_CRON_SECRET", "CRON_SECRET"))
 
     @field_validator("database_url")
     @classmethod
@@ -64,6 +92,24 @@ class Settings(BaseSettings):
                 self.env = "production"
         return self
 
+    @model_validator(mode="after")
+    def _auth_safe(self) -> Settings:
+        """Fail closed: demo sign-in must never be reachable in production by accident."""
+        if self.env == "production" and self.auth_mode == "demo" and not self.allow_demo_auth_in_production:
+            raise ValueError(
+                "FAB_AUTH_MODE=demo is refused in production; use supabase "
+                "(or set FAB_ALLOW_DEMO_AUTH_IN_PRODUCTION=true for a public demo)"
+            )
+        if self.auth_mode == "supabase" and not self.supabase_url:
+            raise ValueError("FAB_AUTH_MODE=supabase needs SUPABASE_URL")
+        if (
+            self.env == "production"
+            and self.auth_mode == "demo"
+            and self.auth_secret == "local-demo-signing-secret-not-for-production-use"
+        ):
+            raise ValueError("set FAB_AUTH_SECRET when demo auth is allowed in production")
+        return self
+
     @property
     def is_postgres(self) -> bool:
         return self.database_url.startswith(("postgresql://", "postgres://"))
@@ -71,8 +117,19 @@ class Settings(BaseSettings):
 
 # Query parameters libpq understands; anything else (e.g. Supabase's ``supa=``) makes
 # psycopg refuse the URL, so it is dropped.
-_LIBPQ_PARAMS = {"sslmode", "sslrootcert", "sslcert", "sslkey", "connect_timeout", "application_name",
-                 "options", "target_session_attrs", "keepalives", "keepalives_idle", "gssencmode"}
+_LIBPQ_PARAMS = {
+    "sslmode",
+    "sslrootcert",
+    "sslcert",
+    "sslkey",
+    "connect_timeout",
+    "application_name",
+    "options",
+    "target_session_attrs",
+    "keepalives",
+    "keepalives_idle",
+    "gssencmode",
+}
 
 
 def libpq_url(url: str) -> str:

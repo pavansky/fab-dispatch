@@ -4,6 +4,7 @@ Dispatch order is what a fab shift lead does by hand: bottleneck tools first, th
 tightest deadline. Fast and easy to explain, but a choice is never revisited, so an early
 job can take the only engineer a later job could have used.
 """
+
 from __future__ import annotations
 
 from ..planner import Planner
@@ -19,5 +20,7 @@ def run_greedy(p: Planner) -> dict[str, Decision]:
             continue
         best = feasible[0]
         p.commit(best)
-        decisions[job.id] = decision(best, feasible, rejected, f"Dispatched #{n} in priority/deadline order; cheapest feasible was")
+        decisions[job.id] = decision(
+            best, feasible, rejected, f"Dispatched #{n} in priority/deadline order; cheapest feasible was"
+        )
     return decisions

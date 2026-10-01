@@ -1,12 +1,15 @@
 """HTTP contract: caching headers, error envelope, planning endpoints and the live-shift flow."""
+
 import json
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.conftest import auth_headers
 
-client = TestClient(app)
+client = TestClient(app, headers=auth_headers("dispatcher"))
+anonymous = TestClient(app)
 
 
 @pytest.fixture(scope="module")
@@ -15,14 +18,14 @@ def scenario():
 
 
 def test_api_root_points_to_docs_and_ui():
-    body = client.get("/").json()
+    body = anonymous.get("/").json()
     assert body["docs"] == "/docs" and "5173" in body["ui"]
 
 
 def test_health_and_liveness():
-    assert client.get("/api/livez").json() == {"status": "ok"}
-    body = client.get("/api/health").json()
-    assert body["db_ok"] is True and body["status"] == "ok"
+    assert anonymous.get("/api/livez").json() == {"status": "ok"}
+    body = anonymous.get("/api/health").json()
+    assert body["db_ok"] is True and body["schema_ok"] is True and body["status"] == "ok"
 
 
 def test_meta_is_cacheable_with_etag():
@@ -58,6 +61,7 @@ def test_allocate_runs_every_strategy(scenario):
 def test_errors_use_one_envelope(scenario):
     r = client.post("/api/scenario", json={"preset": "nope"})
     assert r.status_code == 422 and r.json()["error"]["code"] == "invalid"
+    assert anonymous.post("/api/scenario", json={}).json()["error"]["code"] == "unauthorised"
     r = client.post("/api/plan", json={"scenario": scenario, "algorithm": "magic"})
     assert r.status_code == 422 and "magic" in r.json()["error"]["message"]
     bad = json.loads(json.dumps(scenario))
@@ -68,8 +72,9 @@ def test_errors_use_one_envelope(scenario):
 
 
 def test_benchmark_and_optimality_gap():
-    body = client.post("/api/benchmark", json={"preset": "normal", "seeds": 2, "n_jobs": 10,
-                                               "algorithms": ["greedy", "regret"]}).json()
+    body = client.post(
+        "/api/benchmark", json={"preset": "normal", "seeds": 2, "n_jobs": 10, "algorithms": ["greedy", "regret"]}
+    ).json()
     assert len(body["runs"]) == 4
     gap = client.post("/api/optimality-gap", json={"seeds": 1, "n_engineers": 3, "n_jobs": 8}).json()
     assert all(v >= -1e-6 for v in gap["mean_gap_pct"].values()), "a heuristic beat the proven optimum"

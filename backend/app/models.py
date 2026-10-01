@@ -6,14 +6,15 @@ scheduled preventive maintenance (PM) on a tool at a floor position; each needs 
 tool family at a minimum level, carries a priority, and must *start* inside a window.
 Times are minutes since shift start; positions are metres on the fab floor plan.
 """
+
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-Skill = Literal["litho", "etch", "deposition", "cmp", "implant", "metrology"]
-SKILLS: tuple[str, ...] = ("litho", "etch", "deposition", "cmp", "implant", "metrology")
+# Tool families are defined per fab (app/fabs/profiles/*.json), so a skill is any family id.
+Skill = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=40)]
 
 
 class Engineer(BaseModel):
@@ -80,6 +81,7 @@ class Settings(BaseModel):
 
 
 class Scenario(BaseModel):
+    fab_id: str = Field("fab1-300mm-logic", description="which fab profile this shift belongs to")
     engineers: list[Engineer]
     jobs: list[Job]
     settings: Settings = Settings()

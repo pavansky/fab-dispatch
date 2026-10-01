@@ -1,4 +1,5 @@
 """Process-wide singletons, built lazily so imports stay cheap (serverless cold starts)."""
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -35,6 +36,10 @@ def rate_limit(name: str, per_min: float, burst: int):
     def dep(request: Request) -> None:
         if get_settings().env == "test":
             return
-        if not _limiter.allow(client_id(request), name, per_min, burst):
+        # Per signed-in user where known (fair across shared NAT/proxies), else per client IP.
+        user = getattr(request.state, "user", None)
+        who = f"user:{user.id}" if user else client_id(request)
+        if not _limiter.allow(who, name, per_min, burst):
             raise HTTPException(429, f"Too many {name} requests; slow down.", headers={"Retry-After": "5"})
+
     return dep

@@ -1,6 +1,7 @@
 """Repair-history retrieval: "what happened the last times this kind of fault occurred?"
 
-A tool-down arrives with a free-text symptom. We embed it and search a vector index of
+A tool-down arrives with a free-text symptom. Each fab's fault catalogue lives in its
+profile (app/fabs/profiles), and each fab gets its own history and its own index. We embed it and search a vector index of
 past repairs (Qdrant) for the nearest neighbours on the same tool family. That gives:
 
 * a **duration prediction**: similarity-weighted mean of the neighbours' actual repair
@@ -16,6 +17,7 @@ embedder. In production set
 synthetic but structured: each fault code has root causes with their own duration
 distributions, so retrieval has real signal to find.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -29,78 +31,7 @@ import threading
 from dataclasses import dataclass
 
 from .config import Settings
-
-# family -> fault code -> (symptom phrasings, [(root cause, fix, mean minutes, sd)])
-CATALOG: dict[str, dict[str, tuple[list[str], list[tuple[str, str, int, int]]]]] = {
-    "litho": {
-        "OVL-DRIFT": (["overlay drift out of spec", "alignment residuals trending high", "overlay excursion after reticle change"],
-                      [("lens heating model stale", "recalibrate lens heating correction", 70, 15),
-                       ("wafer stage interferometer drift", "re-zero interferometers and requalify stage", 150, 30)]),
-        "FOCUS-ERR": (["focus spot defects on edge dies", "leveling sensor error", "best focus shifted"],
-                      [("contaminated wafer chuck", "clean chuck and run flatness check", 90, 20),
-                       ("leveling sensor out of calibration", "calibrate level sensor", 60, 10)]),
-        "SRC-PWR": (["light source power unstable", "dose error alarm", "laser energy fluctuating"],
-                    [("laser chamber gas aged", "laser gas refill and energy recal", 120, 25),
-                     ("beam delivery optics degraded", "inspect and swap beam delivery optic", 200, 40)]),
-    },
-    "etch": {
-        "RF-REFL": (["RF reflected power high", "plasma will not strike", "matching network fault"],
-                    [("match network capacitor worn", "replace tuning capacitor", 80, 15),
-                     ("RF cable connector damaged", "replace RF cable", 45, 10)]),
-        "ESC-HE": (["chuck helium leak rate high", "wafer clamping failure", "backside helium flow alarm"],
-                   [("ESC surface worn", "swap electrostatic chuck", 180, 30),
-                    ("o-ring degraded", "replace helium o-ring", 60, 12)]),
-        "PART-ADD": (["particle adders on monitor wafer", "defect density spike after etch", "flaking from chamber walls"],
-                     [("chamber needs wet clean", "wet clean chamber and season", 240, 40),
-                      ("process kit at end of life", "replace process kit", 120, 20)]),
-    },
-    "deposition": {
-        "THK-NU": (["film thickness non-uniformity", "deposition rate drift", "center to edge thickness delta"],
-                   [("showerhead holes clogged", "replace showerhead", 150, 30),
-                    ("heater zone thermocouple drift", "recalibrate heater zones", 70, 15)]),
-        "VAC-LEAK": (["base pressure too high", "chamber leak check failed", "pump down too slow"],
-                     [("gate valve seal leaking", "replace gate valve seal", 90, 20),
-                      ("turbo pump bearing worn", "swap turbo pump", 160, 30)]),
-        "TGT-LIFE": (["sputter target near end of life", "arcing during PVD", "target voltage unstable"],
-                     [("target eroded", "replace sputter target", 200, 35),
-                      ("magnet assembly misaligned", "realign magnetron", 100, 20)]),
-    },
-    "cmp": {
-        "PAD-WEAR": (["removal rate dropping", "pad life limit reached", "polish rate unstable"],
-                     [("pad glazed", "replace pad and condition", 75, 15),
-                      ("conditioner disk worn", "replace conditioner disk", 55, 10)]),
-        "SLURRY": (["slurry flow alarm", "scratches on wafers after polish", "slurry delivery pressure low"],
-                   [("slurry filter clogged", "change slurry filter and flush", 50, 10),
-                    ("delivery pump diaphragm failed", "replace slurry pump", 130, 25)]),
-        "HEAD-VAC": (["wafer slip out of carrier head", "head vacuum fault", "carrier membrane leak"],
-                     [("membrane torn", "replace carrier membrane", 90, 15),
-                      ("retaining ring worn", "replace retaining ring", 70, 12)]),
-    },
-    "implant": {
-        "BEAM-CUR": (["beam current low", "beam tuning fails", "source arc unstable"],
-                     [("ion source filament worn", "replace source filament", 110, 20),
-                      ("extraction electrode coated", "clean extraction electrodes", 150, 30)]),
-        "DOSE-UNI": (["dose uniformity out of spec", "scan uniformity alarm", "faraday cup reading erratic"],
-                     [("faraday cup contaminated", "clean and recalibrate faraday", 80, 15),
-                      ("scan waveform drift", "retune scan waveform", 60, 10)]),
-    },
-    "metrology": {
-        "CAL-DRIFT": (["measurement drift on reference wafer", "gauge R&R failed", "calibration out of tolerance"],
-                      [("reference standard degraded", "requalify with new standard", 45, 10),
-                       ("stage encoder drift", "recalibrate stage", 70, 15)]),
-        "OPT-FAULT": (["image focus failing on CD-SEM", "optical path alarm", "low signal to noise"],
-                      [("electron gun tip aging", "condition or swap gun tip", 140, 25),
-                       ("lamp at end of life", "replace light source lamp", 40, 8)]),
-    },
-}
-PM_TASKS = {
-    "litho": "scheduled scanner PM: lens and stage checks",
-    "etch": "scheduled chamber PM: wet clean and process kit",
-    "deposition": "scheduled chamber PM: shield kit and showerhead",
-    "cmp": "scheduled polisher PM: pad, conditioner and slurry lines",
-    "implant": "scheduled implanter PM: source rebuild",
-    "metrology": "scheduled metrology PM: calibration and standards",
-}
+from .fabs import FabProfile
 
 log = logging.getLogger("fab")
 
@@ -109,12 +40,15 @@ HISTORY_SEED = 2026
 DIM = 512
 
 
-def fault_symptom(rng: random.Random, family: str) -> tuple[str, str, int]:
+def fault_symptom(rng: random.Random, profile: FabProfile, family: str) -> tuple[str, str, int]:
     """A fresh tool-down: (fault code, symptom text, planner's standard estimate in min)."""
-    code = rng.choice(list(CATALOG[family]))
-    phrases, causes = CATALOG[family][code]
-    text = rng.choice(phrases) + rng.choice(["", " on chamber B", " after PM", " during production lot", " intermittently"])
-    standard = round(statistics.fmean(c[2] for c in causes) / 15) * 15
+    faults = profile.family(family).faults
+    code = rng.choice(list(faults))
+    fault = faults[code]
+    text = rng.choice(fault.symptoms) + rng.choice(
+        ["", " on chamber B", " after PM", " during production lot", " intermittently"]
+    )
+    standard = round(statistics.fmean(c.mean_min for c in fault.causes) / 15) * 15
     return code, text, int(standard)
 
 
@@ -130,21 +64,26 @@ class Repair:
     engineer: str
 
 
-def synthetic_history(n: int = HISTORY_SIZE, seed: int = HISTORY_SEED) -> list[Repair]:
+def synthetic_history(profile: FabProfile, n: int = HISTORY_SIZE, seed: int = HISTORY_SEED) -> list[Repair]:
+    """A fab's past repairs, generated from its own fault catalogue (deterministic)."""
     rng = random.Random(seed)
     engineers = [f"E{i:02d}" for i in range(1, 31)]
+    families = profile.family_ids
     out = []
     for i in range(n):
-        family = rng.choice(list(CATALOG))
-        code = rng.choice(list(CATALOG[family]))
-        phrases, causes = CATALOG[family][code]
-        cause, fix, mean, sd = rng.choice(causes)
-        symptom = rng.choice(phrases) + rng.choice(["", " on chamber A", " on chamber B", " after PM", " during production lot"])
+        family = rng.choice(families)
+        faults = profile.family(family).faults
+        code = rng.choice(list(faults))
+        fault = faults[code]
+        c = rng.choice(fault.causes)
+        cause, fix, mean, sd = c.cause, c.fix, c.mean_min, c.sd_min
+        symptom = rng.choice(fault.symptoms) + rng.choice(
+            ["", " on chamber A", " on chamber B", " after PM", " during production lot"]
+        )
         # Some engineers are their family's go-to people: bias who fixed what.
-        home = list(CATALOG).index(family) * 5   # stable across processes, unlike hash()
+        home = families.index(family) * 5  # stable across processes, unlike hash()
         eng = engineers[(home + rng.choice([0, 0, 1, 2, rng.randrange(30)])) % 30]
-        out.append(Repair(i + 1, family, code, symptom, cause, fix,
-                          max(15, int(rng.gauss(mean, sd))), eng))
+        out.append(Repair(i + 1, family, code, symptom, cause, fix, max(15, int(rng.gauss(mean, sd))), eng))
     return out
 
 
@@ -161,7 +100,7 @@ class HashEmbedder:
         feats = words + [f"{a}_{b}" for a, b in itertools.pairwise(words)]
         for w in words:
             padded = f"#{w}#"
-            feats += [padded[i:i + 3] for i in range(len(padded) - 2)]
+            feats += [padded[i : i + 3] for i in range(len(padded) - 2)]
         for f in feats:
             h = int.from_bytes(hashlib.blake2b(f.encode(), digest_size=8).digest(), "little")
             vec[h % DIM] += 1.0 if (h >> 63) == 0 else -1.0
@@ -170,7 +109,7 @@ class HashEmbedder:
 
 
 class RepairIndex:
-    COLLECTION = "repairs"
+    """One Qdrant collection per fab (``repairs_<fab id>``), built lazily on first use."""
 
     def __init__(self, settings: Settings):
         from qdrant_client import QdrantClient  # lazy: keeps cold starts lean when unused
@@ -193,41 +132,54 @@ class RepairIndex:
             self.client = QdrantClient(":memory:")
             self.mode = "embedded"
         self.embedder = HashEmbedder()
-        self._ready = False
+        self._ready: set[str] = set()
         self._lock = threading.Lock()
 
-    def ensure(self) -> None:
-        """Build the index once (idempotent; skipped if a matching collection exists)."""
-        if self._ready:
-            return
+    @staticmethod
+    def collection(fab_id: str) -> str:
+        return "repairs_" + fab_id.replace("-", "_")
+
+    def ensure(self, profile: FabProfile) -> str:
+        """Build this fab's index once (idempotent; skipped if a matching collection exists)."""
+        name = self.collection(profile.id)
+        if name in self._ready:
+            return name
         with self._lock:
-            if self._ready:
-                return
+            if name in self._ready:
+                return name
             from qdrant_client import models
 
-            history = synthetic_history()
-            if self.client.collection_exists(self.COLLECTION):
-                if self.client.count(self.COLLECTION).count == len(history):
-                    self._ready = True
-                    return
-                self.client.delete_collection(self.COLLECTION)
-            self.client.create_collection(self.COLLECTION, vectors_config=models.VectorParams(
-                size=DIM, distance=models.Distance.COSINE))
-            self.client.create_payload_index(self.COLLECTION, "family", models.PayloadSchemaType.KEYWORD) \
-                if self.mode == "server" else None
-            batch = [models.PointStruct(id=r.id, vector=self.embedder.embed(r.symptom), payload=r.__dict__)
-                     for r in history]
+            history = synthetic_history(profile)
+            if self.client.collection_exists(name):
+                if self.client.count(name).count == len(history):
+                    self._ready.add(name)
+                    return name
+                self.client.delete_collection(name)
+            self.client.create_collection(
+                name, vectors_config=models.VectorParams(size=DIM, distance=models.Distance.COSINE)
+            )
+            if self.mode == "server":
+                self.client.create_payload_index(name, "family", models.PayloadSchemaType.KEYWORD)
+            batch = [
+                models.PointStruct(id=r.id, vector=self.embedder.embed(r.symptom), payload=r.__dict__) for r in history
+            ]
             for i in range(0, len(batch), 256):
-                self.client.upsert(self.COLLECTION, points=batch[i:i + 256], wait=True)
-            self._ready = True
+                self.client.upsert(name, points=batch[i : i + 256], wait=True)
+            self._ready.add(name)
+            return name
 
-    def similar(self, family: str, symptom: str, k: int = 12) -> dict:
+    def similar(self, profile: FabProfile, family: str, symptom: str, k: int = 12) -> dict:
         from qdrant_client import models
 
-        self.ensure()
+        name = self.ensure(profile)
         hits = self.client.query_points(
-            self.COLLECTION, query=self.embedder.embed(symptom), limit=k, with_payload=True,
-            query_filter=models.Filter(must=[models.FieldCondition(key="family", match=models.MatchValue(value=family))]),
+            name,
+            query=self.embedder.embed(symptom),
+            limit=k,
+            with_payload=True,
+            query_filter=models.Filter(
+                must=[models.FieldCondition(key="family", match=models.MatchValue(value=family))]
+            ),
         ).points
         if not hits:
             return {"neighbours": [], "prediction": None}
@@ -244,12 +196,20 @@ class RepairIndex:
         top_cause = max(causes, key=causes.get)
         return {
             "prediction": {
-                "minutes": round(mean), "p10": round(q[0]), "p90": round(q[-1]),
+                "minutes": round(mean),
+                "p10": round(q[0]),
+                "p90": round(q[-1]),
                 "confidence": round(statistics.fmean(h.score for h in hits[:5]), 3),
-                "likely_cause": top_cause, "cause_share": round(causes[top_cause] / total, 2),
+                "likely_cause": top_cause,
+                "cause_share": round(causes[top_cause] / total, 2),
             },
             "experienced_engineers": sorted(engineers.items(), key=lambda kv: -kv[1])[:5],
-            "neighbours": [{"score": round(h.score, 3), **{k: h.payload[k] for k in
-                            ("id", "code", "symptom", "cause", "fix", "minutes", "engineer")}} for h in hits[:6]],
+            "neighbours": [
+                {
+                    "score": round(h.score, 3),
+                    **{k: h.payload[k] for k in ("id", "code", "symptom", "cause", "fix", "minutes", "engineer")},
+                }
+                for h in hits[:6]
+            ],
             "index": {"mode": self.mode, "embedder": self.embedder.name, "size": HISTORY_SIZE},
         }

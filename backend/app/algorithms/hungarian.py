@@ -8,6 +8,7 @@ rounds repeat until no feasible pair is left.
 Within a round the matching is globally optimal, so it won't starve a job the way greedy
 can. Across rounds it is still myopic: round 1 doesn't know what round 2 will need.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -46,8 +47,10 @@ def run_hungarian(p: Planner) -> dict[str, Decision]:
             local = feasible[0]
             why = f"Round {rnd}: optimal matching of {len(techs)} engineers x {len(open_jobs)} open jobs chose"
             if local.tech_id != t:
-                why = (f"Round {rnd}: locally cheapest was {local.tech_id} ({local.cost:.1f}), but the "
-                       f"globally optimal matching needed {local.tech_id} elsewhere, so it chose")
+                why = (
+                    f"Round {rnd}: locally cheapest was {local.tech_id} ({local.cost:.1f}), but the "
+                    f"globally optimal matching needed {local.tech_id} elsewhere, so it chose"
+                )
             pending.append((chosen, decision(chosen, feasible, rejected, why)))
         for chosen, d in pending:
             p.commit(chosen)

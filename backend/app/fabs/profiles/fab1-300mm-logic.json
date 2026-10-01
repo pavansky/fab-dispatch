@@ -1,0 +1,503 @@
+{
+  "id": "fab1-300mm-logic",
+  "name": "Fab 1 \u00b7 300mm logic",
+  "description": "Illustrative 300mm logic fab: lithography in a central yellow-light bay, etch, deposition, CMP, implant and metrology around it.",
+  "floor": {
+    "width": 400,
+    "height": 240
+  },
+  "shift": {
+    "start_hour": 7,
+    "length_min": 720
+  },
+  "walk_m_per_min": 60,
+  "constraint_family": "litho",
+  "families": [
+    {
+      "id": "litho",
+      "label": "Lithography",
+      "prefix": "LIT",
+      "area": [
+        150,
+        80,
+        250,
+        160
+      ],
+      "pm_task": "scheduled scanner PM: lens and stage checks",
+      "faults": {
+        "OVL-DRIFT": {
+          "symptoms": [
+            "overlay drift out of spec",
+            "alignment residuals trending high",
+            "overlay excursion after reticle change"
+          ],
+          "causes": [
+            {
+              "cause": "lens heating model stale",
+              "fix": "recalibrate lens heating correction",
+              "mean_min": 70,
+              "sd_min": 15
+            },
+            {
+              "cause": "wafer stage interferometer drift",
+              "fix": "re-zero interferometers and requalify stage",
+              "mean_min": 150,
+              "sd_min": 30
+            }
+          ]
+        },
+        "FOCUS-ERR": {
+          "symptoms": [
+            "focus spot defects on edge dies",
+            "leveling sensor error",
+            "best focus shifted"
+          ],
+          "causes": [
+            {
+              "cause": "contaminated wafer chuck",
+              "fix": "clean chuck and run flatness check",
+              "mean_min": 90,
+              "sd_min": 20
+            },
+            {
+              "cause": "leveling sensor out of calibration",
+              "fix": "calibrate level sensor",
+              "mean_min": 60,
+              "sd_min": 10
+            }
+          ]
+        },
+        "SRC-PWR": {
+          "symptoms": [
+            "light source power unstable",
+            "dose error alarm",
+            "laser energy fluctuating"
+          ],
+          "causes": [
+            {
+              "cause": "laser chamber gas aged",
+              "fix": "laser gas refill and energy recal",
+              "mean_min": 120,
+              "sd_min": 25
+            },
+            {
+              "cause": "beam delivery optics degraded",
+              "fix": "inspect and swap beam delivery optic",
+              "mean_min": 200,
+              "sd_min": 40
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "etch",
+      "label": "Etch",
+      "prefix": "ETC",
+      "area": [
+        20,
+        20,
+        140,
+        110
+      ],
+      "pm_task": "scheduled chamber PM: wet clean and process kit",
+      "faults": {
+        "RF-REFL": {
+          "symptoms": [
+            "RF reflected power high",
+            "plasma will not strike",
+            "matching network fault"
+          ],
+          "causes": [
+            {
+              "cause": "match network capacitor worn",
+              "fix": "replace tuning capacitor",
+              "mean_min": 80,
+              "sd_min": 15
+            },
+            {
+              "cause": "RF cable connector damaged",
+              "fix": "replace RF cable",
+              "mean_min": 45,
+              "sd_min": 10
+            }
+          ]
+        },
+        "ESC-HE": {
+          "symptoms": [
+            "chuck helium leak rate high",
+            "wafer clamping failure",
+            "backside helium flow alarm"
+          ],
+          "causes": [
+            {
+              "cause": "ESC surface worn",
+              "fix": "swap electrostatic chuck",
+              "mean_min": 180,
+              "sd_min": 30
+            },
+            {
+              "cause": "o-ring degraded",
+              "fix": "replace helium o-ring",
+              "mean_min": 60,
+              "sd_min": 12
+            }
+          ]
+        },
+        "PART-ADD": {
+          "symptoms": [
+            "particle adders on monitor wafer",
+            "defect density spike after etch",
+            "flaking from chamber walls"
+          ],
+          "causes": [
+            {
+              "cause": "chamber needs wet clean",
+              "fix": "wet clean chamber and season",
+              "mean_min": 240,
+              "sd_min": 40
+            },
+            {
+              "cause": "process kit at end of life",
+              "fix": "replace process kit",
+              "mean_min": 120,
+              "sd_min": 20
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "deposition",
+      "label": "Deposition",
+      "prefix": "DEP",
+      "area": [
+        260,
+        20,
+        380,
+        110
+      ],
+      "pm_task": "scheduled chamber PM: shield kit and showerhead",
+      "faults": {
+        "THK-NU": {
+          "symptoms": [
+            "film thickness non-uniformity",
+            "deposition rate drift",
+            "center to edge thickness delta"
+          ],
+          "causes": [
+            {
+              "cause": "showerhead holes clogged",
+              "fix": "replace showerhead",
+              "mean_min": 150,
+              "sd_min": 30
+            },
+            {
+              "cause": "heater zone thermocouple drift",
+              "fix": "recalibrate heater zones",
+              "mean_min": 70,
+              "sd_min": 15
+            }
+          ]
+        },
+        "VAC-LEAK": {
+          "symptoms": [
+            "base pressure too high",
+            "chamber leak check failed",
+            "pump down too slow"
+          ],
+          "causes": [
+            {
+              "cause": "gate valve seal leaking",
+              "fix": "replace gate valve seal",
+              "mean_min": 90,
+              "sd_min": 20
+            },
+            {
+              "cause": "turbo pump bearing worn",
+              "fix": "swap turbo pump",
+              "mean_min": 160,
+              "sd_min": 30
+            }
+          ]
+        },
+        "TGT-LIFE": {
+          "symptoms": [
+            "sputter target near end of life",
+            "arcing during PVD",
+            "target voltage unstable"
+          ],
+          "causes": [
+            {
+              "cause": "target eroded",
+              "fix": "replace sputter target",
+              "mean_min": 200,
+              "sd_min": 35
+            },
+            {
+              "cause": "magnet assembly misaligned",
+              "fix": "realign magnetron",
+              "mean_min": 100,
+              "sd_min": 20
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cmp",
+      "label": "CMP",
+      "prefix": "CMP",
+      "area": [
+        20,
+        130,
+        140,
+        220
+      ],
+      "pm_task": "scheduled polisher PM: pad, conditioner and slurry lines",
+      "faults": {
+        "PAD-WEAR": {
+          "symptoms": [
+            "removal rate dropping",
+            "pad life limit reached",
+            "polish rate unstable"
+          ],
+          "causes": [
+            {
+              "cause": "pad glazed",
+              "fix": "replace pad and condition",
+              "mean_min": 75,
+              "sd_min": 15
+            },
+            {
+              "cause": "conditioner disk worn",
+              "fix": "replace conditioner disk",
+              "mean_min": 55,
+              "sd_min": 10
+            }
+          ]
+        },
+        "SLURRY": {
+          "symptoms": [
+            "slurry flow alarm",
+            "scratches on wafers after polish",
+            "slurry delivery pressure low"
+          ],
+          "causes": [
+            {
+              "cause": "slurry filter clogged",
+              "fix": "change slurry filter and flush",
+              "mean_min": 50,
+              "sd_min": 10
+            },
+            {
+              "cause": "delivery pump diaphragm failed",
+              "fix": "replace slurry pump",
+              "mean_min": 130,
+              "sd_min": 25
+            }
+          ]
+        },
+        "HEAD-VAC": {
+          "symptoms": [
+            "wafer slip out of carrier head",
+            "head vacuum fault",
+            "carrier membrane leak"
+          ],
+          "causes": [
+            {
+              "cause": "membrane torn",
+              "fix": "replace carrier membrane",
+              "mean_min": 90,
+              "sd_min": 15
+            },
+            {
+              "cause": "retaining ring worn",
+              "fix": "replace retaining ring",
+              "mean_min": 70,
+              "sd_min": 12
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "implant",
+      "label": "Implant",
+      "prefix": "IMP",
+      "area": [
+        260,
+        130,
+        380,
+        220
+      ],
+      "pm_task": "scheduled implanter PM: source rebuild",
+      "faults": {
+        "BEAM-CUR": {
+          "symptoms": [
+            "beam current low",
+            "beam tuning fails",
+            "source arc unstable"
+          ],
+          "causes": [
+            {
+              "cause": "ion source filament worn",
+              "fix": "replace source filament",
+              "mean_min": 110,
+              "sd_min": 20
+            },
+            {
+              "cause": "extraction electrode coated",
+              "fix": "clean extraction electrodes",
+              "mean_min": 150,
+              "sd_min": 30
+            }
+          ]
+        },
+        "DOSE-UNI": {
+          "symptoms": [
+            "dose uniformity out of spec",
+            "scan uniformity alarm",
+            "faraday cup reading erratic"
+          ],
+          "causes": [
+            {
+              "cause": "faraday cup contaminated",
+              "fix": "clean and recalibrate faraday",
+              "mean_min": 80,
+              "sd_min": 15
+            },
+            {
+              "cause": "scan waveform drift",
+              "fix": "retune scan waveform",
+              "mean_min": 60,
+              "sd_min": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "metrology",
+      "label": "Metrology",
+      "prefix": "MET",
+      "area": [
+        150,
+        20,
+        250,
+        70
+      ],
+      "pm_task": "scheduled metrology PM: calibration and standards",
+      "faults": {
+        "CAL-DRIFT": {
+          "symptoms": [
+            "measurement drift on reference wafer",
+            "gauge R&R failed",
+            "calibration out of tolerance"
+          ],
+          "causes": [
+            {
+              "cause": "reference standard degraded",
+              "fix": "requalify with new standard",
+              "mean_min": 45,
+              "sd_min": 10
+            },
+            {
+              "cause": "stage encoder drift",
+              "fix": "recalibrate stage",
+              "mean_min": 70,
+              "sd_min": 15
+            }
+          ]
+        },
+        "OPT-FAULT": {
+          "symptoms": [
+            "image focus failing on CD-SEM",
+            "optical path alarm",
+            "low signal to noise"
+          ],
+          "causes": [
+            {
+              "cause": "electron gun tip aging",
+              "fix": "condition or swap gun tip",
+              "mean_min": 140,
+              "sd_min": 25
+            },
+            {
+              "cause": "lamp at end of life",
+              "fix": "replace light source lamp",
+              "mean_min": 40,
+              "sd_min": 8
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "presets": {
+    "normal": {
+      "label": "Normal shift",
+      "description": "Typical mix of PMs and tool-downs; staffing roughly matches load.",
+      "family_mix": {
+        "litho": 0.15,
+        "etch": 0.22,
+        "deposition": 0.2,
+        "cmp": 0.15,
+        "implant": 0.1,
+        "metrology": 0.18
+      },
+      "constraint_engineer_share": 0.18,
+      "down_share": 0.55,
+      "sla_critical": 45,
+      "sla_down": 120
+    },
+    "litho_crunch": {
+      "label": "Lithography crunch",
+      "description": "Scanner problems pile up while few engineers hold litho certifications.",
+      "family_mix": {
+        "litho": 0.4,
+        "etch": 0.15,
+        "deposition": 0.15,
+        "cmp": 0.1,
+        "implant": 0.05,
+        "metrology": 0.15
+      },
+      "constraint_engineer_share": 0.1,
+      "down_share": 0.7,
+      "sla_critical": 45,
+      "sla_down": 120
+    },
+    "excursion": {
+      "label": "Excursion / surge",
+      "description": "Mostly unplanned downs with tight response targets.",
+      "family_mix": {
+        "litho": 0.2,
+        "etch": 0.25,
+        "deposition": 0.2,
+        "cmp": 0.1,
+        "implant": 0.1,
+        "metrology": 0.15
+      },
+      "constraint_engineer_share": 0.18,
+      "down_share": 0.9,
+      "sla_critical": 25,
+      "sla_down": 60
+    },
+    "overstaffed": {
+      "label": "Overstaffed",
+      "description": "Plenty of engineers; the question is cost, not coverage.",
+      "family_mix": {
+        "litho": 0.15,
+        "etch": 0.22,
+        "deposition": 0.2,
+        "cmp": 0.15,
+        "implant": 0.1,
+        "metrology": 0.18
+      },
+      "constraint_engineer_share": 0.2,
+      "down_share": 0.5,
+      "sla_critical": 60,
+      "sla_down": 150
+    }
+  }
+}

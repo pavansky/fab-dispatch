@@ -1,18 +1,21 @@
 """Every algorithm must respect every hard constraint on every generated scenario."""
+
 import pytest
 
 from app.algorithms import ALGORITHMS
 from app.engine import allocate
-from app.generator import PRESETS, generate
+from app.fabs import all_profiles
+from app.generator import generate
 from app.models import Weights
 
-CASES = [(preset, seed) for preset in PRESETS for seed in range(4)]
+# Every preset of every fab profile: hard constraints are a property of the engine, not of one fab.
+CASES = [(fab.id, preset, seed) for fab in all_profiles().values() for preset in fab.presets for seed in range(3)]
 
 
 @pytest.mark.parametrize("algorithm", list(ALGORITHMS))
-@pytest.mark.parametrize("preset,seed", CASES)
-def test_hard_constraints_hold(algorithm, preset, seed):
-    sc = generate(seed=seed, n_engineers=12, n_jobs=40, preset=preset)
+@pytest.mark.parametrize("fab_id,preset,seed", CASES)
+def test_hard_constraints_hold(algorithm, fab_id, preset, seed):
+    sc = generate(seed=seed, n_engineers=12, n_jobs=40, preset=preset, fab_id=fab_id)
     res = allocate(sc, Weights(), algorithm)
     engineers = {e.id: e for e in sc.engineers}
     jobs = {j.id: j for j in sc.jobs}

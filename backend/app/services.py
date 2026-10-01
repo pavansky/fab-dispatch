@@ -1,4 +1,5 @@
 """Application services: the layer between HTTP routes and the solver/store."""
+
 from __future__ import annotations
 
 import time
@@ -14,7 +15,7 @@ from .store import Store
 @dataclass
 class PlanOutcome:
     result: AllocationResult
-    cache: str          # "memory" | "store" | "miss"
+    cache: str  # "memory" | "store" | "miss"
     elapsed_ms: float
 
 
@@ -29,8 +30,12 @@ class PlanningService:
 
     def plan(self, scenario: Scenario, weights: Weights, algorithm: str) -> PlanOutcome:
         t0 = time.perf_counter()
-        key = plan_key(scenario=scenario.model_dump(mode="json"), weights=weights.model_dump(),
-                       algorithm=algorithm, budget=self._budget())
+        key = plan_key(
+            scenario=scenario.model_dump(mode="json"),
+            weights=weights.model_dump(),
+            algorithm=algorithm,
+            budget=self._budget(),
+        )
         if (hit := self.lru.get(key)) is not None:
             return PlanOutcome(AllocationResult.model_validate(hit), "memory", (time.perf_counter() - t0) * 1000)
         if (stored := self.store.get_cached_plan(key)) is not None:

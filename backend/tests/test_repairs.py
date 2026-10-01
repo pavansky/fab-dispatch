@@ -1,25 +1,33 @@
 """Repair-history retrieval: determinism, relevance, and the prediction API."""
+
 from fastapi.testclient import TestClient
 
-from app.knowledge import CATALOG, HashEmbedder, synthetic_history
+from app.fabs import all_profiles
+from app.knowledge import HashEmbedder, synthetic_history
 from app.main import app
+from tests.conftest import auth_headers
 
-client = TestClient(app)
+client = TestClient(app, headers=auth_headers("viewer"))
 
 
-def test_history_is_reproducible_across_processes():
-    a, b = synthetic_history(200), synthetic_history(200)
-    assert a == b
-    assert {r.family for r in a} == set(CATALOG)
+def test_history_is_reproducible_and_covers_every_family_of_every_fab():
+    for profile in all_profiles().values():
+        a, b = synthetic_history(profile, 300), synthetic_history(profile, 300)
+        assert a == b
+        assert {r.family for r in a} == set(profile.family_ids)
 
 
 def test_embedder_is_normalised_and_lexically_sensible():
     e = HashEmbedder()
     v = e.embed("RF reflected power high")
     assert abs(sum(x * x for x in v) - 1) < 1e-9
+
     def cos(a, b):
         return sum(x * y for x, y in zip(e.embed(a), e.embed(b)))
-    assert cos("RF reflected power high", "RF reflected power high on chamber B") > cos("RF reflected power high", "slurry flow alarm")
+
+    assert cos("RF reflected power high", "RF reflected power high on chamber B") > cos(
+        "RF reflected power high", "slurry flow alarm"
+    )
 
 
 def test_similar_repairs_stay_in_family_and_match_the_fault():
@@ -32,6 +40,7 @@ def test_similar_repairs_stay_in_family_and_match_the_fault():
 
 def test_predict_durations_only_touches_tool_downs():
     sc = client.post("/api/scenario", json={"seed": 3, "n_engineers": 6, "n_jobs": 20}).json()
+    assert sc["fab_id"] == "fab1-300mm-logic"
     out = client.post("/api/repairs/predict-durations", json=sc).json()
     changed = {c["job_id"] for c in out["changes"]}
     kinds = {j["id"]: j["kind"] for j in sc["jobs"]}
@@ -50,7 +59,9 @@ def test_locked_disk_index_falls_back_to_memory(tmp_path):
 
     s = Settings(env="local", qdrant_path=str(tmp_path / "q"))
     first = RepairIndex(s)
-    second = RepairIndex(s)       # same folder, already locked by `first`
+    second = RepairIndex(s)  # same folder, already locked by `first`
     assert first.mode == "embedded-disk"
     assert second.mode == "embedded"
-    assert second.similar("etch", "RF reflected power high")["prediction"]
+    from app.fabs import get_profile
+
+    assert second.similar(get_profile("fab1-300mm-logic"), "etch", "RF reflected power high")["prediction"]

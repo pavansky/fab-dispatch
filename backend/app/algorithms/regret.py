@@ -9,6 +9,7 @@ That is the fab situation: lots of engineers can handle metrology, but maybe two
 on shift are level-3 on the EUV/immersion scanners. A small priority term breaks ties so
 a bottleneck tool-down isn't beaten by a PM with the same regret.
 """
+
 from __future__ import annotations
 
 from ..planner import Planner

@@ -1,4 +1,5 @@
 """PyVRP, ALNS and the exact MILP: hard constraints, optimality ordering, live-mode freezing."""
+
 import pytest
 
 from app.algorithms.alns import run_alns
@@ -24,6 +25,7 @@ def test_search_methods_never_lose_to_their_start(preset, seed):
         fn(p, seed=seed)
         q = Planner(sc, Weights())
         from app.algorithms.regret import run_regret
+
         run_regret(q)
         assert p.total_cost() <= q.total_cost() + 1e-6, algo
     assert regret["assigned"] >= 0
@@ -33,8 +35,11 @@ def test_search_methods_never_lose_to_their_start(preset, seed):
 def test_exact_is_a_lower_bound_and_search_is_close(seed):
     sc = generate(seed, n_engineers=4, n_jobs=12, preset="normal")
     costs = {}
-    for name, fn in [("exact", run_exact), ("alns", lambda p: run_alns(p, seed=seed, max_iterations=300)),
-                     ("pyvrp", lambda p: run_pyvrp(p, seed=seed, max_iterations=2000))]:
+    for name, fn in [
+        ("exact", run_exact),
+        ("alns", lambda p: run_alns(p, seed=seed, max_iterations=300)),
+        ("pyvrp", lambda p: run_pyvrp(p, seed=seed, max_iterations=2000)),
+    ]:
         p = Planner(sc, Weights())
         fn(p)
         costs[name] = p.total_cost()

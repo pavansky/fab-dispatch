@@ -12,6 +12,7 @@ This is exponential in route length, so it's only for small instances (about 20 
 and 6 engineers). That's enough to measure how far each heuristic is from the true
 optimum, which is what this module is for. It is not exposed in the interactive UI.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -43,7 +44,9 @@ def enumerate_routes(p: Planner, tech_id: str) -> dict[frozenset, tuple[float, t
             return None
         k = len(base) + len(seq)
         soft = sum(p._soft(sim).values())
-        return soft + p.w.workload_balance * k * (k - 1) / 2 - sum(p.w.priority_reward * p.jobs[j].priority for j in seq)
+        return (
+            soft + p.w.workload_balance * k * (k - 1) / 2 - sum(p.w.priority_reward * p.jobs[j].priority for j in seq)
+        )
 
     def dfs(seq: list[str]) -> None:
         nonlocal count

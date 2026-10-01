@@ -12,6 +12,7 @@ Algorithms only ever ask two questions:
 Because every algorithm uses the same feasibility check and cost function, their results
 are directly comparable: the only difference is the *order* and *scope* of decisions.
 """
+
 from __future__ import annotations
 
 from collections import Counter

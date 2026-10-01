@@ -11,6 +11,7 @@ key is a SHA-256 of that input as canonical JSON. Two tiers:
 Bump ``ENGINE_VERSION`` whenever solver behaviour changes; old entries then simply stop
 matching.
 """
+
 from __future__ import annotations
 
 import hashlib
