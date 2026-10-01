@@ -2,6 +2,16 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [1.2.0] - 2026-10-01
+
+### Added
+- Shareable deep links: `?tab=` opens a view, `?job=` / `?engineer=` open with that item selected; the
+  URL follows navigation.
+- Production README with screenshots, results, API reference and configuration table.
+
+### Fixed
+- A deep-linked selection is no longer cleared when the first scenario loads.
+
 ## [1.1.1] - 2026-10-01
 
 ### Fixed
