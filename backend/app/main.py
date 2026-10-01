@@ -12,9 +12,10 @@ from starlette.responses import JSONResponse
 
 from .cache import ENGINE_VERSION
 from .config import get_settings
+from .help import load_articles
 from .http import error_body
 from .observability import RequestContext, configure_logging, request_id
-from .routes import auth, fabs, live, planning, repairs, system
+from .routes import auth, fabs, help, live, planning, repairs, system
 
 log = logging.getLogger("fab")
 
@@ -63,8 +64,18 @@ def create_app() -> FastAPI:
         details = [{k: v for k, v in e.items() if k in ("loc", "msg", "type")} for e in exc.errors()]
         return JSONResponse({**error_body("invalid", msg, request_id.get()), "details": details}, status_code=422)
 
-    for r in (system.root, system.router, auth.router, fabs.router, planning.router, live.router, repairs.router):
+    for r in (
+        system.root,
+        system.router,
+        auth.router,
+        fabs.router,
+        planning.router,
+        live.router,
+        repairs.router,
+        help.router,
+    ):
         app.include_router(r)
+    load_articles()  # broken help content (bad link, missing title) fails at startup, not in front of users
     log.info("fab-dispatch %s ready (env=%s)", ENGINE_VERSION, settings.env)
     return app
 

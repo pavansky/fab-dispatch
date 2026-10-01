@@ -10,6 +10,9 @@ Two modes behind one interface:
   with ``FAB_AUTH_SECRET``. Settings refuse this mode in production unless explicitly
   allowed, so it cannot leak into a real deployment.
 
+Guests (Supabase anonymous sign-in, no email) get ``FAB_GUEST_ROLE``, or are refused when
+it's ``none``; that lets a public demo open in one click without weakening named accounts.
+
 Roles are ordered: ``viewer`` < ``dispatcher``. Viewers can plan, explore and watch live
 shifts; dispatchers can also drive the clock, report tool-downs and call engineers off.
 Each user also has a list of fabs they may see ("*" = all), which scopes every
@@ -39,7 +42,7 @@ class User(BaseModel):
     email: str
     role: Role
     fabs: list[str]
-    provider: Literal["demo", "supabase"]
+    provider: Literal["demo", "supabase", "guest"]
 
     def can_access(self, fab_id: str) -> bool:
         return "*" in self.fabs or fab_id in self.fabs
@@ -93,6 +96,17 @@ def _verify_supabase(token: str, settings: Settings) -> User:
     else:
         key = _jwks(settings.supabase_url).get_signing_key_from_jwt(token)
         claims = jwt.decode(token, key.key, algorithms=["ES256", "RS256"], audience="authenticated", issuer=issuer)
+    if claims.get("is_anonymous"):
+        # Guest sign-in (Supabase anonymous user): no email; the role comes from settings.
+        if settings.guest_role == "none":
+            raise ValueError("guest access is disabled")
+        return User(
+            id=claims["sub"],
+            email=f"guest-{claims['sub'][:6]}",
+            role=settings.guest_role,
+            fabs=list(settings.default_fabs),
+            provider="guest",
+        )
     email = (claims.get("email") or "").lower()
     meta = claims.get("app_metadata") or {}  # set by admins, not editable by users
     role = meta.get("role")
