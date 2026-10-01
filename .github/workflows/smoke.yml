@@ -11,7 +11,10 @@ permissions:
 
 jobs:
   smoke:
-    if: github.event.deployment_status.state == 'success'
+    # Only the app's deployments: GitHub Pages also reports one when the docs site publishes.
+    if: >-
+      github.event.deployment_status.state == 'success'
+      && github.event.deployment.environment != 'github-pages'
     runs-on: ubuntu-latest
     env:
       PRODUCTION: ${{ github.event.deployment.environment == 'Production' }}
