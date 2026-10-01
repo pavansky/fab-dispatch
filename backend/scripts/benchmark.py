@@ -4,7 +4,7 @@
 
 Three studies:
 1. quality across the four scenario presets (mean over seeded shifts, lowest-cost wins)
-2. optimality gap against the exact MILP on small shifts
+2. optimality gap against the proven optimum (exact MILP), at full shift size, per preset
 3. runtime scaling with problem size
 """
 
@@ -55,6 +55,44 @@ def quality(seeds: int, engineers: int, jobs: int) -> None:
         for a in ALGORITHMS:
             cells = [f"{statistics.fmean(rows[a][k]):.1f}" for k, _ in COLUMNS]
             print(f"| {a} | " + " | ".join(cells) + f" | {wins[a]}/{seeds} |")
+
+
+def gaps_full(seeds: int, engineers: int, jobs: int) -> None:
+    """Gap to the proven optimum on full-size shifts, per preset. Any negative gap would mean
+    the "optimum" isn't one, so it fails loudly instead of printing a flattering table."""
+    print("\n| Preset | Strategy | Mean gap % | Worst gap % | Optimal in |\n|---|---|---|---|---|")
+    overall: dict[str, list[float]] = defaultdict(list)
+    exact_s, columns = [], []
+    for preset in PRESETS:
+        per: dict[str, list[float]] = defaultdict(list)
+        for seed in range(seeds):
+            sc = generate(seed, engineers, jobs, preset)
+            p = Planner(sc, Weights())
+            t0 = time.perf_counter()
+            run_exact(p)
+            exact_s.append(time.perf_counter() - t0)
+            columns.append(p.meta["solver"]["columns"])
+            opt = p.total_cost()
+            for a, (_, fn) in ALGORITHMS.items():
+                q = Planner(sc, Weights())
+                fn(q)
+                g = 100 * (q.total_cost() - opt) / abs(opt)
+                assert g > -1e-6, f"{a} beat the 'optimum' on {preset} seed {seed}: {g:.4f}%"
+                per[a].append(g)
+                overall[a].append(g)
+        for a in ALGORITHMS:
+            hits = sum(g < 0.01 for g in per[a])
+            print(
+                f"| {PRESETS[preset].label} | {a} | {statistics.fmean(per[a]):.2f} | {max(per[a]):.2f} | {hits}/{seeds} |"
+            )
+    print("\n| Strategy | Mean gap % (all presets) | Worst gap % | Optimal in |\n|---|---|---|---|")
+    for a in ALGORITHMS:
+        g = overall[a]
+        print(f"| {a} | {statistics.fmean(g):.2f} | {max(g):.2f} | {sum(x < 0.01 for x in g)}/{len(g)} |")
+    print(
+        f"\nExact solve (enumerate + MILP): mean {statistics.fmean(exact_s):.1f} s, max {max(exact_s):.1f} s; "
+        f"{statistics.fmean(columns):,.0f} routes per shift on average."
+    )
 
 
 def gaps(seeds: int) -> None:
@@ -122,7 +160,12 @@ def main() -> None:
     ap.add_argument("--engineers", type=int, default=14)
     ap.add_argument("--jobs", type=int, default=45)
     ap.add_argument("--gap-seeds", type=int, default=20)
+    ap.add_argument("--only", choices=["gaps-full"], help="run one study")
     args = ap.parse_args()
+    if args.only == "gaps-full":
+        print(f"### Optimality gap at full size ({args.gap_seeds} shifts per preset, {args.engineers} x {args.jobs})")
+        gaps_full(args.gap_seeds, args.engineers, args.jobs)
+        return
     print(f"### Quality ({args.seeds} seeds per preset, {args.engineers} engineers, {args.jobs} jobs)")
     quality(args.seeds, args.engineers, args.jobs)
     print(f"\n### Optimality gap ({args.gap_seeds} shifts of 4 engineers x 12 jobs, exact MILP optimum)")

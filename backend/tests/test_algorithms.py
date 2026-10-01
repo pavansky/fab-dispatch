@@ -89,3 +89,22 @@ def test_batch_and_regret_serve_at_least_as_much_priority_on_average():
     mean = {a: statistics.fmean(v) for a, v in scores.items()}
     assert mean["hungarian"] >= mean["greedy"] - 0.5
     assert mean["regret"] >= mean["greedy"] - 0.5
+
+
+def test_the_exact_optimum_is_proven_at_full_shift_size():
+    """A full 14 x 45 shift is solved to proven optimality, and no heuristic beats it."""
+    from app.algorithms import ALGORITHMS
+    from app.algorithms.exact import run_exact
+    from app.generator import generate
+    from app.models import Weights
+    from app.planner import Planner
+
+    sc = generate(0, 14, 45, "normal")
+    p = Planner(sc, Weights())
+    run_exact(p)
+    opt = p.total_cost()
+    assert p.meta["solver"]["columns"] > 10_000
+    for name, (_, fn) in ALGORITHMS.items():
+        q = Planner(sc, Weights())
+        fn(q)
+        assert q.total_cost() >= opt - 1e-6, name
