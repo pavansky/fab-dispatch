@@ -2,6 +2,11 @@ import { ALGO_ORDER, ALGO_SHORT, METRICS, improvement } from './metrics.js'
 import { fmt } from './format.js'
 
 export const GOALS = {
+  value: {
+    label: 'Best value: cost × latency',
+    help: 'Never trades away bottleneck coverage. Among plans within the noise margin of the cheapest, takes the fastest to compute. A slower solver has to earn its latency.',
+    rank: ['objective', 'runtime_ms'],
+  },
   bottleneck: {
     label: 'Protect bottleneck tools',
     help: 'Most bottleneck tool-downs covered, then the fastest response. Use when lost wafer moves dominate.',
@@ -22,7 +27,58 @@ export const GOALS = {
 // Differences smaller than this are treated as a tie when ranking.
 const TIE = { critical_coverage_pct: 0.05, priority_weighted_coverage_pct: 0.05, coverage_pct: 0.05, mean_response_min: 0.25, objective: 0.5 }
 
+/**
+ * Cost differences smaller than this are treated as noise, not a win. On one shift,
+ * re-sequencing a single job moves the objective by a few points, so a 1% "win" is
+ * not evidence. Calling it one would be a false positive.
+ */
+export function costMargin(cheapest) {
+  return Math.max(0.02 * Math.abs(cheapest), 5)
+}
+
+/** Strategies not beaten on both cost and latency by another (the efficient frontier). */
+export function paretoFront(results) {
+  return results.filter((r) => !results.some((o) => o !== r
+    && o.metrics.objective <= r.metrics.objective && o.metrics.runtime_ms <= r.metrics.runtime_ms
+    && (o.metrics.objective < r.metrics.objective || o.metrics.runtime_ms < r.metrics.runtime_ms)))
+}
+
+function recommendValue(results) {
+  // 1. Guard: never give up bottleneck coverage or priority-weighted coverage for speed or cost.
+  const bestCrit = Math.max(...results.map((r) => r.metrics.critical_coverage_pct))
+  const bestPri = Math.max(...results.map((r) => r.metrics.priority_weighted_coverage_pct))
+  const safe = results.filter((r) => r.metrics.critical_coverage_pct >= bestCrit - 1e-9
+    && r.metrics.priority_weighted_coverage_pct >= bestPri - 0.5)
+  const pool = safe.length ? safe : results
+  // 2. Cheapest plan, and everything within the noise margin of it.
+  const cheapest = pool.reduce((a, b) => (b.metrics.objective < a.metrics.objective ? b : a))
+  const margin = costMargin(cheapest.metrics.objective)
+  const nearTie = pool.filter((r) => r.metrics.objective <= cheapest.metrics.objective + margin)
+  // 3. Among statistically indistinguishable plans, the fastest wins.
+  const winner = nearTie.reduce((a, b) => (b.metrics.runtime_ms < a.metrics.runtime_ms ? b : a))
+  const ranked = [winner, ...results.filter((r) => r !== winner).sort((a, b) => a.metrics.objective - b.metrics.objective)]
+  const m = winner.metrics
+  const excluded = results.filter((r) => !pool.includes(r))
+  let why
+  if (winner === cheapest) {
+    const next = pool.filter((r) => r !== winner).sort((a, b) => a.metrics.objective - b.metrics.objective)[0]
+    why = next
+      ? `Cheapest plan by a real margin: ${fmt(m.objective)} pts, ${fmt(next.metrics.objective - m.objective)} pts (${Math.round(100 * (next.metrics.objective - m.objective) / next.metrics.objective)}%) below ${ALGO_SHORT[next.algorithm]}. That's worth its ${fmt(m.runtime_ms, 0)} ms solve.`
+      : `Only strategy that keeps full bottleneck coverage.`
+  } else {
+    why = `${ALGO_SHORT[cheapest.algorithm]} is cheaper by only ${fmt(m.objective - cheapest.metrics.objective)} pts, inside the ${fmt(margin, 0)}-pt noise margin, so it isn't a real win. ${ALGO_SHORT[winner.algorithm]} gets an equivalent plan ${Math.max(1, Math.round(cheapest.metrics.runtime_ms / Math.max(m.runtime_ms, 0.1)))}× faster (${fmt(m.runtime_ms, 0)} ms vs ${fmt(cheapest.metrics.runtime_ms, 0)} ms).`
+  }
+  why += ` Covers ${m.assigned} of ${m.jobs} jobs, ${fmt(m.critical_coverage_pct)}% of bottleneck downs.`
+  const tradeoff = []
+  if (excluded.length) tradeoff.push(`Excluded for losing bottleneck coverage: ${excluded.map((r) => ALGO_SHORT[r.algorithm]).join(', ')}`)
+  const faster = pool.filter((r) => r.metrics.runtime_ms < m.runtime_ms && !nearTie.includes(r))
+    .sort((a, b) => a.metrics.objective - b.metrics.objective)[0]
+  if (faster) tradeoff.push(`${ALGO_SHORT[faster.algorithm]} answers in ${fmt(faster.metrics.runtime_ms, 0)} ms but costs ${fmt(faster.metrics.objective - m.objective)} pts more`)
+  return { winner, ranked, why, tradeoff, margin, nearTie: nearTie.map((r) => r.algorithm) }
+}
+
 export function recommend(results, goalKey) {
+  if (goalKey === 'value') return recommendValue(results)
   const goal = GOALS[goalKey]
   const sorted = [...results].sort((a, b) => {
     for (const key of goal.rank) {
@@ -125,7 +181,7 @@ export function insights(results, scenario) {
     const bestC = constructive.reduce((x, y) => (y.metrics.objective < x.metrics.objective ? y : x))
     const bestS = search.reduce((x, y) => (y.metrics.objective < x.metrics.objective ? y : x))
     const saving = (bestC.metrics.objective - bestS.metrics.objective) / (bestC.metrics.objective || 1)
-    if (saving > 0.02) {
+    if (bestC.metrics.objective - bestS.metrics.objective > costMargin(bestS.metrics.objective)) {
       out.push({
         icon: '↘',
         html: `<b>Search pays off: ${ALGO_SHORT[bestS.algorithm]} costs ${Math.round(saving * 100)}% less than the best one-pass method</b> (${ALGO_SHORT[bestC.algorithm]}), mostly by cutting idle wait (${fmt(bestS.metrics.wait_min_total, 0)} vs ${fmt(bestC.metrics.wait_min_total, 0)} min). It takes about a second instead of milliseconds.`,

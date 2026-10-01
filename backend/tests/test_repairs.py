@@ -41,3 +41,16 @@ def test_predict_durations_only_touches_tool_downs():
 
 def test_unknown_family_is_rejected():
     assert client.post("/api/repairs/similar", json={"family": "magic", "symptom": "broken"}).status_code == 422
+
+
+def test_locked_disk_index_falls_back_to_memory(tmp_path):
+    """Two processes can't share an embedded on-disk Qdrant folder; the second must not 500."""
+    from app.config import Settings
+    from app.knowledge import RepairIndex
+
+    s = Settings(env="local", qdrant_path=str(tmp_path / "q"))
+    first = RepairIndex(s)
+    second = RepairIndex(s)       # same folder, already locked by `first`
+    assert first.mode == "embedded-disk"
+    assert second.mode == "embedded"
+    assert second.similar("etch", "RF reflected power high")["prediction"]

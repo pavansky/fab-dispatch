@@ -1,7 +1,7 @@
 """Runtime settings, read once from environment variables (prefix ``FAB_``) or ``.env``.
 
-Local development needs none of them: the defaults give an in-process SQLite store and
-an embedded Qdrant collection, so the brief's "no API keys, runs locally" rule holds.
+Local development needs none of them: the defaults give a SQLite store and an
+in-memory Qdrant collection, so the brief's "no API keys, runs locally" rule holds.
 Production sets ``FAB_DATABASE_URL`` (Supabase/any Postgres) and, optionally,
 ``FAB_QDRANT_URL``.
 """
@@ -22,11 +22,12 @@ class Settings(BaseSettings):
     database_url: str = Field("sqlite:///./data/fab.db", description="sqlite:///path or postgresql://...")
     qdrant_url: str | None = Field(None, description="Qdrant server URL; unset = embedded local mode")
     qdrant_api_key: str | None = None
-    qdrant_path: str = Field("./data/qdrant", description="on-disk path for embedded Qdrant")
+    qdrant_path: str | None = Field(
+        None, description="optional on-disk path for embedded Qdrant; unset = in-memory per process")
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     solver_time_limit_s: float = Field(3.0, gt=0, le=20, description="safety cap for ALNS and PyVRP")
-    alns_iterations: int = Field(600, ge=1, description="ALNS iteration budget (deterministic stop)")
-    pyvrp_iterations: int = Field(3000, ge=1, description="PyVRP iteration budget (deterministic stop)")
+    alns_iterations: int = Field(300, ge=1, description="ALNS iteration budget (deterministic stop); see ANALYSIS §1")
+    pyvrp_iterations: int = Field(1000, ge=1, description="PyVRP iteration budget (deterministic stop); see ANALYSIS §1")
     live_time_limit_s: float = Field(0.6, gt=0, le=10, description="budget per live re-dispatch")
     sse_window_s: float = Field(25.0, gt=0, description="seconds an SSE response stays open (serverless-safe)")
     log_json: bool = False
@@ -57,8 +58,6 @@ class Settings(BaseSettings):
         if os.environ.get("VERCEL"):
             if "database_url" not in self.model_fields_set:
                 self.database_url = "sqlite:////tmp/fab.db"
-            if "qdrant_path" not in self.model_fields_set:
-                self.qdrant_path = "/tmp/qdrant"
             if "log_json" not in self.model_fields_set:
                 self.log_json = True
             if self.env == "local":

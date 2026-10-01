@@ -86,6 +86,32 @@ def scaling() -> None:
         print(f"| {e} engineers, {j} jobs | " + " | ".join(cells) + " |")
 
 
+def budgets() -> None:
+    """Cost of each extra iteration: where the quality curve flattens is the budget to ship."""
+    from app.algorithms.alns import run_alns
+    from app.algorithms.pyvrp_ils import run_pyvrp
+    from app.algorithms.regret import run_regret
+
+    scs = [generate(s, 14, 45, p) for s in range(6) for p in ("normal", "excursion")]
+
+    def run(fn):
+        costs, ts = [], []
+        for sc in scs:
+            p = Planner(sc, Weights())
+            t0 = time.perf_counter()
+            fn(p)
+            ts.append((time.perf_counter() - t0) * 1000)
+            costs.append(p.total_cost())
+        return statistics.fmean(costs), statistics.fmean(ts)
+
+    base, _ = run(run_regret)
+    print("\n| Solver | Iterations | Cost below regret-2 | Mean solve ms |\n|---|---|---|---|")
+    for name, fn, its in (("ALNS", run_alns, (100, 300, 600)), ("PyVRP", run_pyvrp, (250, 1000, 3000))):
+        for it in its:
+            c, t = run(lambda p, fn=fn, it=it: fn(p, max_iterations=it, runtime_s=60))
+            print(f"| {name} | {it} | {100 * (base - c) / base:.1f}% | {t:.0f} |")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", type=int, default=20)
@@ -99,6 +125,8 @@ def main() -> None:
     gaps(args.gap_seeds)
     print("\n### Solve time (ms, one shift)")
     scaling()
+    print("\n### Iteration budget (12 shifts)")
+    budgets()
 
 
 if __name__ == "__main__":

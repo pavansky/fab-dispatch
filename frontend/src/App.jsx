@@ -32,7 +32,7 @@ function AlgoSwitch({ results, active, onChange, pending = new Set() }) {
         const r = results.find((x) => x.algorithm === a)
         return (
           <button key={a} aria-pressed={active === a} onClick={() => onChange(a)} disabled={!r}>
-            <span className={`swatch sw-${a}`} />{ALGO_SHORT[a]}
+            <span className="swatch" />{ALGO_SHORT[a]}
             {pending.has(a) ? <span className="spinner" aria-label="solving" /> : r && <span className="muted num">{r.metrics.assigned}/{r.metrics.jobs}</span>}
           </button>
         )
@@ -50,7 +50,7 @@ export default function App() {
   // A shared live-shift link (?shift=…) opens straight into Live dispatch.
   const [tab, setTab] = useState(() => (new URLSearchParams(location.search).has('shift') ? 'live' : 'overview'))
   const [active, setActive] = useState('pyvrp')
-  const [goal, setGoal] = useState('cost')
+  const [goal, setGoal] = useState('value')
   const [selection, setSelection] = useState(null)
   const [floorView, setFloorView] = useState('single')
   const [showChanges, setShowChanges] = useState(true)
@@ -128,7 +128,7 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <div className="brand"><span className="brand-mark"><span /></span>Fab Dispatch<small>maintenance allocation engine</small></div>
+        <div className="brand"><span className="brand-mark"><span /></span>Fab Dispatch<small>/ allocation engine</small></div>
         <div className="context" aria-label="Current scenario">
           <span className="chip">{meta.presets[params.preset].label}</span>
           <span className="chip"><b>{effective.engineers.length}</b> engineers{offShift.size > 0 && ` (${offShift.size} off)`}</span>
@@ -213,9 +213,9 @@ export default function App() {
           {error && <div className="error-bar" role="alert">{error} <button className="btn ghost" onClick={() => setError(null)}>Dismiss</button></div>}
           {Object.entries(planErrors).map(([a, msg]) => <div key={a} className="error-bar" role="alert">{ALGO_SHORT[a]}: {msg}</div>)}
           <nav className="nav" role="tablist">
-            {TABS.map(([k, label]) => (
+            {TABS.map(([k, label], i) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>
-                {label}{k === 'workforce' && unserved > 0 && <span className="count">{unserved}</span>}
+                <span className="idx">{String(i + 1).padStart(2, '0')}</span>{label}{k === 'workforce' && unserved > 0 && <span className="count">{unserved}</span>}
               </button>
             ))}
           </nav>
@@ -256,7 +256,7 @@ export default function App() {
                           return (
                             <figure key={a} style={{ margin: 0 }}>
                               <figcaption style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, marginBottom: 6 }}>
-                                <span className={`swatch sw-${a}`} /><b>{ALGO_SHORT[a]}</b>
+                                <span className="swatch" /><b>{ALGO_SHORT[a]}</b>
                                 <span className="muted num">{r.metrics.assigned}/{r.metrics.jobs} jobs · cost {r.metrics.objective}</span>
                               </figcaption>
                               <FloorPlan compact scenario={scenario} result={r} areas={meta.areas} selection={selection} onSelect={setSelection} offShift={offShift} />

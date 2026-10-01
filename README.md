@@ -5,8 +5,8 @@ fab floor. Five allocation strategies, from a one-pass greedy to the state-of-th
 compared side by side. A **live dispatch** mode re-plans in real time as tool-downs arrive, and a
 **repair-history** index (Qdrant) predicts how long a fault will take from similar past repairs.
 
-Runs entirely on a laptop with no accounts or API keys. The same code deploys to Vercel with Supabase
-Postgres and an optional Qdrant server.
+Runs entirely on a laptop with no accounts or API keys. The same code runs in production on Vercel with
+Supabase Postgres ([fab-dispatch.vercel.app](https://fab-dispatch.vercel.app)), and can use an optional Qdrant server.
 
 | | |
 |---|---|
@@ -76,15 +76,15 @@ served work, and in live mode a stability penalty for moving a job to a differen
 | **Greedy** | constructive | priority → deadline order, cheapest feasible engineer, never revisits | ~1 ms |
 | **Hungarian** | assignment | optimal engineer × job matching per round (Kuhn-Munkres), repeated | ~3 ms |
 | **Regret-2** | constructive | place the job with most to lose first; protects scarce certifications | ~7 ms |
-| **ALNS** | metaheuristic | destroy/repair search on the *exact* objective (Ropke & Pisinger; Kovacs et al. for technician routing) | ~0.35 s |
-| **PyVRP** | metaheuristic | state-of-the-art iterated local search (C++ core), warm-started from regret | ~1.1 s |
+| **ALNS** | metaheuristic | destroy/repair search on the *exact* objective (Ropke & Pisinger; Kovacs et al. for technician routing) | ~0.17 s |
+| **PyVRP** | metaheuristic | state-of-the-art iterated local search (C++ core), warm-started from regret | ~0.4 s |
 
 There's also an **exact solver** (route enumeration + set-partitioning MILP on HiGHS) for small shifts,
 used to measure each heuristic's **true optimality gap**. Every strategy shares one constraint engine
 and one cost function, so they differ only in how they decide.
 
 **Headline results** (80 seeded shifts; full tables in [docs/ANALYSIS.md](docs/ANALYSIS.md)):
-- PyVRP has the cheapest plan in 79/80 shifts: 24–32% cheaper than the best one-pass method in three of
+- PyVRP has the cheapest plan in 78/80 shifts: 23–30% cheaper than the best one-pass method in three of
   four scenario types, mostly by cutting idle wait.
 - Against a proven optimum on small shifts, ALNS is closest (0.9% mean gap) because it optimises the
   exact objective; PyVRP is 1.8%; greedy is 10.5%.
@@ -115,9 +115,12 @@ and one cost function, so they differ only in how they decide.
 ## Production features
 
 - **Deterministic solvers** (fixed seeds, iteration budgets, time only as a safety cap). The same input
-  always gives the same plan, which makes caching safe.
+  always gives the same plan, which makes caching safe. Budgets sit at the knee of the measured
+  quality-vs-iterations curve (ANALYSIS, "Sizing the search budget").
+- **Best-value recommendations**: never trade away bottleneck coverage; treat cost differences inside a
+  noise margin as ties and pick the fastest; benchmark verdicts use paired bootstrap 95% CIs.
 - **Two-tier content-addressed plan cache**: an in-process LRU, then a database table shared across
-  instances. A repeated PyVRP plan returns in about 3 ms instead of about 600 ms. The browser keeps its
+  instances. In production a repeated plan is served in under 1 ms of server time. The browser keeps its
   own cache too, and cancels stale requests.
 - **Progressive results**: all five strategies are requested in parallel and each renders as it lands.
 - **Live shifts**: server-owned state with optimistic versioning (`If-Match` → 409), an append-only event

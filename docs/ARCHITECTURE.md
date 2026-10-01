@@ -112,8 +112,9 @@ duration as a similarity²-weighted mean with a p10–p90 range. The likely root
 weighted vote, and the most frequent fixers are listed. This is k-NN regression, so every prediction
 can be traced back to the neighbours that produced it.
 
-Modes: `:memory:` in tests, embedded on-disk locally, and a server via `FAB_QDRANT_URL` in compose or
-production. The index is built idempotently on first use (about 0.6 s).
+Modes: in-memory per process by default (any number of workers, no file locks), optional on-disk via
+`FAB_QDRANT_PATH` (falls back to memory if another process holds the lock), and a server via
+`FAB_QDRANT_URL` in compose or production. The index is built idempotently on first use (about 0.6 s).
 
 ## 6. Configuration
 
@@ -126,8 +127,9 @@ move to `/tmp` and logs switch to JSON. See [.env.example](../.env.example).
 | Operation | Time |
 |---|---|
 | Greedy / Hungarian / Regret, 14 × 45 | 1–7 ms |
-| ALNS (600 it.), 14 × 45 | ~0.35 s |
-| PyVRP (3000 it.), 14 × 45 | ~1.1 s |
+| ALNS (300 it.), 14 × 45 | ~0.17 s (≈0.9 s on Vercel) |
+| PyVRP (1000 it.), 14 × 45 | ~0.4 s (≈1 s on Vercel) |
+| Repeated plan, production (cache hit) | < 1 ms server time |
 | Same plan from the in-process cache | ~3 ms end to end through nginx |
 | Live re-plan with ALNS | ~100 ms |
 | Repair-history query | ~7 ms (index build ~0.6 s, once) |

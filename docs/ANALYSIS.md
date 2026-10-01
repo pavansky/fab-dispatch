@@ -13,34 +13,34 @@ only difference is how it decides.
 | Normal shift | Coverage % | Bottleneck % | Response min | Walk m/job | Idle wait min | Load std | **Cost** | ms | Lowest cost |
 |---|---|---|---|---|---|---|---|---|---|
 | Greedy | 93.7 | 97.8 | 23.9 | 102.9 | 1819 | 1.7 | 924.5 | 1.5 | 0/20 |
-| Hungarian | 96.1 | 97.9 | **15.8** | 85.5 | 2333 | **0.6** | 967.2 | 2.9 | 0/20 |
-| Regret-2 | 94.7 | 97.1 | 22.2 | 97.3 | 1528 | 1.6 | 851.4 | 5.9 | 0/20 |
-| ALNS | 98.0 | **98.4** | 22.0 | 86.1 | 1182 | 1.6 | 641.8 | 338 | 0/20 |
-| PyVRP | **98.1** | **98.4** | 23.4 | **83.7** | **968** | 1.9 | **577.9** | 1074 | **20/20** |
+| Hungarian | 96.1 | 97.9 | **15.8** | **85.5** | 2333 | **0.6** | 967.2 | 3.0 | 0/20 |
+| Regret-2 | 94.7 | 97.1 | 22.2 | 97.3 | 1528 | 1.6 | 851.4 | 6.3 | 0/20 |
+| ALNS | **97.9** | **98.4** | 20.8 | **85.5** | 1263 | 1.6 | 664.6 | 174 | 1/20 |
+| PyVRP | 97.7 | **98.4** | 22.5 | 86.7 | **1011** | 1.9 | **600.6** | 363 | **19/20** |
 
 | Litho crunch | Coverage % | Bottleneck % | Response min | Walk m/job | Idle wait min | Load std | **Cost** | ms | Lowest cost |
 |---|---|---|---|---|---|---|---|---|---|
-| Greedy | 67.2 | 55.0 | 21.8 | 104.8 | 1596 | 2.0 | 2463.4 | 1.3 | 0/20 |
-| Hungarian | 68.2 | 55.4 | **7.5** | 87.7 | 3162 | **0.9** | 2743.4 | 2.2 | 0/20 |
-| Regret-2 | 67.9 | 55.2 | 19.2 | 102.6 | 1385 | 2.0 | 2389.4 | 5.0 | 0/20 |
-| ALNS | 68.8 | **57.1** | 17.1 | 87.8 | 1088 | 2.0 | 2238.3 | 475 | 1/20 |
-| PyVRP | **68.9** | **57.1** | 19.5 | 93.9 | **890** | 2.2 | **2200.9** | 671 | **19/20** |
+| Greedy | 67.2 | 55.0 | 21.8 | 104.8 | 1596 | 2.0 | 2463.4 | 1.2 | 0/20 |
+| Hungarian | 68.2 | 55.4 | **7.5** | **87.7** | 3162 | **0.9** | 2743.4 | 2.3 | 0/20 |
+| Regret-2 | 67.9 | 55.2 | 19.2 | 102.6 | 1385 | 2.0 | 2389.4 | 4.8 | 0/20 |
+| ALNS | 68.8 | **57.1** | 17.9 | 93.1 | 1066 | 2.0 | 2248.4 | 233 | 1/20 |
+| PyVRP | **68.9** | **57.1** | 18.8 | 94.3 | **906** | 2.2 | **2206.1** | 231 | **19/20** |
 
 | Excursion / surge | Coverage % | Bottleneck % | Response min | Walk m/job | Idle wait min | Load std | **Cost** | ms | Lowest cost |
 |---|---|---|---|---|---|---|---|---|---|
-| Greedy | 90.8 | 89.8 | 8.9 | 104.3 | 2442 | 1.7 | 1384.6 | 1.4 | 0/20 |
-| Hungarian | 93.1 | 91.3 | **4.5** | 88.5 | 3326 | **0.7** | 1444.1 | 2.7 | 0/20 |
-| Regret-2 | 92.2 | 89.9 | 7.3 | 97.0 | 2381 | 1.6 | 1306.7 | 6.4 | 0/20 |
-| ALNS | 94.6 | **91.8** | 7.6 | 93.5 | 1961 | 1.6 | 1074.4 | 358 | 0/20 |
-| PyVRP | **94.8** | 91.5 | 9.0 | 91.6 | **1633** | 2.0 | **993.2** | 984 | **20/20** |
+| Greedy | 90.8 | 89.8 | 8.9 | 104.3 | 2442 | 1.7 | 1384.6 | 1.5 | 0/20 |
+| Hungarian | 93.1 | 91.3 | **4.5** | **88.5** | 3326 | **0.7** | 1444.1 | 2.9 | 0/20 |
+| Regret-2 | 92.2 | 89.9 | 7.3 | 97.0 | 2381 | 1.6 | 1306.7 | 6.1 | 0/20 |
+| ALNS | 94.6 | **91.8** | 7.3 | 92.7 | 2013 | 1.6 | 1096.3 | 183 | 0/20 |
+| PyVRP | **94.7** | 91.5 | 9.3 | 92.1 | **1719** | 1.9 | **1008.1** | 331 | **20/20** |
 
 | Overstaffed | Coverage % | Bottleneck % | Response min | Walk m/job | Idle wait min | Load std | **Cost** | ms | Lowest cost |
 |---|---|---|---|---|---|---|---|---|---|
-| Greedy | 92.4 | 97.7 | 30.3 | 101.7 | 1787 | 1.7 | 947.9 | 1.5 | 0/20 |
-| Hungarian | 96.8 | **98.7** | **17.9** | 85.5 | 2240 | **0.6** | 912.2 | 3.0 | 0/20 |
-| Regret-2 | 95.3 | 97.7 | 30.6 | 98.3 | 1330 | 1.7 | 783.5 | 6.5 | 0/20 |
-| ALNS | **98.1** | **98.7** | 27.9 | 84.1 | 1067 | 1.7 | 613.6 | 355 | 0/20 |
-| PyVRP | **98.1** | **98.7** | 31.0 | **83.7** | **824** | 2.0 | **540.3** | 1113 | **20/20** |
+| Greedy | 92.4 | 97.7 | 30.3 | 101.7 | 1787 | 1.7 | 947.9 | 1.4 | 0/20 |
+| Hungarian | 96.8 | **98.7** | **17.9** | 85.5 | 2240 | **0.6** | 912.2 | 2.9 | 0/20 |
+| Regret-2 | 95.3 | 97.7 | 30.6 | 98.3 | 1330 | 1.7 | 783.5 | 6.6 | 0/20 |
+| ALNS | **98.0** | **98.7** | 27.3 | 87.4 | 1105 | 1.7 | 631.1 | 182 | 0/20 |
+| PyVRP | 97.9 | **98.7** | 31.0 | **84.3** | **865** | 1.9 | **556.5** | 377 | **20/20** |
 
 ### Distance from the proven optimum
 
@@ -52,38 +52,58 @@ MILP (HiGHS). Gap = (strategy cost − optimum) / optimum.
 | Greedy | 10.5% | 38.9% | 3/20 |
 | Hungarian | 7.2% | 28.2% | 2/20 |
 | Regret-2 | 4.7% | 15.9% | 6/20 |
-| **ALNS** | **0.9%** | **6.7%** | **14/20** |
-| PyVRP | 1.8% | 11.2% | 14/20 |
+| **ALNS** | **0.9%** | **6.7%** | 13/20 |
+| PyVRP | 1.8% | 11.2% | **14/20** |
 
-### Solve time (ms, one shift)
+### Solve time (ms, one shift, this laptop)
 
 | Size | Greedy | Hungarian | Regret-2 | ALNS | PyVRP |
 |---|---|---|---|---|---|
-| 14 engineers, 45 jobs | 2 | 3 | 8 | 346 | 1,209 |
-| 30 engineers, 100 jobs | 6 | 16 | 45 | 1,965 | 2,727 |
-| 60 engineers, 200 jobs | 27 | 76 | 328 | 3,036* | 3,355* |
+| 14 engineers, 45 jobs | 2 | 5 | 6 | 165 | 422 |
+| 30 engineers, 100 jobs | 8 | 15 | 45 | 951 | 922 |
+| 60 engineers, 200 jobs | 24 | 72 | 315 | 3,066* | 2,549 |
 
 \* Hit the 3 s safety cap before the iteration budget. Those plans are still good but not
-reproducible, so they're kept out of the shared cache (see [DECISIONS.md](DECISIONS.md) D5).
+reproducible, so they're kept out of the shared cache (see [DECISIONS.md](DECISIONS.md) D5). On
+Vercel's serverless CPU, measured solve times are roughly 3–5× this laptop's.
+
+### Sizing the search budget
+
+How much quality each extra iteration buys (12 shifts, cost reduction relative to regret-2):
+
+| Solver | Iterations | Cost below regret-2 | Mean solve ms |
+|---|---|---|---|
+| ALNS | 100 | 10.7% | 65 |
+| ALNS | **300** (shipped) | 13.4% | 179 |
+| ALNS | 600 | 14.2% | 346 |
+| PyVRP | 250 | 14.6% | 100 |
+| PyVRP | **1000** (shipped) | 15.7% | 360 |
+| PyVRP | 3000 | 16.8% | 1,069 |
+
+The curves flatten fast. Going from 1000 to 3000 PyVRP iterations triples latency (on serverless,
+from about 1 s to past the 3 s cap) for a further 0.2–3.9% cost across the four presets. The shipped
+budgets sit at the knee. Teams that value cost over latency can raise them with
+`FAB_PYVRP_ITERATIONS` / `FAB_ALNS_ITERATIONS`; the plan cache keys on the budget, so the change is
+safe.
 
 ## 2. What I learned
 
-**1. Search beats any one-pass rule, by a lot.** PyVRP had the cheapest plan in 79 of 80 shifts. Against
-the best one-pass method (regret-2) it costs 24–32% less in three presets and 8% less in litho crunch,
+**1. Search beats any one-pass rule, by a lot.** PyVRP had the cheapest plan in 78 of 80 shifts. Against
+the best one-pass method (regret-2) it costs 23–30% less in three presets and 8% less in litho crunch,
 and serves about 3 points more jobs (1 point in litho crunch). Most of the saving is **idle wait**, which
-falls by about a third: the one-pass methods commit jobs in an order that leaves engineers standing at
+falls by about a third (28–35%): the one-pass methods commit jobs in an order that leaves engineers standing at
 tools waiting for windows to open, and only re-sequencing whole routes fixes that.
 
 **2. The method that's best for one objective isn't best for another, and the exact solver shows why.**
 On small shifts **ALNS gets closer to the true optimum than PyVRP** (0.9% vs 1.8% mean gap, 6.7% vs 11.2%
 worst). ALNS optimises our objective exactly, including the convex workload-balance term. PyVRP can't
 express that term natively, so it optimises a slightly different problem very well. On full-size shifts,
-PyVRP's raw search speed (C++, tens of thousands of moves per second) outweighs that mismatch. The
+PyVRP's raw search speed (a C++ core) outweighs that mismatch. The
 lesson: a solver is only as good as its fit to the actual objective, and measuring against a proven
 optimum is what reveals it.
 
 **3. Hungarian wins on response time and fairness, and loses on cost, for one reason.** Hungarian has
-the fastest response to tool-downs in every preset (under half the next-best in litho crunch: 7.5 vs 17.1 min)
+the fastest response to tool-downs in every preset (under half the next-best in litho crunch: 7.5 vs 17.9 min)
 and by far the most even workload (std 0.6–0.9 vs 1.6–2.2). Each round gives every engineer at most one
 job, chosen optimally for that round, so work spreads out and everyone's first job starts immediately.
 But a round is optimal only for itself: later jobs get slotted where engineers wait for windows, so its
@@ -107,9 +127,9 @@ to the real fix: cross-training or staffing. For a fab manager, that's often the
 | A job must be dispatched **the instant** it arrives; no batching window | Greedy, or regret insertion into the current plan | Milliseconds, explainable in one sentence. |
 | **Contention**: many jobs competing for few qualified engineers, tight windows | Regret-2 at minimum, a search method ideally | One-at-a-time commitment strands jobs. |
 | KPI is **time-to-respond** or **fairness** | Hungarian in rounds | Structurally spreads first jobs across everyone. Accept the idle-time cost. |
-| KPI is **total cost or throughput**, and about 1 s is acceptable | PyVRP | Lowest cost in 79/80 shifts. |
+| KPI is **total cost or throughput**, and about 0.4 s (about 1 s on serverless) is acceptable | PyVRP | Lowest cost in 78/80 shifts. |
 | The objective has terms a library can't express (balance, stability, custom penalties) | ALNS | Optimises the exact objective. Closest to optimal on small shifts. |
-| **Plenty of engineers** (overstaffed) | Any for bottleneck work; search for the rest | All cover about 98% of bottleneck downs. Greedy still drops PMs (92% vs 98% overall coverage) and costs 75% more than PyVRP. |
+| **Plenty of engineers** (overstaffed) | Any for bottleneck work; search for the rest | All cover about 98% of bottleneck downs. Greedy still drops PMs (92% vs 98% overall coverage) and costs 70% more than PyVRP. |
 | **Certification shortage** | Fix staffing | All strategies hit the same ceiling. |
 
 **When does the difference matter most?** Mostly where engineers are contended and windows are tight.
@@ -130,4 +150,4 @@ downs). At hard capacity limits the gap closes again, because nothing can be don
   dispatcher decisions (inverse optimisation) would make the recommendations match how the site
   actually operates.
 - **Scaling past one fab.** ALNS's pure-Python iterations slow past about 100 jobs (it hits the 3 s cap
-  at 200). PyVRP or a compiled ALNS would be the path.
+  at 200). PyVRP, or a compiled ALNS, would be the path.

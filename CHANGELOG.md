@@ -2,6 +2,23 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [1.1.0] - 2026-10-01
+
+### Added
+- Best-value recommendation (coverage guard → noise margin → fastest), set as the default goal.
+- Cost × latency frontier chart on the Overview and per benchmark preset.
+- Paired bootstrap 95% CIs in the benchmark: a strategy is "worse" only when the CI excludes zero.
+- Reads `POSTGRES_URL` from Vercel's Supabase integration; libpq-safe URL cleaning.
+
+### Changed
+- New visual system: warm neutrals, Geist/Geist Mono, single orange signal, light and dark.
+- Embedded Qdrant runs in memory per process by default.
+
+### Fixed
+- 500 on repair search when a second process held the embedded Qdrant folder lock.
+- Vercel build had no Python dependencies (pyproject listed none); now kept in sync with
+  requirements.txt by a test.
+
 ## [1.0.0] - 2026-10-01
 
 ### Added

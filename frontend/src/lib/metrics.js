@@ -1,15 +1,15 @@
 // One definition per metric, used by every view so labels, units and "better" never drift.
 export const METRICS = {
-  coverage_pct: { label: 'Jobs covered', unit: '%', better: 'max' },
-  critical_coverage_pct: { label: 'Bottleneck downs covered', unit: '%', better: 'max' },
+  coverage_pct: { label: 'Jobs covered', short: 'Jobs', unit: '%', better: 'max' },
+  critical_coverage_pct: { label: 'Bottleneck downs covered', short: 'Bottleneck', unit: '%', better: 'max' },
   priority_weighted_coverage_pct: { label: 'Priority-weighted coverage', unit: '%', better: 'max' },
-  mean_response_min: { label: 'Response to tool-downs', unit: 'min', better: 'min' },
+  mean_response_min: { label: 'Response to tool-downs', short: 'Response', unit: 'min', better: 'min' },
   walk_m_per_job: { label: 'Walking per job', unit: 'm', better: 'min' },
   wait_min_total: { label: 'Idle wait, all engineers', unit: 'min', better: 'min' },
   overqualification_levels: { label: 'Over-qualification', unit: 'levels', better: 'min' },
   utilization_pct: { label: 'Engineer utilisation', unit: '%', better: 'max' },
   workload_std: { label: 'Workload spread (std)', unit: 'jobs', better: 'min' },
-  objective: { label: 'Operating cost (objective)', unit: 'pts', better: 'min' },
+  objective: { label: 'Operating cost (objective)', short: 'Cost', unit: 'pts', better: 'min' },
   runtime_ms: { label: 'Solve time', unit: 'ms', better: 'min' },
 }
 

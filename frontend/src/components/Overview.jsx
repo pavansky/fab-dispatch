@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ALGO_BLURB, ALGO_KIND, ALGO_ORDER, ALGO_SHORT, METRICS, improvement } from '../lib/metrics.js'
-import { GOALS, disagreements, insights, recommend } from '../lib/analysis.js'
+import { GOALS, disagreements, insights, paretoFront, recommend } from '../lib/analysis.js'
+import FrontierChart from './FrontierChart.jsx'
 import { PRIORITY, fmt } from '../lib/format.js'
 import MetricBars from './MetricBars.jsx'
 
@@ -26,8 +27,8 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
     <>
       <section className="card reco" aria-label="Recommendation">
         <div>
-          <p className="eyebrow">Recommended dispatch plan{pending.size > 0 && <span className="solving" style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}><span className="spinner" />waiting for {[...pending].map((a) => ALGO_SHORT[a]).join(', ')}</span>}</p>
-          <h2><span className={`swatch sw-${reco.winner.algorithm}`} style={{ width: 14, height: 14 }} />{reco.winner.label}</h2>
+          <p className="eyebrow"><span className="sig">● Recommended</span> dispatch plan{pending.size > 0 && <span className="solving" style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}><span className="spinner" />waiting for {[...pending].map((a) => ALGO_SHORT[a]).join(', ')}</span>}</p>
+          <h2>{reco.winner.label}</h2>
           <p>{reco.why}</p>
           {reco.tradeoff.length > 0 && <p className="tradeoff">Trade-off: {reco.tradeoff.join('; ')}.</p>}
         </div>
@@ -42,6 +43,19 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
         </div>
       </section>
 
+      <section className="card">
+        <div className="card-h"><div><h2><span className="section-no">01</span>Cost × latency</h2>
+          <p>Lower-left is better on both. The line is the efficient frontier: nothing on it is beaten on both cost and speed. The shaded band is the noise margin ({reco.margin ? `±${fmt(reco.margin, 0)} pts` : 'per goal'}) above the cheapest plan; differences inside it aren't counted as wins.</p></div></div>
+        <div className="card-b">
+          <FrontierChart wide margin={goal === 'value' ? reco.margin : 0}
+            points={(() => {
+              const front = new Set(paretoFront(results).map((r) => r.algorithm))
+              return results.map((r) => ({ key: r.algorithm, cost: r.metrics.objective, latency: r.metrics.runtime_ms,
+                front: front.has(r.algorithm), reco: r.algorithm === reco.winner.algorithm }))
+            })()} />
+        </div>
+      </section>
+
       <div className="cards algos">
         {ALGO_ORDER.map((key) => {
           const r = results.find((x) => x.algorithm === key)
@@ -49,14 +63,14 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
           return (
             <section key={key} className={`card score ${reco.winner.algorithm === key ? 'recommended' : ''}`}>
               <div className="score-h">
-                <span className={`swatch sw-${key}`} style={{ marginTop: 4 }} />{ALGO_SHORT[key]}
+                <span className={`swatch ${reco.winner.algorithm === key ? 'is-reco' : ''}`} style={{ marginTop: 6 }} />{ALGO_SHORT[key]}
                 {reco.winner.algorithm === key && <span className="badge brand">Recommended</span>}
               </div>
               <p className="help"><span className="badge" style={{ marginRight: 6 }}>{ALGO_KIND[key]}</span>{ALGO_BLURB[key]}</p>
               <div className="kpis">
                 {KPI_KEYS.map((k) => (
                   <div key={k} className="kpi">
-                    <div className="label">{METRICS[k].label}</div>
+                    <div className="label" title={METRICS[k].label}>{METRICS[k].short ?? METRICS[k].label}</div>
                     <div className="value">{fmt(r.metrics[k])}<small>{METRICS[k].unit}</small></div>
                     {key === 'greedy' ? <span className="delta flat">baseline</span> : <Delta k={k} value={r.metrics[k]} base={greedy?.metrics[k]} />}
                   </div>
@@ -70,7 +84,7 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
 
       <div className="grid-2">
         <section className="card">
-          <div className="card-h"><div><h2>Key findings</h2><p>Generated from this shift's results.</p></div></div>
+          <div className="card-h"><div><h2><span className="section-no">02</span>Key findings</h2><p>Generated from this shift's results.</p></div></div>
           <div className="card-b">
             <ul className="insights">
               {notes.map((n, i) => (
@@ -80,13 +94,13 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
           </div>
         </section>
         <section className="card">
-          <div className="card-h"><div><h2>Where the strategies disagree</h2><p>{diffs.length} of {jobsTotal} jobs. Click a row to inspect it.</p></div>
+          <div className="card-h"><div><h2><span className="section-no">03</span>Where the strategies disagree</h2><p>{diffs.length} of {jobsTotal} jobs. Click a row to inspect it.</p></div>
             <label className="toggle"><input type="checkbox" checked={onlyCoverage} onChange={(e) => setOnlyCoverage(e.target.checked)} />Only served vs unserved</label>
           </div>
           <div className="card-b table-wrap" style={{ maxHeight: 340, overflowY: 'auto' }}>
             {diffs.length === 0 ? <div className="empty">All strategies produce the same assignment.</div> : (
               <table className="data">
-                <thead><tr><th>Job</th><th>Type</th>{ALGO_ORDER.map((a) => <th key={a}><span className={`swatch sw-${a}`} /> {ALGO_SHORT[a]}</th>)}</tr></thead>
+                <thead><tr><th>Job</th><th>Type</th>{ALGO_ORDER.map((a) => <th key={a}>{ALGO_SHORT[a]}</th>)}</tr></thead>
                 <tbody>
                   {diffs.map((d) => (
                     <tr key={d.job.id} onClick={() => onSelect({ type: 'job', id: d.job.id })}>
@@ -105,9 +119,9 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
       </div>
 
       <section className="card">
-        <div className="card-h"><div><h2>Metric comparison</h2><p>Same shift, same constraints, same cost function. Only the decision strategy differs.</p></div></div>
+        <div className="card-h"><div><h2><span className="section-no">04</span>Metric comparison</h2><p>Same shift, same constraints, same cost function. Only the decision strategy differs.</p></div></div>
         <div className="card-b">
-          <MetricBars results={results} onPick={onPickAlgo}
+          <MetricBars results={results} onPick={onPickAlgo} highlight={reco.winner.algorithm}
             keys={['coverage_pct', 'critical_coverage_pct', 'priority_weighted_coverage_pct', 'mean_response_min', 'walk_m_per_job', 'wait_min_total', 'overqualification_levels', 'workload_std', 'utilization_pct', 'objective', 'runtime_ms']} />
         </div>
       </section>

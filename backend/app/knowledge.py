@@ -9,8 +9,9 @@ past repairs (Qdrant) for the nearest neighbours on the same tool family. That g
 * **who has fixed this before**: engineers ranked by how many of the neighbours they fixed.
 * the **likely root cause and fix** to brief the engineer with.
 
-Runs with no key and no server by default: Qdrant in embedded mode (``:memory:`` in tests,
-a local path otherwise) and a dependency-free hashed n-gram embedder. In production set
+Runs with no key and no server by default: Qdrant embedded in-process (in memory, so any
+number of workers can each hold their own copy) and a dependency-free hashed n-gram
+embedder. In production set
 ``FAB_QDRANT_URL`` (and ``FAB_QDRANT_API_KEY``) for a Qdrant server. The history is
 synthetic but structured: each fault code has root causes with their own duration
 distributions, so retrieval has real signal to find.
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+import logging
 import math
 import random
 import re
@@ -100,6 +102,8 @@ PM_TASKS = {
     "metrology": "scheduled metrology PM: calibration and standards",
 }
 
+log = logging.getLogger("fab")
+
 HISTORY_SIZE = 1800
 HISTORY_SEED = 2026
 DIM = 512
@@ -174,11 +178,19 @@ class RepairIndex:
         if settings.qdrant_url:
             self.client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key, timeout=10)
             self.mode = "server"
-        elif settings.env == "test":
-            self.client = QdrantClient(":memory:")
-            self.mode = "memory"
+        elif settings.qdrant_path and settings.env != "test":
+            # On-disk embedded mode takes an exclusive lock on the folder, so a second process
+            # (reloader, extra worker) can't open it. The history is deterministic and rebuilds
+            # in under a second, so fall back to memory rather than fail the request.
+            try:
+                self.client = QdrantClient(path=settings.qdrant_path)
+                self.mode = "embedded-disk"
+            except RuntimeError as e:
+                log.warning("qdrant path %s unavailable (%s); using in-memory index", settings.qdrant_path, e)
+                self.client = QdrantClient(":memory:")
+                self.mode = "embedded"
         else:
-            self.client = QdrantClient(path=settings.qdrant_path)
+            self.client = QdrantClient(":memory:")
             self.mode = "embedded"
         self.embedder = HashEmbedder()
         self._ready = False

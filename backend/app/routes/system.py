@@ -14,8 +14,8 @@ ALGO_INFO = {
     "greedy": {"family": "constructive", "speed": "instant"},
     "hungarian": {"family": "assignment", "speed": "instant"},
     "regret": {"family": "constructive", "speed": "instant"},
-    "alns": {"family": "metaheuristic", "speed": "~1 s"},
-    "pyvrp": {"family": "metaheuristic", "speed": "~1 s"},
+    "alns": {"family": "metaheuristic", "speed": "~0.2 s"},
+    "pyvrp": {"family": "metaheuristic", "speed": "~0.4 s"},
 }
 
 

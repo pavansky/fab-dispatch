@@ -2,7 +2,7 @@ import { ALGO_ORDER, ALGO_SHORT, METRICS, bestOf } from '../lib/metrics.js'
 import { fmt } from '../lib/format.js'
 
 /** Small multiples: one short bar chart per metric, one bar per algorithm, values labelled directly. */
-export default function MetricBars({ results, keys, onPick }) {
+export default function MetricBars({ results, keys, onPick, highlight }) {
   const ordered = ALGO_ORDER.map((a) => results.find((r) => r.algorithm === a)).filter(Boolean)
   return (
     <div className="multiples">
@@ -20,8 +20,8 @@ export default function MetricBars({ results, keys, onPick }) {
               return (
                 <div key={r.algorithm} className="mbar" onClick={() => onPick?.(r.algorithm)} role="button" tabIndex={0}
                   title={`${r.label}: ${fmt(v)} ${def.unit}`}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span className={`swatch sw-${r.algorithm}`} />{ALGO_SHORT[r.algorithm]}</span>
-                  <span className="track"><span className="fill" style={{ width: `${(Math.abs(v) / max) * 100}%`, background: `var(--s-${r.algorithm})` }} /></span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span className={`swatch ${r.algorithm === highlight ? 'is-reco' : ''}`} />{ALGO_SHORT[r.algorithm]}</span>
+                  <span className="track"><span className={`fill ${r.algorithm === highlight ? 'is-reco' : ''}`} style={{ width: `${(Math.abs(v) / max) * 100}%` }} /></span>
                   <span className={`v ${v === best && !allEqual ? 'best' : ''}`}>{fmt(v)}</span>
                 </div>
               )

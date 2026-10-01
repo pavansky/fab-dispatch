@@ -83,7 +83,36 @@ aborted, and the previous results stay on screen while new ones solve.
 **Why.** Greedy answers in milliseconds and PyVRP in about a second. Waiting for the slowest would
 waste the fast ones.
 
-### D13. Light and dark themes with validated chart colours
-**Decision.** Light is the default, with a toggle and system setting respected. Series and priority
-colours were checked with a colour-vision validator in both themes. Where contrast is below 3:1, every
-mark also has a direct label.
+### D13. Visual system: one ink, one signal
+**Decision.** Warm neutrals, Geist and Geist Mono, hairline rules, square corners, and a single orange
+signal colour for what deserves attention: the recommended plan, live state, bottleneck work. Light by
+default, a separately tuned dark theme, and the system setting is respected.
+**Why.** Five hues for five strategies competed with the content. Every strategy is already named on
+its mark, so colour can do one job, "this is the recommendation", instead of five. Contrast was checked
+for both themes, with the orange stepped darker for text on light backgrounds (5.4:1).
+
+### D14. "Best value" recommendations that refuse false positives
+**Context.** Cost, latency and coverage pull against each other, and on a single shift small cost
+differences are mostly noise.
+**Decision.** The default goal applies three steps in order:
+1. Never give up bottleneck or priority coverage.
+2. Treat every plan within a noise margin (2% or 5 points) of the cheapest as equally cheap.
+3. Among those, pick the fastest to compute.
+
+The benchmark goes further: a strategy is only "worse" when the paired bootstrap 95% CI of its cost
+difference against the best excludes zero. Otherwise it's reported as tied.
+**Why.** Paying 1 s of latency for a 1% "saving" that wouldn't replicate is the false positive to
+avoid. A slower solver has to earn its latency with a difference that is real.
+
+### D15. Embedded Qdrant is in-memory per process
+**Context.** On-disk embedded Qdrant locks its folder exclusively, so a second process (a reloader,
+a second uvicorn worker, a second container) failed with 500s.
+**Decision.** In memory by default. The index is deterministic and rebuilds in about 0.6 s. On-disk is
+opt-in (`FAB_QDRANT_PATH`) and falls back to memory if locked. Shared state belongs on a Qdrant server
+(`FAB_QDRANT_URL`).
+
+### D16. Search budgets sized from the quality curve, not by feel
+**Context.** On Vercel, PyVRP at 3000 iterations hit the 3 s cap: slower, non-reproducible, and
+uncacheable.
+**Decision.** ALNS 300 and PyVRP 1000 iterations, the knee of the measured curve. Going higher triples
+latency for a further 0.2–3.9% cost. Configurable, and part of the cache key.

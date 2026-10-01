@@ -25,7 +25,7 @@ function JobView({ job, results, active, onSelect }) {
         return (
           <div key={key} className={`decision ${key === active ? 'active' : ''}`}>
             <div className="decision-h">
-              <span className={`swatch sw-${key}`} />{ALGO_SHORT[key]}
+              <span className="swatch" />{ALGO_SHORT[key]}
               <span className="who">
                 {a ? <button className="btn ghost" style={{ padding: '0 4px' }} onClick={() => onSelect({ type: 'engineer', id: a.tech_id })}>{a.tech_id} →</button>
                   : <span className="cell-none">Unassigned</span>}
