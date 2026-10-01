@@ -15,16 +15,23 @@ services:
 
   api:
     build: ./backend
+    image: fab-dispatch-api:local
     environment:
       FAB_DATABASE_URL: postgresql://fab:fab@postgres:5432/fab
       FAB_QDRANT_URL: http://qdrant:6333
       FAB_CORS_ORIGINS: '["http://localhost:8080"]'
+      # Production settings with one-click demo sign-in, so the stack runs with no accounts.
+      # For real sign-in: FAB_AUTH_MODE=supabase plus the FAB_SUPABASE_* settings.
+      FAB_ALLOW_DEMO_AUTH_IN_PRODUCTION: "true"
+      # Signs demo sessions. The fallback is for this local stack only: set your own anywhere else.
+      FAB_AUTH_SECRET: ${FAB_AUTH_SECRET:-local-compose-only-not-a-secret-0123456789}
     depends_on:
       postgres: { condition: service_healthy }
       qdrant: { condition: service_healthy }
 
   web:
     build: ./frontend
+    image: fab-dispatch-ui:local
     ports: ["8080:80"]
     depends_on:
       api: { condition: service_healthy }

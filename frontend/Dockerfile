@@ -6,7 +6,9 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
+# Security fixes published since the base image was built.
+RUN apk upgrade --no-cache
 LABEL org.opencontainers.image.source="https://github.com/pavansky/fab-dispatch" \
       org.opencontainers.image.licenses="MIT"
 COPY nginx.conf /etc/nginx/conf.d/default.conf

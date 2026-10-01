@@ -5,11 +5,17 @@ WORKDIR /srv
 
 FROM base AS deps
 COPY requirements.txt .
-RUN pip install --prefix=/install -r requirements.txt
+# psycopg[binary] bundles its own libpq and libraries, which security updates never reach. The
+# image uses plain psycopg on Debian's libpq5 instead (installed below), patched with the OS.
+RUN sed 's/^psycopg\[binary\]/psycopg/' requirements.txt > requirements.image.txt \
+ && pip install --prefix=/install -r requirements.image.txt
 
 FROM base AS runtime
 LABEL org.opencontainers.image.source="https://github.com/pavansky/fab-dispatch" \
       org.opencontainers.image.licenses="MIT"
+# Security fixes published since the base image was built.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends libpq5 && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10001 app && mkdir -p /srv/data && chown app /srv/data
 COPY --from=deps /install /usr/local
 COPY app ./app
