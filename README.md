@@ -23,6 +23,7 @@ greedy to a state-of-the-art vehicle-routing solver, compared live, with every d
 [![Python](https://img.shields.io/badge/python-3.11–3.14-020202?logo=python&logoColor=white)](#quick-start)
 [![React](https://img.shields.io/badge/React-19-020202?logo=react&logoColor=white)](frontend/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.142-020202?logo=fastapi&logoColor=white)](backend/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-020202)](LICENSE)
 
 [**Quick start**](#quick-start) · [**Review in 10 minutes**](https://pavansky.github.io/fab-dispatch/reviewers/) · [Requirements map](#requirements-map) · [Results](#results) ·
 [Docs](https://pavansky.github.io/fab-dispatch/) · [API](https://fab-dispatch.vercel.app/api/docs) · [Support](#support)
@@ -466,7 +467,8 @@ docs/                      the documentation site: quick start, reviewers' tour,
 | [In-app help](backend/app/help/articles/) | The 17 help-center articles, readable here too |
 | [supabase/README.md](supabase/README.md) | Branded sign-in emails, sender setup, guest access |
 | [SECURITY.md](SECURITY.md) · [SUPPORT.md](SUPPORT.md) | Threat model and mitigations · where to get help |
-| [CHANGELOG.md](CHANGELOG.md) | Release history (v0.1.0 → v2.1.0) |
+| [CHANGELOG.md](CHANGELOG.md) | Release history, every version since v0.1.0 |
+| [LICENSE](LICENSE) · [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | MIT · the open-source software it builds on, with each license |
 
 ## Support
 
@@ -489,3 +491,10 @@ More in [SUPPORT.md](SUPPORT.md) and the [support guide](https://pavansky.github
 - **One engineer per job; no parts availability.** Both are natural extensions of the constraint engine.
 - **Enterprise SSO** (SAML/OIDC via Supabase) and **audit export** to a fab's SIEM are configuration
   and integration work, not redesign.
+
+## License
+
+[MIT](LICENSE) © 2026 PavanSky. Free to use, copy, modify and share, commercially too, as long as
+the copyright and license notice stay with it. The libraries it builds on keep their own licenses,
+all compatible with MIT: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The data is
+synthetic and covered by the same license.

@@ -8,6 +8,8 @@ COPY requirements.txt .
 RUN pip install --prefix=/install -r requirements.txt
 
 FROM base AS runtime
+LABEL org.opencontainers.image.source="https://github.com/pavansky/fab-dispatch" \
+      org.opencontainers.image.licenses="MIT"
 RUN useradd --system --uid 10001 app && mkdir -p /srv/data && chown app /srv/data
 COPY --from=deps /install /usr/local
 COPY app ./app

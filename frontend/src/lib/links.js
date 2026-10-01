@@ -11,6 +11,7 @@ export const LINKS = {
   discussions: `${REPO}/discussions`,
   security: `${REPO}/security/policy`,
   support: `${DOCS}support/`,
+  license: `${DOCS}project/license/`,
 }
 
 /** A prefilled GitHub issue: what happened, plus the context a maintainer needs to reproduce it. */

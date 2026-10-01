@@ -62,7 +62,7 @@ export default function About({ onClose, onHelp }) {
             </ul>
           </section>
 
-          <p className="help">Built with {STACK.join(' · ')}. <a href={LINKS.source} {...ext}>Source on GitHub ↗</a></p>
+          <p className="help">Built with {STACK.join(' · ')}. <a href={LINKS.source} {...ext}>Source on GitHub ↗</a> · <a href={LINKS.license} {...ext}>MIT License ↗</a></p>
         </div>
       </aside>
     </>

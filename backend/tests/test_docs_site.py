@@ -37,7 +37,9 @@ def test_every_help_article_is_in_the_docs_site_navigation():
 
 def test_docs_links_in_the_app_point_at_real_pages():
     links = (ROOT / "frontend/src/lib/links.js").read_text()
-    pages = re.findall(r"\$\{DOCS\}([a-z0-9-]+)/", links)
+    pages = re.findall(r"\$\{DOCS\}([a-z0-9/-]+)/", links)
     assert pages, "expected docs links in links.js"
-    for page in pages:
-        assert (ROOT / "docs" / f"{page}.md").exists(), f"links.js points at missing docs page {page}/"
+    nav = set(_nav_files(yaml.load((ROOT / "mkdocs.yml").read_text(), Loader=_Loader)["nav"]))
+    for page in pages:  # a written page, or one docs/build.py generates into the navigation
+        found = (ROOT / "docs" / f"{page}.md").exists() or f"{page}.md" in nav
+        assert found, f"links.js points at missing docs page {page}/"

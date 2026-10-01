@@ -7,6 +7,8 @@ COPY . .
 RUN npm run build
 
 FROM nginx:1.27-alpine
+LABEL org.opencontainers.image.source="https://github.com/pavansky/fab-dispatch" \
+      org.opencontainers.image.licenses="MIT"
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
