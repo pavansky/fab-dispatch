@@ -8,6 +8,11 @@ updates:
     directory: /frontend
     schedule: { interval: weekly }
     groups: { frontend: { patterns: ["*"] } }
+    # Major toolchain upgrades (Vite, ESLint, React plugins) change build and lint behaviour:
+    # do them deliberately in their own PR, not as a weekly bump.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
