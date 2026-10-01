@@ -1,0 +1,31 @@
+/* Fab Dispatch brand on Material: ink primary, one signal-orange accent, square corners. */
+:root, [data-md-color-scheme="default"] {
+  --md-primary-fg-color: #020202;
+  --md-primary-fg-color--light: #2a2827;
+  --md-primary-fg-color--dark: #000000;
+  --md-primary-bg-color: #f5f5f5;
+  --md-accent-fg-color: #ef6f2e;
+  --md-typeset-a-color: #b8460c;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #0b0b0b;
+  --md-primary-fg-color--light: #1b1918;
+  --md-primary-fg-color--dark: #000000;
+  --md-accent-fg-color: #ef6f2e;
+  --md-typeset-a-color: #f08a55;
+  --md-default-bg-color: #0f0e0e;
+}
+.md-header { border-bottom: 2px solid #ef6f2e; }
+.md-typeset h1, .md-typeset h2 { font-weight: 600; letter-spacing: -0.02em; color: var(--md-default-fg-color); }
+.md-typeset .md-button { border-radius: 3px; font-family: "Geist Mono", monospace; text-transform: uppercase; letter-spacing: .04em; font-size: .7rem; }
+.md-typeset .md-button--primary { background: #020202; border-color: #020202; color: #f5f5f5; }
+.md-typeset .md-button--primary:hover { background: #ef6f2e; border-color: #ef6f2e; }
+.md-typeset .grid.cards > ul > li { border-radius: 4px; }
+.md-typeset .grid.cards > ul > li:hover { border-color: #ef6f2e; }
+.md-typeset .grid.cards .lg { color: #ef6f2e; }
+
+.hero { padding: 1.2rem 0 1rem; }
+.hero h1 { font-size: 2.4rem; line-height: 1.05; margin: .6rem 0 .8rem; max-width: 20ch; }
+.hero p { font-size: .95rem; max-width: 62ch; }
+.hero .hero-mark { width: 44px; height: 44px; }
+#redoc-container { margin: 0 -0.8rem; }

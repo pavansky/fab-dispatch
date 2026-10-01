@@ -180,7 +180,7 @@ measured retrieval score it says "I don't know". An LLM is optional and only rew
 answer; citations and actions never come from it.
 **Why.** A dispatcher acts on these answers, so a confident wrong one is worse than none. Grounding
 makes answers checkable and identical to what the screen shows; the refusal threshold sits between
-on-topic (≥ 0.65) and off-topic (≤ 0.36) scores on an evaluation set that runs in CI. It also meets
+on-topic (≥ 0.6) and off-topic (≤ 0.36) scores on an evaluation set that runs in CI. It also meets
 the brief's no-keys rule, and makes the LLM a swappable enhancement, not a dependency.
 
 ### D25. One-click guest access for the public demo
@@ -189,3 +189,19 @@ the brief's no-keys rule, and makes the LLM a swappable enhancement, not a depen
 **Why.** Supabase's built-in email sender only reaches the project's own team, and a reviewer
 shouldn't depend on email at all. Anonymous users are real Supabase users, so the API's verification,
 rate limits and fab scoping apply unchanged, and a guest can't escalate.
+
+### D26. One source for every document, and a site that builds strictly
+**Decision.** The documentation site (MkDocs Material on GitHub Pages) generates its user guide from
+the in-app help articles, its project pages from CHANGELOG/SECURITY/CONTRIBUTING, and its API
+reference from the running app's OpenAPI schema. It builds with `--strict` on every PR. Tests keep
+the site's navigation, the app's docs links and the release version in step.
+**Why.** Documentation that's written twice drifts. Here the help center, the assistant's knowledge
+and the public docs are the same text, and a broken link fails CI instead of a reader.
+
+### D27. Make the first five minutes effortless
+**Decision.** Three ways in, each one step: the live app with guest access, GitHub Codespaces, and
+`python3 run.py` (versions checked, dependencies installed once, both servers started, browser
+opened). In the app: a tour, contextual help, About & support, and a crash screen with a prefilled
+report.
+**Why.** A product is judged in its first minutes. Every extra step between "curious" and "using it"
+loses people, and a confusing failure loses them for good.

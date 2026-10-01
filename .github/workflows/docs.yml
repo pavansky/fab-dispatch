@@ -1,0 +1,44 @@
+name: Docs
+
+# Builds the documentation site on every change (strict: broken links fail the build) and
+# publishes it to GitHub Pages from main: https://pavansky.github.io/fab-dispatch/
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: docs · build (strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: "backend/requirements.txt\ndocs/requirements.txt" }
+      - run: pip install -r backend/requirements.txt -r docs/requirements.txt
+      - name: Generate pages from their sources (help articles, changelog, OpenAPI)
+        run: python docs/build.py
+      - run: mkdocs build --strict
+        env: { NO_MKDOCS_2_WARNING: "1" }
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with: { path: site }
+
+  deploy:
+    name: docs · publish to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: { pages: write, id-token: write }
+    environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
