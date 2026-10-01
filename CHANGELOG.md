@@ -2,6 +2,34 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.5.0] - 2026-10-01
+
+### Added
+- **Equipment ingestion API** (`POST /api/ingest/tool-downs`): tools and MES systems report faults
+  directly, authenticated by a per-fab token (only its SHA-256 is configured), with a required
+  `Idempotency-Key` so retried messages report once. The fault joins the fab's live shift.
+- **Assignments read model**: every write to a shift also writes its per-job rows (engineer, times,
+  status) in the same transaction. New queries: `GET /api/shifts/{id}/assignments` and an
+  engineer's history, `GET /api/fabs/{fab}/engineers/{id}/assignments`.
+- **Self-serve account deletion** (user menu → Delete my account; `DELETE /api/auth/me`): personal
+  data is erased, shift history is anonymised, and the sign-in account is removed.
+- **Terms of use**, linked from sign-in and About & support.
+- **Architecture: design principles and trade-offs**, with the next step for each at fab scale;
+  decisions D28–D32.
+
+### Changed
+- **Rate limits hold across instances**: a per-minute quota in the database backs the in-memory
+  burst guard, so limits apply on serverless; it fails open if the database is unreachable.
+- **Tenant scope enforced in SQL**: shift reads are filtered by the caller's fabs in the query, as
+  well as checked in the route.
+- **Live updates poll adaptively**: 0.25 s while a shift is busy, backing off to 2 s when quiet.
+- **Repair-history search is exact NumPy k-NN by default** (index builds in 80 ms instead of
+  ~600 ms, ~0.1 ms per query); Qdrant is used when a server is configured.
+
+### Fixed
+- A symptom sharing nothing with past repairs produced a 0-minute "prediction"; it now returns none.
+- Repair-history answers are reproducible: ties between equally similar repairs break by id.
+
 ## [2.4.0] - 2026-10-01
 
 ### Added
