@@ -58,11 +58,25 @@ class Settings(BaseSettings):
         None, validation_alias=AliasChoices("FAB_SUPABASE_JWT_SECRET", "SUPABASE_JWT_SECRET")
     )
     dispatcher_emails: list[str] = Field(default_factory=list, description="bootstrap dispatchers by email")
+    guest_role: Literal["none", "viewer", "dispatcher"] = Field(
+        "viewer", description="role for Supabase anonymous (guest) sign-ins; none = guests refused"
+    )
     default_role: Literal["viewer", "dispatcher"] = "viewer"
     default_fabs: list[str] = Field(
         default_factory=lambda: ["*"], description="fabs a user can access unless their profile says otherwise"
     )
     cron_secret: str | None = Field(None, validation_alias=AliasChoices("FAB_CRON_SECRET", "CRON_SECRET"))
+
+    # ---- assistant -----------------------------------------------------------------
+    assistant_llm: Literal["none", "anthropic", "ollama"] = Field(
+        "none", description="optional model that rewrites grounded answers; none = fully local, no key"
+    )
+    assistant_model: str | None = Field(None, description="model id; defaults per provider")
+    anthropic_api_key: str | None = Field(
+        None, validation_alias=AliasChoices("FAB_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"), repr=False
+    )
+    ollama_url: str = Field("http://127.0.0.1:11434", description="local Ollama server for assistant_llm=ollama")
+    assistant_llm_timeout_s: float = Field(8.0, gt=0, le=30)
 
     @field_validator("database_url")
     @classmethod

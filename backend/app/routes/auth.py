@@ -22,7 +22,11 @@ def auth_config() -> dict:
     s = get_settings()
     out: dict = {"mode": s.auth_mode}
     if s.auth_mode == "supabase":
-        out |= {"supabase_url": s.supabase_url, "supabase_publishable_key": s.supabase_publishable_key}
+        out |= {
+            "supabase_url": s.supabase_url,
+            "supabase_publishable_key": s.supabase_publishable_key,
+            "guest_role": None if s.guest_role == "none" else s.guest_role,
+        }
     else:
         out["demo_roles"] = ["dispatcher", "viewer"]
     return out
