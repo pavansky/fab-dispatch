@@ -22,6 +22,7 @@ import Tour from './components/Tour.jsx'
 // Help and the assistant load on first use, keeping Markdown rendering out of the main bundle.
 const HelpCenter = lazy(() => import('./components/HelpCenter.jsx'))
 const Assistant = lazy(() => import('./components/Assistant.jsx'))
+const About = lazy(() => import('./components/About.jsx'))
 
 const TABS = [['overview', 'Overview'], ['floor', 'Floor plan'], ['schedule', 'Schedule'], ['workforce', 'Workforce'], ['live', 'Live dispatch'], ['benchmark', 'Benchmark']]
 const SLA = { 3: 45, 2: 120, 1: 240 }
@@ -101,6 +102,7 @@ function Workspace({ theme, setTheme }) {
   const [askDraft, setAskDraft] = useState('')
   const [messages, setMessages] = useState([])
   const [touring, setTouring] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   useEffect(() => {
     const url = new URL(location.href)
@@ -119,6 +121,7 @@ function Workspace({ theme, setTheme }) {
   const helpApi = useMemo(() => ({
     openHelp: (slug = null, anchor = '') => setHelp({ slug, anchor }),
     openAssistant: (draft = '') => { setAskDraft(draft); setAskOpen(true); setHelp(null) },
+    openAbout: () => { setHelp(null); setAboutOpen(true) },
   }), [])
 
   // Keyboard: ? help, / assistant, 1-6 views. Never while typing in a field.
@@ -266,7 +269,7 @@ function Workspace({ theme, setTheme }) {
   return (
     <HelpContext.Provider value={helpApi}>
       <TopBar fabs={fabs} fabId={profile.id} onFab={(id) => openFab(id)} theme={theme} onTheme={setTheme}
-        busy={busy} pending={pending} onMenu={() => setDrawer(true)} onHelp={() => helpApi.openHelp()}
+        busy={busy} pending={pending} onMenu={() => setDrawer(true)} onHelp={() => helpApi.openHelp()} onAbout={helpApi.openAbout}
         solvedNote={`${results.length} strategies solved${Object.values(cacheInfo).some((c) => c !== 'miss') ? ' · cached' : ''}`}
         chips={<>
           <span className="chip">{profile.presets[params.preset]?.label}</span>
@@ -379,7 +382,7 @@ function Workspace({ theme, setTheme }) {
                   {activeResult.unassigned.length > 0 && (
                     <section className="card">
                       <div className="card-h"><div><h2>Unserved work · {activeResult.label}</h2><p>Why each job could not be placed.</p></div></div>
-                      <div className="card-b table-wrap">
+                      <div className="card-b table-wrap" tabIndex={0}>
                         <table className="data">
                           <thead><tr><th>Job</th><th>Type</th><th>Needs</th><th>Reason</th></tr></thead>
                           <tbody>
@@ -414,6 +417,7 @@ function Workspace({ theme, setTheme }) {
           draft={askDraft} onAction={onAssistantAction} onClose={() => setAskOpen(false)} />}
         {help && <HelpCenter target={help} onNavigate={(slug, anchor = '') => setHelp({ slug, anchor })} onClose={() => setHelp(null)}
           onTour={() => { setHelp(null); setTab('overview'); setTouring(true) }} />}
+        {aboutOpen && <About onClose={() => setAboutOpen(false)} onHelp={() => { setAboutOpen(false); helpApi.openHelp() }} />}
       </Suspense>
       {touring && results.length > 0 && tab === 'overview' && <Tour onDone={endTour} />}
     </HelpContext.Provider>

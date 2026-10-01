@@ -111,7 +111,7 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
           <div className="card-h"><div><h2><span className="section-no">03</span>Where the strategies disagree</h2><p>{diffs.length} of {jobsTotal} jobs. Click a row to inspect it.</p></div>
             <label className="toggle"><input type="checkbox" checked={onlyCoverage} onChange={(e) => setOnlyCoverage(e.target.checked)} />Only served vs unserved</label>
           </div>
-          <div className="card-b table-wrap" style={{ maxHeight: 340, overflowY: 'auto' }}>
+          <div className="card-b table-wrap" tabIndex={0} style={{ maxHeight: 340, overflowY: 'auto' }}>
             {diffs.length === 0 ? <div className="empty">All strategies produce the same assignment.</div> : (
               <table className="data">
                 <thead><tr><th>Job</th><th>Type</th>{ALGO_ORDER.map((a) => <th key={a}>{ALGO_SHORT[a]}</th>)}</tr></thead>

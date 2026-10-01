@@ -1,7 +1,7 @@
 {
   "name": "fab-dispatch-ui",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.3.0",
   "type": "module",
   "engines": {
     "node": ">=20.19"
@@ -24,6 +24,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.2",

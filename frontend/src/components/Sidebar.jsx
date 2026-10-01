@@ -46,8 +46,8 @@ export default function Sidebar({
         </section>
 
         <details className="card card-b section" open data-tour="weights">
-          <summary><p className="eyebrow" style={{ margin: 0 }}>Cost weights <InfoLink slug="constraints-and-weights" anchor="soft-constraints-the-cost-weights" label="Cost weights" /></p></summary>
-          <p className="help" style={{ marginTop: 8 }}>Soft constraints. Every strategy re-solves as you drag.</p>
+          <summary><p className="eyebrow" style={{ margin: 0 }}>Cost weights</p></summary>
+          <p className="help" style={{ marginTop: 8 }}>Soft constraints. Every strategy re-solves as you drag. <InfoLink slug="constraints-and-weights" anchor="soft-constraints-the-cost-weights" label="Cost weights" /></p>
           {WEIGHTS.map(([key, label, unit, min, max, step]) => (
             <label key={key} className="field">
               <span>{label} <span className="muted">{unit}</span><b>{weights[key]}</b></span>
@@ -59,7 +59,8 @@ export default function Sidebar({
         </details>
 
         <details className="card card-b section" open>
-          <summary><p className="eyebrow" style={{ margin: 0 }}>What-if <InfoLink slug="what-ifs" label="What-if scenarios" /></p></summary>
+          <summary><p className="eyebrow" style={{ margin: 0 }}>What-if</p></summary>
+          <p className="help" style={{ marginTop: 8 }}>Try changes without touching the real plan. <InfoLink slug="what-ifs" label="What-if scenarios" /></p>
           <label className="toggle" style={{ marginTop: 10 }}>
             <input type="checkbox" checked={addMode} onChange={(e) => { setAddMode(e.target.checked); if (e.target.checked) onClose() }} />
             Report a job by tapping the floor

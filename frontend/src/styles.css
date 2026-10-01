@@ -12,7 +12,7 @@
   --surface-3: #ebebeb;
   --ink: #020202;
   --ink-2: #4d4947;
-  --ink-3: #8a8380;
+  --ink-3: #6e6866;            /* muted text: ≥ 4.5:1 on every light surface (WCAG AA) */
   --line: #e2dfdd;
   --line-2: #ccc9c7;
   --grid: rgba(2, 2, 2, 0.045);
@@ -121,10 +121,10 @@ button, svg.floor g { -webkit-tap-highlight-color: transparent; }
 
 .nav { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; }
 .nav button { border: none; background: none; padding: 12px 14px; color: var(--ink-3); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
-.nav button .idx { color: var(--ink-3); margin-right: 6px; opacity: .7; }
+.nav button .idx { color: var(--ink-3); margin-right: 6px; }
 .nav button:hover { color: var(--ink); }
 .nav button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
-.nav button[aria-selected="true"] .idx { color: var(--signal); opacity: 1; }
+.nav button[aria-selected="true"] .idx { color: var(--signal-text); }
 .nav .count { margin-left: 6px; font-size: 10px; padding: 1px 5px; border-radius: 2px; background: var(--critical-wash); color: var(--critical); }
 
 /* ---------------------------------------------------------------- cards */
@@ -318,7 +318,7 @@ svg.floor.adding { cursor: crosshair; }
 .g-tick { position: absolute; top: 6px; transform: translateX(-50%); font: 10.5px var(--mono); color: var(--ink-3); }
 .g-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--grid); }
 .g-bar { position: absolute; top: 7px; height: 16px; border-radius: 2px; border: none; padding: 0 4px; font: 600 10px "Geist Mono", monospace; color: var(--o-ink); overflow: hidden; white-space: nowrap; cursor: pointer; min-width: 4px; text-align: left; }
-.g-bar.p1 { color: #020202; }
+.g-bar.p1, .g-bar.p3 { color: #020202; } /* ink on light grey and orange: ≥ 6.9:1 */
 .g-bar.p1 { background: var(--o-1); } .g-bar.p2 { background: var(--o-2); } .g-bar.p3 { background: var(--o-3); }
 .g-bar.sel { outline: 2px solid var(--ink); outline-offset: 1px; z-index: 2; }
 .g-wait { position: absolute; top: 14px; height: 2px; background: repeating-linear-gradient(90deg, var(--ink-3) 0 2px, transparent 2px 5px); }
@@ -410,7 +410,7 @@ svg.floor.adding { cursor: crosshair; }
 .sig { font: 500 10.5px var(--mono); text-transform: uppercase; color: var(--signal-text); }
 
 /* ---------------------------------------------------------------- auth, menus, toasts */
-.signin { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+.signin { min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 16px; padding: 24px 16px; }
 .signin-card { width: min(440px, 100%); padding: 28px; }
 .signin h1 { font-size: 30px; font-weight: 500; letter-spacing: -.03em; margin: 0 0 6px; text-transform: uppercase; }
 .signin-roles { display: grid; gap: 8px; margin: 10px 0 12px; }
@@ -580,3 +580,22 @@ svg.floor { touch-action: manipulation; }
   .help-body { padding: 14px 14px 24px; }
   .toasts { bottom: 64px; }
 }
+
+/* ---------------------------------------------------------------- about, support, feedback */
+.signin-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .04em; }
+.signin-footer a { color: var(--ink-3); text-decoration: none; }
+.signin-footer a:hover { color: var(--signal-text); }
+.error-detail { white-space: pre-wrap; word-break: break-word; font: 12px var(--mono); background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; color: var(--critical); }
+.about-hero { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.about-hero .brand-mark { width: 36px; height: 36px; border-radius: 5px; }
+.about-hero .brand-mark span { width: 13px; height: 13px; }
+.about-facts { margin-bottom: 18px; }
+.about-facts .ok { color: var(--good); }
+.about-facts .bad { color: var(--critical); }
+.link-list a { display: block; padding: 10px 12px; color: var(--ink); text-decoration: none; font-size: 13.5px; }
+.link-list a:hover { background: var(--surface-2); }
+.msg-feedback { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 12px; }
+.msg-feedback .btn.ghost { padding: 2px 6px; font-size: 14px; }
+.msg-feedback form { display: flex; gap: 6px; width: 100%; }
+.msg-feedback form .input { flex: 1; padding: 4px 8px; font-size: 12.5px; }
+.msg-feedback form .btn { padding: 4px 10px; font-size: 12px; }

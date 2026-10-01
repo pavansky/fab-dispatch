@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { authConfig, clearPlanCache, demoSignIn, getMe, setTokenProvider } from './api.js'
 import { loadTurnstile } from './lib/captcha.js'
+import { LINKS } from './lib/links.js'
 
 // Two sign-in modes behind one context:
 //  - supabase (UAT/prod): Supabase Auth in the browser (magic link or password); the API
@@ -213,6 +214,12 @@ export function SignIn() {
         )}
         {error && <p className="error-bar" role="alert" style={{ marginTop: 12 }}>{error}</p>}
       </div>
+      <nav className="signin-footer" aria-label="About Fab Dispatch">
+        <a href={LINKS.docs} target="_blank" rel="noopener noreferrer">Documentation</a>
+        <a href={LINKS.privacy} target="_blank" rel="noopener noreferrer">Privacy</a>
+        <a href={LINKS.support} target="_blank" rel="noopener noreferrer">Support</a>
+        <a href={LINKS.source} target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
     </main>
   )
 }

@@ -17,7 +17,7 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
     <div className="gantt" role="table" aria-label={`Shift schedule, ${result.label}`}>
       <div className="g-row head" role="row">
         <div className="g-name muted" role="columnheader">Engineer</div>
-        <div className="g-head-track">
+        <div className="g-head-track" role="columnheader" aria-label="Time">
           {hours.filter((h) => h % (SHIFT_MIN > 600 ? 120 : 60) === 0).map((h) => <span key={h} className="g-tick" style={{ left: pct(h) }}>{clock(h)}</span>)}
         </div>
         <div className="g-util muted" role="columnheader">Busy</div>
@@ -28,8 +28,8 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
         const busy = r?.stops.reduce((s, x) => s + (x.end - x.start), 0) ?? 0
         return (
           <div key={e.id} className={`g-row ${off ? 'off' : ''}`} role="row" style={!r && !off ? { opacity: 0.6 } : undefined}>
-            <div className="g-name" onClick={() => onSelect({ type: 'engineer', id: e.id })}>{e.id}<small>{e.name}</small></div>
-            <div className="g-track">
+            <div className="g-name" role="rowheader" onClick={() => onSelect({ type: 'engineer', id: e.id })}>{e.id}<small>{e.name}</small></div>
+            <div className="g-track" role="cell">
               {hours.map((h) => <span key={h} className="g-grid" style={{ left: pct(h) }} />)}
               {now !== undefined && <span className="g-now" style={{ left: pct(now) }} />}
               {selJob && <span className="g-window" style={{ left: pct(selJob.earliest), width: pct(selJob.latest - selJob.earliest) }} />}
@@ -60,7 +60,7 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
                 )
               })}
             </div>
-            <div className="g-util num">{off ? 'off' : `${Math.round((busy / (e.shift_end - e.shift_start)) * 100)}%`}</div>
+            <div className="g-util num" role="cell">{off ? 'off' : `${Math.round((busy / (e.shift_end - e.shift_start)) * 100)}%`}</div>
           </div>
         )
       })}
