@@ -34,6 +34,7 @@ from ..store import NotFound, VersionConflict
 from ..validation import check_scenario, fab_for
 
 router = APIRouter(prefix="/api/shifts", tags=["live"])
+SSE_POLL_MIN_S, SSE_POLL_MAX_S = 0.25, 2.0
 
 
 class CreateShift(BaseModel):
@@ -62,8 +63,10 @@ def _view(state: live.LiveState, version: int, viewers: list[str] | None = None)
 
 
 def _load(shift_id: str, user: User) -> tuple[live.LiveState, int]:
+    # Tenant scope is enforced twice: in the SQL (a shift in another fab is never read) and
+    # here, so a store that ignored the scope still couldn't leak one.
     try:
-        raw, version = get_store().get_shift(shift_id)
+        raw, version = get_store().get_shift(shift_id, fabs=user.fabs)
     except NotFound:
         raise HTTPException(404, f"shift {shift_id} not found") from None
     state = live.LiveState.model_validate(raw)
@@ -96,7 +99,9 @@ def _mutate(
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
         try:
-            new_version = store.save_shift(shift_id, state.model_dump(mode="json"), version)
+            new_version = store.save_shift(
+                shift_id, state.model_dump(mode="json"), version, assignments=live.assignment_rows(state)
+            )
         except VersionConflict:
             if if_match is not None:
                 raise HTTPException(409, "shift changed concurrently; reload and retry") from None
@@ -119,7 +124,9 @@ def create_shift(
     check_scenario(user, req.scenario)
     state, events = live.start(req.scenario, req.weights, req.algorithm, user.email)
     store = get_store()
-    store.create_shift(state.id, state.model_dump(mode="json"), state.fab_id, user.email)
+    store.create_shift(
+        state.id, state.model_dump(mode="json"), state.fab_id, user.email, assignments=live.assignment_rows(state)
+    )
     store.append_events(state.id, [{**e, "version": 1} for e in events])
     return {**_view(state, 1), "events": events}
 
@@ -180,6 +187,13 @@ def engineer_off(
     return _mutate(shift_id, user, lambda s: live.engineer_off(s, engineer_id, user.email), if_match, idempotency_key)
 
 
+@router.get("/{shift_id}/assignments")
+def shift_assignments(shift_id: str, user: User = Depends(require("viewer"))) -> list[dict]:
+    """The shift's current assignments from the read model: one row per known job."""
+    _load(shift_id, user)
+    return get_store().shift_assignments(shift_id)
+
+
 @router.get("/{shift_id}/events")
 def events(
     shift_id: str,
@@ -210,6 +224,7 @@ async def stream(
         yield "retry: 1500\n\n"
         deadline = time.monotonic() + settings.sse_window_s
         last_beat = 0.0
+        idle = SSE_POLL_MIN_S
         while time.monotonic() < deadline:
             if await request.is_disconnected():
                 return
@@ -221,7 +236,10 @@ async def stream(
             for e in batch:
                 cursor = e["id"]
                 yield f"id: {e['id']}\nevent: {e['kind']}\ndata: {json.dumps(e)}\n\n"
-            await asyncio.sleep(0.5 if not batch else 0.05)
+            # Back off while the shift is quiet; snap back the moment something happens. A busy
+            # shift is polled every 0.25 s, an idle one every 2 s: ~8x fewer queries per viewer.
+            idle = SSE_POLL_MIN_S if batch else min(idle * 1.5, SSE_POLL_MAX_S)
+            await asyncio.sleep(0.05 if len(batch) == 100 else idle)
 
     return StreamingResponse(
         gen(),

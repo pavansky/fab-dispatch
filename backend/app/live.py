@@ -200,6 +200,29 @@ def job_status(state: LiveState) -> dict[str, str]:
     return status
 
 
+def assignment_rows(state: LiveState) -> list[dict]:
+    """The read model's rows: every known job with its engineer, times and status."""
+    status = job_status(state)
+    planned = {a.job_id: a for a in state.plan.assignments} if state.plan else {}
+    jobs = {j.id: j for j in state.scenario.jobs}
+    rows = []
+    for job_id in state.released:
+        job, a = jobs[job_id], planned.get(job_id)
+        rows.append(
+            {
+                "job_id": job_id,
+                "engineer_id": a.tech_id if a else None,
+                "status": status[job_id],
+                "skill": job.skill,
+                "priority": job.priority,
+                "tool": job.tool,
+                "start_min": a.start if a else None,
+                "end_min": a.end if a else None,
+            }
+        )
+    return rows
+
+
 def progress(state: LiveState) -> dict:
     st = job_status(state)
     counts = {k: sum(1 for v in st.values() if v == k) for k in ("done", "in_progress", "planned", "unassigned")}
