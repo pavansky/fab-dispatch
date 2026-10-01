@@ -1,0 +1,43 @@
+name: Uptime
+
+# Every 30 minutes: is production healthy, and are app tables still closed to the public API?
+# A failure opens (or updates) an "incident" issue; recovery closes it. Free on a public repo.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      URL: ${{ vars.PRODUCTION_URL || 'https://fab-dispatch.vercel.app' }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Health
+        id: health
+        continue-on-error: true
+        run: |
+          for i in 1 2 3; do
+            body=$(curl -s --max-time 20 "$URL/api/health") && echo "$body" | python3 -c "import json,sys; h=json.load(sys.stdin); assert h['status']=='ok' and h['schema_ok'], h" && { echo "$body"; exit 0; }
+            sleep 20
+          done
+          echo "unhealthy: ${body:-no response}"; exit 1
+      - name: Open or update the incident
+        if: steps.health.outcome == 'failure'
+        run: |
+          n=$(gh issue list --label incident --state open --json number --jq '.[0].number')
+          msg="Production health check failed at $(date -u +'%Y-%m-%d %H:%M UTC'): $URL/api/health ([run]($GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID))"
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$msg"; else gh label create incident --color B60205 --force >/dev/null; gh issue create --title "Incident: production is unhealthy" --label incident --body "$msg"; fi
+          exit 1
+      - name: Close a resolved incident
+        if: steps.health.outcome == 'success'
+        run: |
+          for n in $(gh issue list --label incident --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Recovered: health check passing at $(date -u +'%Y-%m-%d %H:%M UTC')."
+          done

@@ -38,6 +38,9 @@ jobs:
       - run: ruff format --check app tests scripts
       - name: Tests with coverage floor
         run: pytest -q --cov=app --cov-report=term-missing:skip-covered --cov-fail-under=90
+      - name: Assistant evaluation report (job summary)
+        if: always()
+        run: python -m scripts.eval_report >> "$GITHUB_STEP_SUMMARY"
 
   backend-matrix:
     name: backend · Python ${{ matrix.python }}
