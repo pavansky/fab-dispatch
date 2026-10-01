@@ -1,6 +1,6 @@
 {
  "version": "2026.10.1",
- "release": "2.3.0",
+ "release": "2.4.0",
  "commit": "local",
  "algorithms": {
   "greedy": {
@@ -40,7 +40,7 @@
   "stability": 25.0
  },
  "store": "sqlite",
- "vector_index": "qdrant-embedded",
+ "vector_index": "exact",
  "solver_budget": {
   "alns_iterations": 60,
   "pyvrp_iterations": 300,
