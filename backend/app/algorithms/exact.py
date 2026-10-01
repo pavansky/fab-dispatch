@@ -8,21 +8,24 @@
    priority reward of the jobs served. This is a 0/1 MILP, solved with HiGHS through
    ``scipy.optimize.milp``, so there's no extra dependency.
 
-This is exponential in route length, so it's only for small instances (about 20 jobs
-and 6 engineers). That's enough to measure how far each heuristic is from the true
-optimum, which is what this module is for. It is not exposed in the interactive UI.
+Enumeration is exponential in route length, but routes here are short (an engineer does at
+most 4-6 jobs a shift) and time windows prune hard: a full 14 x 45 shift has about 40,000
+feasible route sets, enumerated in about a second, and HiGHS proves the optimum in seconds.
+So heuristics are measured against the proven optimum at full size, not just on toy shifts.
+The guard is on the number of routes, which is what actually grows. It is not exposed in the
+interactive UI.
 """
 
 from __future__ import annotations
 
 import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
+from scipy.sparse import csr_matrix
 
 from ..planner import Planner
 from .alns import explain_final
 
-MAX_JOBS = 22
-MAX_ROUTES = 400_000
+MAX_ROUTES = 2_000_000  # per engineer; a full-size shift needs a few thousand
 
 
 class TooLarge(ValueError):
@@ -73,8 +76,6 @@ def enumerate_routes(p: Planner, tech_id: str) -> dict[frozenset, tuple[float, t
 
 
 def run_exact(p: Planner) -> dict:
-    if len(p.unplaced()) > MAX_JOBS:
-        raise TooLarge(f"exact solver is limited to {MAX_JOBS} open jobs")
     jobs = p.unplaced()
     j_index = {j: i for i, j in enumerate(jobs)}
     techs = list(p.techs)
@@ -86,19 +87,23 @@ def run_exact(p: Planner) -> dict:
             costs.append(c)
 
     n = len(columns)
-    a = np.zeros((len(techs) + len(jobs), n))
+    t_index = {t: i for i, t in enumerate(techs)}
+    rows, cols = [], []
     for col, (tid, seq) in enumerate(columns):
-        a[techs.index(tid), col] = 1
+        rows.append(t_index[tid])
+        cols.append(col)
         for j in seq:
-            a[len(techs) + j_index[j], col] = 1
+            rows.append(len(techs) + j_index[j])
+            cols.append(col)
+    a = csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(len(techs) + len(jobs), n))
     res = milp(
         c=np.array(costs),
         constraints=LinearConstraint(a, -np.inf, 1),
         integrality=np.ones(n),
         bounds=Bounds(0, 1),
-        options={"disp": False},
+        options={"disp": False, "mip_rel_gap": 0.0},
     )
-    if not res.success:
+    if res.status != 0:  # 0 = proven optimal; anything else (time limit, ...) is not a proof
         raise RuntimeError(f"MILP failed: {res.message}")
     for col in np.flatnonzero(res.x > 0.5):
         tid, seq = columns[col]
