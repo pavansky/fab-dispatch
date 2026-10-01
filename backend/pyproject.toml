@@ -1,0 +1,42 @@
+[project]
+name = "fab-dispatch"
+version = "1.0.0"
+description = "Resource allocation engine: equipment engineers to tool-downs and PMs in a semiconductor fab"
+requires-python = ">=3.12"
+readme = "../README.md"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi==0.142.2",
+    "uvicorn[standard]==0.54.0",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "numpy==2.5.3",
+    "scipy==1.18.1",
+    "pyvrp==0.14.0",
+    "qdrant-client==1.19.1",
+    "psycopg[binary]==3.3.6",
+]
+
+[tool.vercel]
+entrypoint = "app.main:app"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003", "RUF005", "B008", "SIM108", "E731", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning:starlette.*", "ignore:.*httpx2.*"]
+
+[tool.uv]
+# PyVRP lists matplotlib for its optional plotting helpers; the app never imports them.
+# Dropping the chain (matplotlib, pillow, contourpy, fonttools, ...) keeps the serverless
+# bundle lean and cold starts fast.
+override-dependencies = ["matplotlib; sys_platform == 'never'"]

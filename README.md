@@ -1,126 +1,158 @@
-# Fab Maintenance Dispatch: a resource allocation engine
+# Fab Dispatch: a resource allocation engine
 
-Assigns **equipment engineers** to **tool-downs and preventive maintenance (PM)** on a 300mm
-semiconductor fab floor, using three allocation strategies, and compares them side by side in
-a React UI.
+Assigns **equipment engineers** to **tool-downs and preventive maintenance** on a 300mm semiconductor
+fab floor. Five allocation strategies, from a one-pass greedy to the state-of-the-art PyVRP solver, are
+compared side by side. A **live dispatch** mode re-plans in real time as tool-downs arrive, and a
+**repair-history** index (Qdrant) predicts how long a fault will take from similar past repairs.
 
-- **Backend:** FastAPI, NumPy, SciPy (`linear_sum_assignment` for Hungarian)
-- **Frontend:** React and Vite. The fab floor plan is drawn in plain SVG, so there are no map tiles or API keys.
-- **Tests:** pytest (89 tests)
+Runs entirely on a laptop with no accounts or API keys. The same code deploys to Vercel with Supabase
+Postgres and an optional Qdrant server.
 
-> Full write-up of the results: [docs/ANALYSIS.md](docs/ANALYSIS.md)
+| | |
+|---|---|
+| **Backend** | FastAPI · NumPy · SciPy (Hungarian, HiGHS MILP) · PyVRP · Qdrant client · psycopg 3 |
+| **Frontend** | React 19 · Vite · SVG floor plan (no map tiles, no keys) |
+| **Storage** | SQLite locally (zero setup) · Postgres / Supabase in production |
+| **Tests** | 136 pytest (constraints, optimality, API contract, store on SQLite *and* Postgres) · 7 vitest |
+| **Docs** | [Analysis](docs/ANALYSIS.md) · [Architecture](docs/ARCHITECTURE.md) · [Decisions](docs/DECISIONS.md) · [Deployment](docs/DEPLOYMENT.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) |
 
-## Quick start
+---
 
-Requires Python 3.11+ and Node 20+.
+## Quick start (local, no keys)
+
+Requires **Python 3.12+** and **Node 20+**.
 
 ```bash
-# 1. Backend: http://127.0.0.1:8000  (OpenAPI docs at /docs)
+# 1. API on http://127.0.0.1:8000 (OpenAPI docs at /docs)
 cd backend
 python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --port 8000
 ```
 
 ```bash
-# 2. Frontend: http://localhost:5173  (proxies /api to :8000)
+# 2. UI on http://localhost:5173 (proxies /api to :8000)
 cd frontend
 npm install
 npm run dev
 ```
 
+Or, with `make`: `make setup` once, then `make dev`.
+
 ```bash
-# 3. Tests and benchmark
-cd backend
-pytest -q
-python -m scripts.benchmark --seeds 30
+# Tests and benchmark
+cd backend && pip install -r requirements-dev.txt && pytest -q
+cd frontend && npm test
+cd backend && python -m scripts.benchmark --seeds 20
 ```
 
-## Why this domain
+**Production-like stack** (Postgres + Qdrant server + API + nginx): `docker compose up --build`, then
+http://localhost:8080.
 
-Fab equipment maintenance is a natural fit for "mobile resources assigned to requests":
+---
 
-| Concept | In the fab |
+## The problem, in fab terms
+
+| Concept | In this model |
 |---|---|
-| Resource | Equipment engineer with a home bay, a 12-hour shift (07:00–19:00), and certifications per tool family (litho, etch, deposition, CMP, implant, metrology) at level 1–3 |
-| Request | A **tool-down** (unplanned, must be responded to within an SLA) or a **PM** (scheduled, wide window) on a specific tool |
-| Priority | 3 = bottleneck tool down (litho scanners and other constraint tools), 2 = other tool down, 1 = PM |
-| Location | Metres on the floor plan. Walking distance is **Manhattan**, because bays sit on a grid of aisles and you can't cut across tools |
+| **Resource** | Equipment engineer: home bay on the floor, 12-hour shift (07:00–19:00), max jobs per shift, certified per tool family (litho, etch, deposition, CMP, implant, metrology) at level 1–3 |
+| **Request** | A **tool-down** (unplanned, must be started within an SLA) or a **PM** (scheduled, wide window) on a specific tool, with a free-text symptom |
+| **Priority** | 3 = bottleneck tool down (litho scanners, constraint tools) · 2 = other tool down · 1 = PM |
+| **Distance** | Metres on the floor plan, **Manhattan**: bays sit on a grid of aisles and you can't walk through tools |
+| **Assignment** | An ordered **route** of jobs per engineer, not one job each. This makes it a technician routing and scheduling problem (VRPTW with skills) |
 
-## Data model (`backend/app/models.py`)
+**Hard constraints** (never violated, checked by tests on every strategy): certification, level, max
+jobs, start-time window, shift end.
 
-- `Engineer`: `x, y`, `skills {family: level}`, `shift_start/end`, `max_jobs`
-- `Job`: `x, y`, `skill`, `min_level`, `priority`, `kind` (`down`/`pm`), `earliest`/`latest` **start** window, `duration`, `tool`
-- `Assignment`: engineer, sequence in the route, arrival, start and end times, walking, cost breakdown, **explanation**, runner-up engineers, rejection counts
-- `Unassigned`: job and a plain-language reason (for example "no engineer on shift holds litho level 3+")
+**Soft constraints** (one weighted cost, adjustable live in the UI): walking, idle wait, over-qualification
+(don't send the only level-3 litho engineer to a level-1 job), workload balance, priority reward for
+served work, and in live mode a stability penalty for moving a job to a different engineer.
 
-Each engineer gets an **ordered route** (several jobs per shift), not a single job. This turns
-the problem into a small vehicle-routing problem with time windows (VRPTW), which is what fab dispatch actually looks like.
+## Five strategies
 
-## Constraints (`backend/app/planner.py`)
+| Strategy | Kind | Idea | Typical solve |
+|---|---|---|---|
+| **Greedy** | constructive | priority → deadline order, cheapest feasible engineer, never revisits | ~1 ms |
+| **Hungarian** | assignment | optimal engineer × job matching per round (Kuhn-Munkres), repeated | ~3 ms |
+| **Regret-2** | constructive | place the job with most to lose first; protects scarce certifications | ~7 ms |
+| **ALNS** | metaheuristic | destroy/repair search on the *exact* objective (Ropke & Pisinger; Kovacs et al. for technician routing) | ~0.35 s |
+| **PyVRP** | metaheuristic | state-of-the-art iterated local search (C++ core), warm-started from regret | ~1.1 s |
 
-**Hard constraints** (never violated; the tests check every one):
-1. The engineer is certified on the tool family
-2. The engineer's certification level is at least the job's minimum
-3. At most `max_jobs` per engineer
-4. The engineer arrives before the window's latest start. Arriving early means waiting.
-5. All work finishes before the end of the shift
+There's also an **exact solver** (route enumeration + set-partitioning MILP on HiGHS) for small shifts,
+used to measure each heuristic's **true optimality gap**. Every strategy shares one constraint engine
+and one cost function, so they differ only in how they decide.
 
-**Soft constraints** (weighted cost, adjustable live in the UI):
+**Headline results** (80 seeded shifts; full tables in [docs/ANALYSIS.md](docs/ANALYSIS.md)):
+- PyVRP has the cheapest plan in 79/80 shifts: 24–32% cheaper than the best one-pass method in three of
+  four scenario types, mostly by cutting idle wait.
+- Against a proven optimum on small shifts, ALNS is closest (0.9% mean gap) because it optimises the
+  exact objective; PyVRP is 1.8%; greedy is 10.5%.
+- Hungarian responds fastest to tool-downs and balances load best, but builds up the most idle time.
+- When certifications run out (litho crunch), every strategy hits the same ceiling. That's a staffing
+  problem, and the Workforce view says so.
 
-| Term | Default | Why |
-|---|---|---|
-| Walking per 100 m | 4 | Time in transit is time not fixing tools |
-| Idle wait per minute | 0.2 | An engineer standing at a tool waiting for its window is wasted capacity |
-| Over-qualification per level | 8 | Don't send the only level-3 litho engineer to a level-1 job |
-| Workload balance per job held | 5 | Spread load and avoid burning out one person |
-| Priority reward per point | 60 | Serving a bottleneck down is worth far more than any walking cost |
+## What's in the UI
 
-All three algorithms share one engine. `best_insertion(engineer, job)` tries every position in
-the engineer's current route, simulates the timing, and returns the cheapest feasible position
-with its marginal cost (or the hard constraint that ruled it out). The algorithms differ only in
-the **order and scope** of their decisions, so the comparison is fair.
+- **Overview**: a recommended plan for the chosen goal (protect bottleneck tools / maximise coverage /
+  lowest cost) with the honest trade-off, scorecards against greedy, generated findings, and the jobs
+  where the strategies disagree.
+- **Floor plan**: routes along aisles, hover any job to focus its engineer's route with stop numbers,
+  coverage changes against greedy, side-by-side view of all five.
+- **Inspector**: why each strategy did what it did (runner-up engineer, rejection reasons, cost
+  breakdown), plus **repair history**: predicted duration with p10–p90, likely root cause, who has fixed
+  it before.
+- **Schedule**: Gantt per engineer with walking and idle wait.
+- **Workforce**: demand against certified supply per tool family, and a certification matrix. Shows when
+  the problem is staffing rather than the algorithm.
+- **Live dispatch**: the shift runs in real time. Started work is locked, tool-downs appear when reported,
+  every event triggers a re-plan, and **every open dashboard updates over SSE**. Share the link to
+  watch from another device.
+- **Benchmark**: all strategies over many seeded shifts, plus a measured optimality gap.
+- What-ifs: drag cost weights (re-solves live), report a job by clicking the floor, take an engineer off
+  shift, plan with history-predicted durations. Light and dark themes.
 
-## Algorithms (`backend/app/algorithms/`)
+## Production features
 
-| Algorithm | Idea | Complexity |
-|---|---|---|
-| **Greedy** | Sort jobs by priority, then deadline (what a shift lead does by hand), and give each one the cheapest engineer. Choices are never revisited. | O(J·E·R) |
-| **Hungarian in rounds** | Each round, build an engineers × open-jobs matrix of insertion costs and solve it optimally with Kuhn-Munkres. Each engineer gains at most one job per round, and rounds repeat until nothing feasible is left. | O(rounds·min(E,J)²·max(E,J)) |
-| **Regret-2 insertion** (custom) | Each step, place the job with the largest gap between its best and second-best engineer. A job only one engineer can do goes first. This is built for scarce certifications such as litho. | O(J²·E·R), cached |
-
-**Explanations:** every assignment records why it was made: dispatch order, Hungarian round,
-or regret value; the runner-up engineer and its cost; how many engineers were rejected and why;
-and a per-term cost breakdown. Unassigned jobs get a plain-language reason. Click any job in the UI to see these.
-
-## UI
-
-- **Floor plan:** tool-family areas, engineer home bays (squares), walking routes as L-shaped aisle paths, and jobs coloured by assigned engineer. Bottleneck downs are ringed; unassigned jobs are dashed red. Single or **side-by-side** view.
-- **Algorithm comparison:** 11 metrics, with the best value per row highlighted
-- **Decision explanation:** how each algorithm handled the selected job
-- **Shift schedule:** a Gantt chart per engineer, showing idle waits
-- **What-if:** change scenario preset, seed and size; drag weight sliders (re-solves live); click the floor to report a new tool-down; click an engineer to take them off shift
+- **Deterministic solvers** (fixed seeds, iteration budgets, time only as a safety cap). The same input
+  always gives the same plan, which makes caching safe.
+- **Two-tier content-addressed plan cache**: an in-process LRU, then a database table shared across
+  instances. A repeated PyVRP plan returns in about 3 ms instead of about 600 ms. The browser keeps its
+  own cache too, and cancels stale requests.
+- **Progressive results**: all five strategies are requested in parallel and each renders as it lands.
+- **Live shifts**: server-owned state with optimistic versioning (`If-Match` → 409), an append-only event
+  log, and SSE that resumes with `Last-Event-ID` and works across instances and on serverless.
+- **HTTP**: ETag/304 on reads, gzip, one JSON error envelope with request IDs, per-client rate limits on
+  expensive endpoints, security headers, `/api/livez` and `/api/health`.
+- **Ops**: typed settings from env (`FAB_*`, see [.env.example](.env.example)), structured JSON logs,
+  Docker images (non-root, healthchecks), compose stack, and CI covering lint, tests on SQLite *and*
+  Postgres, frontend tests and build, and image builds.
 
 ## Project layout
 
 ```
 backend/
-  app/models.py          domain model (pydantic)
-  app/planner.py         route simulation, hard and soft constraints, insertion
-  app/algorithms/        greedy.py, hungarian.py, regret.py
-  app/engine.py          runs an algorithm, builds results and metrics
-  app/generator.py       seeded synthetic fab: 4 presets
-  app/main.py            FastAPI: /api/meta, /api/scenario, /api/allocate
-  scripts/benchmark.py   multi-seed comparison
-  tests/                 constraints, algorithm behaviour, API
-frontend/src/            App.jsx and components/
-docs/ANALYSIS.md         algorithm comparison write-up
+  app/
+    models.py            domain model (pydantic)
+    planner.py           route simulation, hard/soft constraints, insertion, live freezing
+    algorithms/          greedy · hungarian · regret · alns · pyvrp_ils · exact
+    engine.py            run a strategy -> assignments, explanations, metrics
+    live.py              rolling-horizon live dispatch
+    knowledge.py         repair history + Qdrant index + duration prediction
+    services.py cache.py store.py   plan cache, SQLite/Postgres repository
+    routes/              system · planning · live (SSE) · repairs
+    config.py observability.py deps.py http.py main.py
+  scripts/benchmark.py   produces the tables in docs/ANALYSIS.md
+  tests/
+frontend/src/
+  App.jsx  api.js  lib/ (analysis, metrics, usePlans)  components/
+docs/                    ANALYSIS · ARCHITECTURE · DECISIONS · DEPLOYMENT
+vercel.json  docker-compose.yml  Makefile  .github/workflows/ci.yml  .env.example
 ```
 
 ## Assumptions
 
-- Synthetic data only: the layout, SLAs and skill mix are illustrative, not from any real fab
-- Static planning for one shift: every job is known up front (see the analysis for the online extension)
-- Durations are deterministic, and each job needs one engineer
-- Walking speed is 60 m/min in cleanroom garb; gowning happens once at shift start
+- Synthetic data: the floor layout, SLAs, skill mix and repair history are illustrative, not from any
+  real fab. The generator is seeded, so every scenario is reproducible.
+- One engineer per job. Walking speed is 60 m/min in cleanroom garb, and gowning happens once at shift start.
+- In live mode an engineer already walking to a job they haven't started can be redirected.

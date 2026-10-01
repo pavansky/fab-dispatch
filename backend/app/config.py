@@ -7,9 +7,11 @@ Production sets ``FAB_DATABASE_URL`` (Supabase/any Postgres) and, optionally,
 """
 from __future__ import annotations
 
+import os
 from functools import lru_cache
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,9 +39,49 @@ class Settings(BaseSettings):
             raise ValueError("FAB_DATABASE_URL must be sqlite:///... or postgresql://...")
         return v
 
+    @model_validator(mode="after")
+    def _platform_database(self) -> Settings:
+        """Accept the variable that Vercel's Supabase/Postgres integrations inject
+        (``POSTGRES_URL``, the pooled URL) when ``FAB_DATABASE_URL`` isn't set."""
+        if "database_url" not in self.model_fields_set and os.environ.get("POSTGRES_URL"):
+            self.database_url = os.environ["POSTGRES_URL"]
+        if self.is_postgres:
+            self.database_url = libpq_url(self.database_url)
+        return self
+
+    @model_validator(mode="after")
+    def _serverless_defaults(self) -> Settings:
+        """On Vercel only /tmp is writable. Without FAB_DATABASE_URL the app still boots
+        (ephemeral SQLite per instance, fine for a demo); with it, state is durable and
+        shared. Logs go out as JSON for the platform's log drain."""
+        if os.environ.get("VERCEL"):
+            if "database_url" not in self.model_fields_set:
+                self.database_url = "sqlite:////tmp/fab.db"
+            if "qdrant_path" not in self.model_fields_set:
+                self.qdrant_path = "/tmp/qdrant"
+            if "log_json" not in self.model_fields_set:
+                self.log_json = True
+            if self.env == "local":
+                self.env = "production"
+        return self
+
     @property
     def is_postgres(self) -> bool:
         return self.database_url.startswith(("postgresql://", "postgres://"))
+
+
+# Query parameters libpq understands; anything else (e.g. Supabase's ``supa=``) makes
+# psycopg refuse the URL, so it is dropped.
+_LIBPQ_PARAMS = {"sslmode", "sslrootcert", "sslcert", "sslkey", "connect_timeout", "application_name",
+                 "options", "target_session_attrs", "keepalives", "keepalives_idle", "gssencmode"}
+
+
+def libpq_url(url: str) -> str:
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k in _LIBPQ_PARAMS]
+    if "supabase" in parts.netloc and not any(k == "sslmode" for k, _ in query):
+        query.append(("sslmode", "require"))
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 
 @lru_cache

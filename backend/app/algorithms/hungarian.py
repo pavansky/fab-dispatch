@@ -37,7 +37,7 @@ def run_hungarian(p: Planner) -> dict[str, Decision]:
         if (cost >= INFEASIBLE).all():
             break
         rows, cols = linear_sum_assignment(cost)
-        picks = [(techs[r], open_jobs[c]) for r, c in zip(rows, cols) if cost[r, c] < INFEASIBLE]
+        picks = [(techs[r], open_jobs[c]) for r, c in zip(rows, cols, strict=True) if cost[r, c] < INFEASIBLE]
         # Snapshot explanations before committing: commits invalidate the insertion cache.
         pending = []
         for t, j in picks:

@@ -78,7 +78,7 @@ def _metrics(p: Planner, runtime_ms: float) -> dict[str, float]:
 
     starts: dict[str, float] = {}
     for tid, route in p.routes.items():
-        for jid, s in zip(route, p.sim(tid).starts):
+        for jid, s in zip(route, p.sim(tid).starts, strict=True):
             starts[jid] = s
     downs = [j for j in served_jobs if j.kind == "down"]
     response = [starts[j.id] - j.earliest for j in downs]

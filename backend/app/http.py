@@ -24,4 +24,4 @@ def error_body(code: str, message: str, request_id: str) -> dict:
     return {"error": {"code": code, "message": message, "request_id": request_id}}
 
 
-__all__ = ["etag_json", "error_body", "JSONResponse"]
+__all__ = ["JSONResponse", "error_body", "etag_json"]

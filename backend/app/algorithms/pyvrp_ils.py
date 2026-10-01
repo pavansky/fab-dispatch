@@ -50,7 +50,6 @@ def run_pyvrp(p: Planner, runtime_s: float | None = None, max_iterations: int | 
     max_iterations = max_iterations if max_iterations is not None else settings.pyvrp_iterations
     t0 = time.perf_counter()
     w = p.w
-    speed = p.scenario.settings.walk_m_per_min
     techs = list(p.techs.values())
     jobs = [p.jobs[j] for j in p.unplaced()]
 

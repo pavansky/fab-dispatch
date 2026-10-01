@@ -137,4 +137,4 @@ def optimality_gap(req: GapRequest) -> dict:
             "note": "Gap = (heuristic cost - proven optimum) / |optimum|, on the full objective incl. unserved penalty."}
 
 
-__all__ = ["router", "allocate"]
+__all__ = ["allocate", "router"]

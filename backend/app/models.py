@@ -27,7 +27,7 @@ class Engineer(BaseModel):
     max_jobs: int = 5
 
     @model_validator(mode="after")
-    def _check(self) -> "Engineer":
+    def _check(self) -> Engineer:
         if self.shift_end <= self.shift_start:
             raise ValueError(f"{self.id}: shift_end must be after shift_start")
         if any(not 1 <= lvl <= 3 for lvl in self.skills.values()):
@@ -56,7 +56,7 @@ class Job(BaseModel):
         return 0 if self.kind == "pm" else self.earliest
 
     @model_validator(mode="after")
-    def _check(self) -> "Job":
+    def _check(self) -> Job:
         if self.latest < self.earliest:
             raise ValueError(f"{self.id}: latest must be >= earliest")
         return self
@@ -85,7 +85,7 @@ class Scenario(BaseModel):
     settings: Settings = Settings()
 
     @model_validator(mode="after")
-    def _unique_ids(self) -> "Scenario":
+    def _unique_ids(self) -> Scenario:
         for kind, items in (("engineer", self.engineers), ("job", self.jobs)):
             ids = [i.id for i in items]
             if len(ids) != len(set(ids)):

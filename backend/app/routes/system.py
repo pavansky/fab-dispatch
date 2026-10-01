@@ -30,7 +30,7 @@ def health() -> dict:
     """Readiness: can we reach the store? Public output stays minimal."""
     try:
         db_ok = get_store().ping()
-    except Exception:  # noqa: BLE001 - health must report, not raise
+    except Exception:
         db_ok = False
     return {"status": "ok" if db_ok else "degraded", "db_ok": db_ok, "version": ENGINE_VERSION}
 

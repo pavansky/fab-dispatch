@@ -278,7 +278,7 @@ class Planner:
             return LEVEL_TOO_LOW
         return None
 
-    def clone(self) -> "Planner":
+    def clone(self) -> Planner:
         """Independent copy with the same committed routes (for warm starts and search)."""
         other = Planner.__new__(Planner)
         other.__dict__.update(self.__dict__)

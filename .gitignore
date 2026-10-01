@@ -8,3 +8,7 @@ __pycache__/
 .claude/
 data/
 backend/data/
+.vercel
+.env*
+!.env.example
+backend/uv.lock

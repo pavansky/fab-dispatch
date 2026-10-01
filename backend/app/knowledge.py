@@ -18,6 +18,7 @@ distributions, so retrieval has real signal to find.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import math
 import random
 import re
@@ -30,7 +31,7 @@ from .config import Settings
 # family -> fault code -> (symptom phrasings, [(root cause, fix, mean minutes, sd)])
 CATALOG: dict[str, dict[str, tuple[list[str], list[tuple[str, str, int, int]]]]] = {
     "litho": {
-        "OVL-DRIFT": (["overlay drift out of spec on lot", "alignment residuals trending high", "overlay excursion after reticle change"],
+        "OVL-DRIFT": (["overlay drift out of spec", "alignment residuals trending high", "overlay excursion after reticle change"],
                       [("lens heating model stale", "recalibrate lens heating correction", 70, 15),
                        ("wafer stage interferometer drift", "re-zero interferometers and requalify stage", 150, 30)]),
         "FOCUS-ERR": (["focus spot defects on edge dies", "leveling sensor error", "best focus shifted"],
@@ -153,7 +154,7 @@ class HashEmbedder:
     def embed(self, text: str) -> list[float]:
         vec = [0.0] * DIM
         words = re.findall(r"[a-z0-9]+", text.lower())
-        feats = words + [f"{a}_{b}" for a, b in zip(words, words[1:])]
+        feats = words + [f"{a}_{b}" for a, b in itertools.pairwise(words)]
         for w in words:
             padded = f"#{w}#"
             feats += [padded[i:i + 3] for i in range(len(padded) - 2)]
@@ -221,11 +222,11 @@ class RepairIndex:
         weights = [max(h.score, 0.0) ** 2 for h in hits]
         minutes = [h.payload["minutes"] for h in hits]
         total = sum(weights) or 1.0
-        mean = sum(w * m for w, m in zip(weights, minutes)) / total
+        mean = sum(w * m for w, m in zip(weights, minutes, strict=True)) / total
         q = statistics.quantiles(minutes, n=10) if len(minutes) >= 2 else [minutes[0]] * 9
         causes: dict[str, float] = {}
         engineers: dict[str, int] = {}
-        for h, w in zip(hits, weights):
+        for h, w in zip(hits, weights, strict=True):
             causes[h.payload["cause"]] = causes.get(h.payload["cause"], 0) + w
             engineers[h.payload["engineer"]] = engineers.get(h.payload["engineer"], 0) + 1
         top_cause = max(causes, key=causes.get)

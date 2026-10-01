@@ -1,8 +1,8 @@
 from collections.abc import Callable
 
 from ..planner import Planner
-from .base import Decision
 from .alns import run_alns
+from .base import Decision
 from .greedy import run_greedy
 from .hungarian import run_hungarian
 from .pyvrp_ils import run_pyvrp

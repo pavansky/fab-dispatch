@@ -118,7 +118,22 @@ export function insights(results, scenario) {
     })
   }
 
-  // 3. Hungarian's round structure: balance and response vs idle time.
+  // 3. What search buys over one-pass construction.
+  const constructive = results.filter((r) => ['greedy', 'hungarian', 'regret'].includes(r.algorithm))
+  const search = results.filter((r) => ['alns', 'pyvrp'].includes(r.algorithm))
+  if (constructive.length && search.length) {
+    const bestC = constructive.reduce((x, y) => (y.metrics.objective < x.metrics.objective ? y : x))
+    const bestS = search.reduce((x, y) => (y.metrics.objective < x.metrics.objective ? y : x))
+    const saving = (bestC.metrics.objective - bestS.metrics.objective) / (bestC.metrics.objective || 1)
+    if (saving > 0.02) {
+      out.push({
+        icon: '↘',
+        html: `<b>Search pays off: ${ALGO_SHORT[bestS.algorithm]} costs ${Math.round(saving * 100)}% less than the best one-pass method</b> (${ALGO_SHORT[bestC.algorithm]}), mostly by cutting idle wait (${fmt(bestS.metrics.wait_min_total, 0)} vs ${fmt(bestC.metrics.wait_min_total, 0)} min). It takes about a second instead of milliseconds.`,
+      })
+    }
+  }
+
+  // 4. Hungarian's round structure: balance and response vs idle time.
   if (by.hungarian && by.regret) {
     const h = by.hungarian.metrics, r = by.regret.metrics
     if (h.wait_min_total > r.wait_min_total * 1.1) {
@@ -129,7 +144,7 @@ export function insights(results, scenario) {
     }
   }
 
-  // 4. Response to bottleneck downs.
+  // 5. Response to bottleneck downs.
   const resp = results.map((r) => [r.algorithm, r.metrics.mean_response_min]).sort((a, b) => a[1] - b[1])
   if (resp.length > 1 && resp[resp.length - 1][1] - resp[0][1] >= 1) {
     out.push({
@@ -138,7 +153,7 @@ export function insights(results, scenario) {
     })
   }
 
-  // 5. Agreement, so the reader knows how much the choice matters here.
+  // 6. Agreement, so the reader knows how much the choice matters here.
   const dis = disagreements(results, scenario.jobs)
   const share = 1 - dis.length / (scenario.jobs.length || 1)
   out.push({
