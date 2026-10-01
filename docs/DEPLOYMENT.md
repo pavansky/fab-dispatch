@@ -16,6 +16,11 @@ docker compose up --build        # http://localhost:8080
 docker compose down -v           # stop and delete volumes
 ```
 
+The stack signs in with one-click demo accounts. Each release also publishes signed images:
+`ghcr.io/pavansky/fab-dispatch-api` and `ghcr.io/pavansky/fab-dispatch-ui`, tagged with the version
+and `latest`. Check where one came from with
+`gh attestation verify oci://ghcr.io/pavansky/fab-dispatch-api:latest -R pavansky/fab-dispatch`.
+
 | Service | Image | Notes |
 |---|---|---|
 | `postgres` | postgres:16-alpine | volume `pgdata`, healthcheck |
