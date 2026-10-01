@@ -133,3 +133,58 @@ def test_feedback_is_stored_counted_and_pruned(store):
     assert stats["job"]["total"] == 2 and stats["job"]["helpful"] == 1
     assert stats["docs"] == {"intent": "docs", "total": 1, "helpful": 1}
     assert store.prune()["assistant_feedback"] == 0  # all recent: nothing to delete
+
+
+def test_reads_are_scoped_to_the_callers_fabs(store):
+    sid = uuid.uuid4().hex[:12]
+    store.create_shift(sid, {"n": 1}, "fab1-300mm-logic", "a@b.c")
+    assert store.get_shift(sid, fabs=["fab1-300mm-logic"])[0] == {"n": 1}
+    assert store.get_shift(sid, fabs=["*"])[0] == {"n": 1}
+    for scope in (["fab2-200mm-specialty"], []):
+        with pytest.raises(NotFound):
+            store.get_shift(sid, fabs=scope)
+
+
+def test_read_model_rows_are_written_with_the_document(store):
+    sid = uuid.uuid4().hex[:12]
+    row = {
+        "job_id": "J1",
+        "engineer_id": "E1",
+        "status": "planned",
+        "skill": "etch",
+        "priority": 2,
+        "tool": "T",
+        "start_min": 10.0,
+        "end_min": 70.0,
+    }
+    store.create_shift(sid, {"v": 1}, "fab1-300mm-logic", "a@b.c", assignments=[row])
+    assert store.shift_assignments(sid) == [row]
+    store.save_shift(sid, {"v": 2}, 1, assignments=[{**row, "engineer_id": "E2"}, {**row, "job_id": "J2"}])
+    assert [r["engineer_id"] for r in store.shift_assignments(sid)] == ["E2", "E1"]
+    assert [r["job_id"] for r in store.engineer_assignments("fab1-300mm-logic", "E2")] == ["J1"]
+    # A lost race writes neither the document nor the read model.
+    with pytest.raises(VersionConflict):
+        store.save_shift(sid, {"v": 3}, 1, assignments=[])
+    assert len(store.shift_assignments(sid)) == 2
+
+
+def test_rate_counters_are_shared_per_window(store):
+    key = f"k-{uuid.uuid4().hex[:6]}"
+    assert [store.hit_rate(key) for _ in range(3)] == [1, 2, 3]
+    assert store.hit_rate(f"{key}-other") == 1
+
+
+def test_user_data_is_erased_and_history_anonymised(store):
+    sid = uuid.uuid4().hex[:12]
+    store.create_shift(sid, {"created_by": "x@y.z", "driver": "x@y.z"}, "fab1-300mm-logic", "x@y.z")
+    store.append_events(sid, [{"kind": "started", "actor": "x@y.z", "message": "x@y.z started the shift."}])
+    store.add_feedback({"user_id": "ux", "intent": "job", "helpful": True, "question": "q"})
+    store.touch_presence(sid, "ux", "x@y.z")
+    store.put_idempotent(f"ux:{sid}:k", {"ok": 1})
+    out = store.delete_user_data("ux", "x@y.z")
+    assert out == {"assistant_feedback": 1, "shift_presence": 1, "idempotency_keys": 1, "shift_events": 1, "shifts": 1}
+    event = store.events_after(sid, 0)[0]
+    assert event["actor"] == "a deleted user" and event["message"] == "a deleted user started the shift."
+    state = store.get_shift(sid)[0]
+    assert state["created_by"] == "a deleted user" and state["driver"] is None
+    assert store.presence(sid) == [] and store.get_idempotent(f"ux:{sid}:k") is None
