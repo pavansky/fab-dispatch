@@ -88,16 +88,18 @@ Where each part of a resource-allocation brief lives, in the app and in the code
 
 ## Results
 
-80 seeded shifts (4 scenario types × 20) of 14 engineers and 45 jobs, plus 20 small shifts solved to
-proven optimality. Full tables and method in [docs/ANALYSIS.md](docs/ANALYSIS.md).
+80 seeded shifts (4 scenario types × 20) of 14 engineers and 45 jobs, **every one solved to proven
+optimality**, so each strategy's gap is measured at the size it runs. Full tables and method in
+[docs/ANALYSIS.md](docs/ANALYSIS.md).
 
-| Strategy | Kind | Solve time* | Lowest cost in | Mean gap to optimum | Strength |
+| Strategy | Kind | Solve time* | Lowest cost in | Gap to proven optimum | Strength |
 |---|---|---|---|---|---|
-| Greedy | constructive | ~2 ms | 0 / 80 | 10.5% | Instant, simplest to explain |
-| Hungarian | assignment | ~3 ms | 0 / 80 | 7.2% | Fastest response to tool-downs, most even workload |
-| Regret-2 | constructive | ~6 ms | 0 / 80 | 4.7% | Protects scarce certifications |
-| ALNS | metaheuristic | ~0.2 s | 2 / 80 | **0.9%** | Optimises the exact objective, including balance |
-| PyVRP | metaheuristic | ~0.4 s | **78 / 80** | 1.8% | Lowest operating cost at full scale |
+| Greedy | constructive | ~2 ms | 0 / 80 | 28.1% | Instant, simplest to explain |
+| Hungarian | assignment | ~3 ms | 0 / 80 | 25.8% | Fastest response to tool-downs, most even workload |
+| Regret-2 | constructive | ~6 ms | 0 / 80 | 19.4% | Protects scarce certifications |
+| ALNS | metaheuristic | ~0.2 s | 2 / 80 | 5.7% | Optimises the exact objective, including balance |
+| PyVRP | metaheuristic | ~0.4 s | **78 / 80** | **2.7%** | Lowest operating cost of the five |
+| Exact | set-partitioning MILP | ~20 s (max 138 s) | optimal | 0% | Proven optimum, for planning ahead |
 
 \*Laptop, 14 engineers × 45 jobs. On Vercel's serverless CPU, ALNS and PyVRP take about 0.7–1.3 s.
 A repeated plan is served from cache in under 1 ms of server time.

@@ -32,19 +32,21 @@ stranded.
 ## ALNS
 
 Adaptive large neighbourhood search: repeatedly removes part of the plan and repairs it, keeping
-changes that lower the cost. It optimises the exact objective, including workload balance. Closest
-to optimal on small shifts.
+changes that lower the cost. It optimises the exact objective, including workload balance. About 6%
+from the proven optimum on full-size shifts.
 
 ## PyVRP
 
 A state-of-the-art vehicle-routing solver (iterated local search, C++ core), warm-started from
-Regret-2. The **lowest operating cost at full scale**, mostly by cutting idle wait.
+Regret-2. The **lowest operating cost of the five**, mostly by cutting idle wait: about 3% from
+the proven optimum on full-size shifts.
 
 ## Exact solver
 
-Not a dispatch option: on small shifts it enumerates every feasible route and solves a
-set-partitioning problem to find the **proven optimum**, so the Benchmark view can show how far each
-heuristic is from it.
+Not a live dispatch option: it enumerates every feasible route and solves a set-partitioning
+problem to find the **proven optimum**. It works at full shift size (about 20 seconds, up to a couple
+of minutes), which suits planning ahead. The Benchmark view uses small shifts so the comparison
+returns in seconds.
 
 ## When each one wins
 
