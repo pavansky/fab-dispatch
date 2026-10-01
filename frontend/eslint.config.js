@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist', 'node_modules'] },
+  { ignores: ['dist', 'node_modules', 'coverage', 'playwright-report', 'test-results'] },
   {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
@@ -21,5 +21,11 @@ export default [
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true, allowExportNames: ['useAuth', 'useTooltip'] }],
     },
   },
-  { files: ['**/__tests__/**', 'vite.config.js', 'eslint.config.js'], languageOptions: { globals: { ...globals.node } } },
+  {
+    files: ['**/__tests__/**', 'src/test/**', '**/*.test.{js,jsx}', 'e2e/**', 'vite.config.js', 'eslint.config.js', 'playwright.config.js'],
+    languageOptions: { globals: { ...globals.node } },
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  // Playwright fixtures call `use()`, which isn't React's hook.
+  { files: ['e2e/**'], rules: { 'react-hooks/rules-of-hooks': 'off' } },
 ]

@@ -1,0 +1,101 @@
+{
+ "id": "fab1-300mm-logic",
+ "name": "Fab 1 \u00b7 300mm logic",
+ "description": "Illustrative 300mm logic fab: lithography in a central yellow-light bay, etch, deposition, CMP, implant and metrology around it.",
+ "floor": {
+  "width": 400.0,
+  "height": 240.0
+ },
+ "shift": {
+  "start_hour": 7,
+  "length_min": 720
+ },
+ "walk_m_per_min": 60.0,
+ "constraint_family": "litho",
+ "families": [
+  {
+   "id": "litho",
+   "label": "Lithography",
+   "prefix": "LIT",
+   "area": [
+    150.0,
+    80.0,
+    250.0,
+    160.0
+   ]
+  },
+  {
+   "id": "etch",
+   "label": "Etch",
+   "prefix": "ETC",
+   "area": [
+    20.0,
+    20.0,
+    140.0,
+    110.0
+   ]
+  },
+  {
+   "id": "deposition",
+   "label": "Deposition",
+   "prefix": "DEP",
+   "area": [
+    260.0,
+    20.0,
+    380.0,
+    110.0
+   ]
+  },
+  {
+   "id": "cmp",
+   "label": "CMP",
+   "prefix": "CMP",
+   "area": [
+    20.0,
+    130.0,
+    140.0,
+    220.0
+   ]
+  },
+  {
+   "id": "implant",
+   "label": "Implant",
+   "prefix": "IMP",
+   "area": [
+    260.0,
+    130.0,
+    380.0,
+    220.0
+   ]
+  },
+  {
+   "id": "metrology",
+   "label": "Metrology",
+   "prefix": "MET",
+   "area": [
+    150.0,
+    20.0,
+    250.0,
+    70.0
+   ]
+  }
+ ],
+ "presets": {
+  "normal": {
+   "label": "Normal shift",
+   "description": "Typical mix of PMs and tool-downs; staffing roughly matches load."
+  },
+  "litho_crunch": {
+   "label": "Lithography crunch",
+   "description": "Scanner problems pile up while few engineers hold litho certifications."
+  },
+  "excursion": {
+   "label": "Excursion / surge",
+   "description": "Mostly unplanned downs with tight response targets."
+  },
+  "overstaffed": {
+   "label": "Overstaffed",
+   "description": "Plenty of engineers; the question is cost, not coverage."
+  }
+ }
+}

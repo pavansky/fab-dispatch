@@ -16,4 +16,18 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': 'http://127.0.0.1:8000' },
   },
+  // Unit and component tests (Vitest, jsdom). Browser end-to-end tests live in e2e/ (Playwright).
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    include: ['src/**/*.test.{js,jsx}'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/test/**', 'src/**/*.test.{js,jsx}', 'src/main.jsx'],
+      reporter: ['text-summary', 'text'],
+      // Floors, not targets: CI fails if coverage drops below today's level.
+      thresholds: { lines: 85, statements: 80, functions: 75, branches: 70 },
+    },
+  },
 })

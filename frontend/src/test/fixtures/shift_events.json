@@ -1,0 +1,125 @@
+[
+ {
+  "id": 1,
+  "kind": "shift_started",
+  "clock": 0.0,
+  "message": "dispatcher@demo.local started the shift with 6 known jobs and 6 engineers.",
+  "data": {},
+  "actor": "dispatcher@demo.local",
+  "at": "2026-10-01T13:20:46.594153+00:00",
+  "version": 1
+ },
+ {
+  "id": 2,
+  "kind": "replanned",
+  "clock": 0.0,
+  "message": "Re-planned (shift start) with ALNS (adaptive large neighbourhood search): 6 newly assigned, 0 moved between engineers, 0 dropped, 0 unassigned.",
+  "data": {
+   "moved": [],
+   "newly_assigned": [
+    "J005",
+    "J006",
+    "J012",
+    "J013",
+    "J017",
+    "J018"
+   ],
+   "dropped": [],
+   "runtime_ms": 3.19,
+   "assignments": {
+    "J005": "E03",
+    "J006": "E01",
+    "J012": "E01",
+    "J013": "E03",
+    "J017": "E01",
+    "J018": "E05"
+   }
+  },
+  "actor": "dispatcher@demo.local",
+  "at": "2026-10-01T13:20:46.597488+00:00",
+  "version": 1
+ },
+ {
+  "id": 3,
+  "kind": "job_reported",
+  "clock": 1.0,
+  "message": "J016 reported: LIT-03B (bottleneck tool down).",
+  "data": {
+   "job_id": "J016",
+   "priority": 3
+  },
+  "actor": "system",
+  "at": "2026-10-01T13:20:46.602873+00:00",
+  "version": 2
+ },
+ {
+  "id": 4,
+  "kind": "replanned",
+  "clock": 1.0,
+  "message": "Re-planned (1 new job(s)) with ALNS (adaptive large neighbourhood search): 1 newly assigned, 0 moved between engineers, 0 dropped, 0 unassigned.",
+  "data": {
+   "moved": [],
+   "newly_assigned": [
+    "J016"
+   ],
+   "dropped": [],
+   "runtime_ms": 4.47,
+   "assignments": {
+    "J016": "E01"
+   }
+  },
+  "actor": "dispatcher@demo.local",
+  "at": "2026-10-01T13:20:46.607517+00:00",
+  "version": 2
+ },
+ {
+  "id": 5,
+  "kind": "job_reported",
+  "clock": 12.0,
+  "message": "J007 reported: DEP-01B (tool down).",
+  "data": {
+   "job_id": "J007",
+   "priority": 2
+  },
+  "actor": "system",
+  "at": "2026-10-01T13:20:46.607530+00:00",
+  "version": 2
+ },
+ {
+  "id": 6,
+  "kind": "replanned",
+  "clock": 12.0,
+  "message": "Re-planned (1 new job(s)) with ALNS (adaptive large neighbourhood search): 1 newly assigned, 0 moved between engineers, 0 dropped, 0 unassigned.",
+  "data": {
+   "moved": [],
+   "newly_assigned": [
+    "J007"
+   ],
+   "dropped": [],
+   "runtime_ms": 3.97,
+   "assignments": {
+    "J007": "E03"
+   }
+  },
+  "actor": "dispatcher@demo.local",
+  "at": "2026-10-01T13:20:46.611625+00:00",
+  "version": 2
+ },
+ {
+  "id": 7,
+  "kind": "clock",
+  "clock": 60.0,
+  "message": "Clock at 60 min.",
+  "data": {
+   "done": 0,
+   "in_progress": 2,
+   "planned": 6,
+   "unassigned": 0,
+   "known": 8,
+   "total": 18
+  },
+  "actor": "dispatcher@demo.local",
+  "at": "2026-10-01T13:20:46.611640+00:00",
+  "version": 2
+ }
+]

@@ -19,3 +19,7 @@ backend/.vercel/
 coverage.xml
 htmlcov/
 .pytest_cache/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/

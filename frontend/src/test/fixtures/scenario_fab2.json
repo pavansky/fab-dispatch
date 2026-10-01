@@ -1,0 +1,345 @@
+{
+ "fab_id": "fab2-200mm-analog",
+ "engineers": [
+  {
+   "id": "E01",
+   "name": "Arun",
+   "x": 120.1,
+   "y": 91.8,
+   "skills": {
+    "photo": 3,
+    "test": 1
+   },
+   "shift_start": 0,
+   "shift_end": 480,
+   "max_jobs": 5
+  },
+  {
+   "id": "E02",
+   "name": "Mei",
+   "x": 21.9,
+   "y": 40.1,
+   "skills": {
+    "diffusion": 3,
+    "thinfilm": 1
+   },
+   "shift_start": 0,
+   "shift_end": 480,
+   "max_jobs": 5
+  },
+  {
+   "id": "E03",
+   "name": "Joon",
+   "x": 280.8,
+   "y": 52.8,
+   "skills": {
+    "thinfilm": 2,
+    "test": 1,
+    "photo": 1
+   },
+   "shift_start": 0,
+   "shift_end": 480,
+   "max_jobs": 4
+  },
+  {
+   "id": "E04",
+   "name": "Priya",
+   "x": 18.7,
+   "y": 156.5,
+   "skills": {
+    "wet": 3,
+    "test": 1,
+    "photo": 1
+   },
+   "shift_start": 0,
+   "shift_end": 480,
+   "max_jobs": 5
+  },
+  {
+   "id": "E05",
+   "name": "Hsin",
+   "x": 250.7,
+   "y": 138.6,
+   "skills": {
+    "test": 2,
+    "photo": 1
+   },
+   "shift_start": 0,
+   "shift_end": 480,
+   "max_jobs": 5
+  },
+  {
+   "id": "E06",
+   "name": "Daniel",
+   "x": 60.1,
+   "y": 52.1,
+   "skills": {
+    "diffusion": 2,
+    "thinfilm": 1,
+    "test": 1
+   },
+   "shift_start": 0,
+   "shift_end": 480,
+   "max_jobs": 6
+  }
+ ],
+ "jobs": [
+  {
+   "id": "J001",
+   "x": 49.2,
+   "y": 123.8,
+   "skill": "wet",
+   "min_level": 1,
+   "priority": 2,
+   "kind": "down",
+   "earliest": 357,
+   "latest": 477,
+   "duration": 60,
+   "tool": "WET-04C",
+   "symptom": "bath concentration out of range intermittently"
+  },
+  {
+   "id": "J002",
+   "x": 275.0,
+   "y": 58.8,
+   "skill": "thinfilm",
+   "min_level": 1,
+   "priority": 2,
+   "kind": "down",
+   "earliest": 175,
+   "latest": 295,
+   "duration": 105,
+   "tool": "TFM-03A",
+   "symptom": "leak check failed during production lot"
+  },
+  {
+   "id": "J003",
+   "x": 211.2,
+   "y": 138.5,
+   "skill": "test",
+   "min_level": 2,
+   "priority": 1,
+   "kind": "pm",
+   "earliest": 152,
+   "latest": 392,
+   "duration": 240,
+   "tool": "PTS-03C",
+   "symptom": "scheduled tester PM: probe card clean and calibration"
+  },
+  {
+   "id": "J004",
+   "x": 20.5,
+   "y": 110.6,
+   "skill": "wet",
+   "min_level": 2,
+   "priority": 1,
+   "kind": "pm",
+   "earliest": 16,
+   "latest": 256,
+   "duration": 90,
+   "tool": "WET-03D",
+   "symptom": "scheduled wet bench PM: bath change and filter replacement"
+  },
+  {
+   "id": "J005",
+   "x": 66.8,
+   "y": 164.6,
+   "skill": "wet",
+   "min_level": 1,
+   "priority": 1,
+   "kind": "pm",
+   "earliest": 171,
+   "latest": 411,
+   "duration": 180,
+   "tool": "WET-04C",
+   "symptom": "scheduled wet bench PM: bath change and filter replacement"
+  },
+  {
+   "id": "J006",
+   "x": 233.4,
+   "y": 141.7,
+   "skill": "test",
+   "min_level": 1,
+   "priority": 2,
+   "kind": "down",
+   "earliest": 126,
+   "latest": 246,
+   "duration": 75,
+   "tool": "PTS-04A",
+   "symptom": "measurement offset on reference during production lot"
+  },
+  {
+   "id": "J007",
+   "x": 143.1,
+   "y": 78.9,
+   "skill": "photo",
+   "min_level": 2,
+   "priority": 1,
+   "kind": "pm",
+   "earliest": 71,
+   "latest": 311,
+   "duration": 240,
+   "tool": "PHO-02D",
+   "symptom": "scheduled stepper PM: lamp, reticle stage and alignment check"
+  },
+  {
+   "id": "J008",
+   "x": 45.4,
+   "y": 118.8,
+   "skill": "wet",
+   "min_level": 1,
+   "priority": 2,
+   "kind": "down",
+   "earliest": 6,
+   "latest": 126,
+   "duration": 105,
+   "tool": "WET-01B",
+   "symptom": "robot homing failed on chamber B"
+  },
+  {
+   "id": "J009",
+   "x": 26.7,
+   "y": 47.1,
+   "skill": "diffusion",
+   "min_level": 1,
+   "priority": 1,
+   "kind": "pm",
+   "earliest": 131,
+   "latest": 371,
+   "duration": 90,
+   "tool": "FUR-03B",
+   "symptom": "scheduled furnace PM: tube clean and thermocouple profile"
+  },
+  {
+   "id": "J010",
+   "x": 267.4,
+   "y": 157.5,
+   "skill": "test",
+   "min_level": 1,
+   "priority": 3,
+   "kind": "down",
+   "earliest": 324,
+   "latest": 364,
+   "duration": 75,
+   "tool": "PTS-04D",
+   "symptom": "tester calibration failed on chamber B"
+  },
+  {
+   "id": "J011",
+   "x": 240.3,
+   "y": 111.6,
+   "skill": "test",
+   "min_level": 1,
+   "priority": 3,
+   "kind": "down",
+   "earliest": 51,
+   "latest": 91,
+   "duration": 75,
+   "tool": "PTS-01A",
+   "symptom": "SMU self-test error"
+  },
+  {
+   "id": "J012",
+   "x": 254.1,
+   "y": 113.9,
+   "skill": "test",
+   "min_level": 1,
+   "priority": 1,
+   "kind": "pm",
+   "earliest": 121,
+   "latest": 361,
+   "duration": 90,
+   "tool": "PTS-03C",
+   "symptom": "scheduled tester PM: probe card clean and calibration"
+  },
+  {
+   "id": "J013",
+   "x": 94.4,
+   "y": 133.0,
+   "skill": "wet",
+   "min_level": 2,
+   "priority": 3,
+   "kind": "down",
+   "earliest": 175,
+   "latest": 215,
+   "duration": 105,
+   "tool": "WET-04C",
+   "symptom": "cassette transfer error on chamber B"
+  },
+  {
+   "id": "J014",
+   "x": 181.6,
+   "y": 91.4,
+   "skill": "photo",
+   "min_level": 3,
+   "priority": 1,
+   "kind": "pm",
+   "earliest": 76,
+   "latest": 316,
+   "duration": 90,
+   "tool": "PHO-02A",
+   "symptom": "scheduled stepper PM: lamp, reticle stage and alignment check"
+  },
+  {
+   "id": "J015",
+   "x": 56.5,
+   "y": 159.5,
+   "skill": "wet",
+   "min_level": 2,
+   "priority": 1,
+   "kind": "pm",
+   "earliest": 128,
+   "latest": 368,
+   "duration": 180,
+   "tool": "WET-03B",
+   "symptom": "scheduled wet bench PM: bath change and filter replacement"
+  },
+  {
+   "id": "J016",
+   "x": 79.9,
+   "y": 74.1,
+   "skill": "diffusion",
+   "min_level": 2,
+   "priority": 1,
+   "kind": "pm",
+   "earliest": 58,
+   "latest": 298,
+   "duration": 120,
+   "tool": "FUR-02B",
+   "symptom": "scheduled furnace PM: tube clean and thermocouple profile"
+  },
+  {
+   "id": "J017",
+   "x": 263.5,
+   "y": 74.4,
+   "skill": "thinfilm",
+   "min_level": 1,
+   "priority": 2,
+   "kind": "down",
+   "earliest": 176,
+   "latest": 296,
+   "duration": 135,
+   "tool": "TFM-03D",
+   "symptom": "deposition rate unstable after PM"
+  },
+  {
+   "id": "J018",
+   "x": 122.2,
+   "y": 88.5,
+   "skill": "photo",
+   "min_level": 3,
+   "priority": 3,
+   "kind": "down",
+   "earliest": 312,
+   "latest": 352,
+   "duration": 60,
+   "tool": "PHO-03B",
+   "symptom": "stepper alignment error after PM"
+  }
+ ],
+ "settings": {
+  "walk_m_per_min": 55.0,
+  "floor_width": 300.0,
+  "floor_height": 180.0
+ }
+}

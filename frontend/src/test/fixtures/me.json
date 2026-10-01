@@ -1,0 +1,9 @@
+{
+ "id": "demo-dispatcher",
+ "email": "dispatcher@demo.local",
+ "role": "dispatcher",
+ "fabs": [
+  "*"
+ ],
+ "provider": "demo"
+}
