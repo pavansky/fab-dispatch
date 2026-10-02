@@ -118,6 +118,7 @@ nav:
       - Algorithms and analysis: ANALYSIS.md
       - Design decisions: DECISIONS.md
       - AI transparency: ai.md
+      - "Design review: Q&A": DESIGN_REVIEW.md
   - API reference: api/index.md
   - Operations:
       - Environments and releases: ENVIRONMENTS.md
