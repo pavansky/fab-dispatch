@@ -365,6 +365,10 @@ What a production AI application needs, and where to see it here.
   report tool-downs, take engineers off shift and run benchmarks.
 - **Fab access** comes from each user's Supabase `app_metadata` (admin-controlled). Requests for a fab
   outside a user's list return 404, so one customer can't discover another's.
+- **A database per fab:** `FAB_TENANT_DATABASES` puts each fab's shifts, events, assignments and
+  cached plans in its own database. CI starts one Postgres per fab and checks, by querying each
+  database directly, that no fab's data appears anywhere else
+  (`docker compose -f docker-compose.yml -f docker-compose.fabs.yml up` to try it).
 
 ## API
 
@@ -468,7 +472,7 @@ docs/                      the documentation site: quick start, reviewers' tour,
 |---|---|
 | [ANALYSIS.md](docs/ANALYSIS.md) | Benchmark, optimality gaps, budget sizing, when each strategy wins |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, auth and tenancy, live dispatch, repair history, migrations, performance |
-| [DECISIONS.md](docs/DECISIONS.md) | 33 design decisions with context and trade-offs |
+| [DECISIONS.md](docs/DECISIONS.md) | 34 design decisions with context and trade-offs |
 | [ENVIRONMENTS.md](docs/ENVIRONMENTS.md) | Dev → UAT → production, releases, rollback, per-environment config |
 | [ONBOARDING_A_FAB.md](docs/ONBOARDING_A_FAB.md) | Adding a new fab: profile, validation, access, release |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Local, Docker and Vercel + Supabase hosting |

@@ -251,3 +251,13 @@ heuristics are a design-time tool for improving operators. The research frontier
 routing is dynamic and stochastic dispatch, so that's where the next improvement lies, alongside
 making the exact optimum fast enough for live use (ANALYSIS §4).
 
+### D34. A database per fab
+**Decision.** `FAB_TENANT_DATABASES` gives a fab its own database for all of its operational data;
+shift ids carry the fab so requests route without a lookup; user-level data stays in the default
+database.
+**Why.** Fab data (tool faults, repair history, staffing) is commercially sensitive, and customers
+expect it to be separable: backed up, retained, moved or deleted per fab. A shared database with a
+`fab_id` filter isolates logically; a database per fab isolates physically and scales out with the
+number of fabs. The next step, where a fab requires it, is a deployment per fab on site, which needs
+no code change: the same images pointed at that fab's database.
+

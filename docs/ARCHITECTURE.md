@@ -54,6 +54,13 @@ flowchart LR
   prefixes, fault catalogues, shift pattern and planning presets. They are validated at startup. The
   generator, repair history (one Qdrant collection per fab), API and UI all read them, so onboarding
   a fab is a JSON file ([ONBOARDING_A_FAB.md](ONBOARDING_A_FAB.md)).
+- **Data: a database per fab.** `FAB_TENANT_DATABASES` maps a fab to its own database. Everything
+  operational for that fab (shifts, events, assignments, replays, cached plans) is written and read
+  only there; the default database keeps user-level data (feedback, quotas). Shift ids carry their
+  fab (`fab1-300mm-logic.3f2a…`), so a link routes straight to the right database without a lookup.
+  Fabs not listed share the default database, isolated by `fab_id` in every query. Health, retention
+  and account deletion cover every database. CI starts a stack with one Postgres per fab and checks
+  each fab's rows exist only in its own database, by querying the databases directly.
 - **Identity**: `app/auth.py`. Supabase-issued tokens are verified against the project's JWKS
   (ES256/RS256) or the legacy HS256 secret, with issuer and audience checks. Local development
   uses short-lived demo tokens, which settings refuse in production.
@@ -227,9 +234,9 @@ laptop (ANALYSIS, "Scale: 20,000 engineers, measured"):
 - solving the same work as one undecomposed problem is slower and costlier, and ALNS degrades to
   its regret-2 start from 150 × 500 up.
 
-What has to change at that scale is the platform around the solver, in the table below: solves move
-to a queue with workers, live updates move to push, the database is partitioned by fab (every table
-already carries `fab_id`), and re-planning is keyed to the affected area only.
+Each fab can already have its own database (section 2), so data scales out by fab too. What has to
+change at that scale is the platform around the solver, in the table below: solves move to a queue
+with workers, live updates move to push, and re-planning is keyed to the affected area only.
 
 ### Deliberate trade-offs, and the next step for each
 
@@ -238,7 +245,7 @@ already carries `fab_id`), and re-planning is keyed to the affected area only.
 | Solves run inside the request (threadpool), ~1 s on Vercel | 14 × 45 jobs solve well inside any limit; no queue to operate | A job queue (e.g. Postgres `SKIP LOCKED` or a managed queue) with workers; `202 Accepted` plus progress over the existing event stream |
 | Live updates by adaptive polling of the event log | Works on serverless with no extra service; ~2 queries/s per busy viewer, 0.5/s idle | Postgres `LISTEN/NOTIFY` on long-lived workers, or Supabase Realtime on the events table with per-fab policies |
 | Shift state is one JSON document, rewritten per write | One atomic, version-checked write; simple to re-plan | Keep it as the write model, store only the diff per event, and snapshot every N events |
-| Fab isolation in SQL and in code, one database role | One service role is simple to reason about | Row-level security policies keyed by a per-request fab claim, so the database enforces isolation even against a bug |
+| A database per fab, one API serving all fabs | Physical data isolation with one deployment to run | A deployment per fab (cell architecture) where a fab requires its data on site: the same images and config, nothing shared but sign-in |
 | UAT and production share a Supabase project (separate schemas) | Free tier: one project | One project per environment, so a UAT incident can't touch production |
 | Durations are point estimates | Repair history already gives p10–p90 | Plan against a chosen quantile (e.g. p80) per job, or robust/stochastic optimisation across scenarios |
 | Ingestion pushes into the live shift | The integration point exists and is safe to retry | A durable inbox table between ingestion and planning, so a burst of faults queues instead of contending for the shift |
