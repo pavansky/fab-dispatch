@@ -25,7 +25,8 @@ Open the [live app](https://fab-dispatch.vercel.app) and click **Try it as a gue
 |---|---|
 | [Requirements map](https://github.com/pavansky/fab-dispatch#requirements-map) | Every item in the brief, where it lives in the app and the code. |
 | [Analysis](ANALYSIS.md) | What comparing the algorithms taught: when each one wins, and why. |
-| [Decisions](DECISIONS.md) | 34 design decisions with context and trade-offs. |
+| [Decisions](DECISIONS.md) | 36 design decisions with context and trade-offs. |
+| [Design review Q&A](DESIGN_REVIEW.md) | The questions a reviewer is likely to ask, answered with the evidence. |
 | [`planner.py`](https://github.com/pavansky/fab-dispatch/blob/main/backend/app/planner.py) | The constraint engine every strategy shares: the reason the comparison is fair. |
 | [`algorithms/`](https://github.com/pavansky/fab-dispatch/tree/main/backend/app/algorithms) | Greedy, Hungarian, Regret-2, ALNS, PyVRP and the exact MILP. |
 | [AI transparency](ai.md) | How the assistant stays grounded, and how its quality is measured. |
@@ -35,7 +36,7 @@ Open the [live app](https://fab-dispatch.vercel.app) and click **Try it as a gue
 ## By the numbers
 
 - **5** strategies plus an exact optimum, on **2** fabs with different floors, shifts and bottlenecks
-- **446** automated tests across pytest, Vitest and Playwright (desktop and phone, with WCAG checks)
+- **455** automated tests across pytest, Vitest and Playwright (desktop and phone, with WCAG checks)
 - **42 / 42** assistant evaluation questions cite the right article; **8 / 8** off-topic refused
 - **Every deploy** smoke-tested: health, schema, real auth, and app tables closed to the public API
 
