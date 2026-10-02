@@ -162,6 +162,23 @@ jobs:
               --quiet --severity CRITICAL,HIGH --ignore-unfixed --exit-code 1 "$image"
           done
 
+  fab-databases:
+    name: images · database per fab
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [backend-quality, frontend]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Start the stack with a separate Postgres for each fab
+        run: docker compose -f docker-compose.yml -f docker-compose.fabs.yml up -d --build --wait --wait-timeout 240
+      - name: Each fab's data is only in its own database (queried directly)
+        run: |
+          until curl -sf -o /dev/null localhost:8080/; do sleep 2; done
+          scripts/check_fab_isolation.sh
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.fabs.yml logs --no-color
+
   workflows:
     name: workflows · actionlint
     runs-on: ubuntu-latest
