@@ -41,7 +41,18 @@ Set it in Supabase → Authentication → Users → *user* → app metadata, e.g
 
 `role` is `viewer` or `dispatcher`. Users can't edit `app_metadata` themselves; admins can.
 
-## 4. Ship it
+## 4. Give it its own database (optional)
+
+To keep the fab's data in a separate database, add it to `FAB_TENANT_DATABASES`:
+
+```bash
+FAB_TENANT_DATABASES='{"fab3-300mm-memory": "postgresql://user:pass@host:5432/fab3"}'
+```
+
+Its schema is created on first use, and `/api/health` reports every database it checks. Fabs not
+listed share the default database, isolated by `fab_id`.
+
+## 5. Ship it
 
 Open a pull request (template: *Onboard a new fab*), let CI pass, merge to `main`, verify in UAT
 with the fab's key users, then release. See [ENVIRONMENTS.md](ENVIRONMENTS.md).
