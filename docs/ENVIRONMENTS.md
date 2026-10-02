@@ -89,6 +89,13 @@ access are configured in Supabase itself: see [supabase/README.md](../supabase/R
 | `FAB_GUEST_ROLE` | `dispatcher` for a public demo; `none` for a real fab | `dispatcher` |
 | `FAB_TURNSTILE_SITE_KEY` | the Turnstile site key | the same key (add the preview hostnames to the widget) |
 | `FAB_ASSISTANT_LLM` | `none` (or `anthropic` with `ANTHROPIC_API_KEY`) | `none` |
+| `FAB_TENANT_DATABASES` | `{"fab2-200mm-analog": "env:FAB2_DATABASE_URL"}` | unset (one database) |
+
+**Production runs a database per fab.** Fab 1 uses the default database (Supabase). Fab 2 has its
+own: a Neon Postgres added through the Vercel Marketplace, connected to *Production only* with the
+prefix `FAB2`, so Vercel injects `FAB2_DATABASE_URL` and nobody copies the secret. `/api/health`
+reports `"databases": 2`. Verified on the live site: a fab 2 live shift, its events and its 22
+assignments exist in Neon and nowhere in Supabase. Preview deployments get no fab 2 credentials.
 
 ### Why UAT is a schema, not a second database
 
