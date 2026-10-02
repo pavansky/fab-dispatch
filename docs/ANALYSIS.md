@@ -76,11 +76,49 @@ By preset, PyVRP's mean gap is 4.3% (normal), 0.9% (litho crunch), 2.1% (surge) 
 normal shift lowers its gap from 8.1% to 5.2% and then stops: it settles in a local optimum, it isn't
 starved of time. Reproduce: `python -m scripts.benchmark --only gaps-full`.
 
-**Where the proof stops scaling.** Enumeration grows explosively with fab size. At 20 engineers ×
-65 jobs a shift has about 409,000 feasible routes and took **27 minutes** to prove (vs 9–83 s at
-14 × 45); at 30 × 100 it would take hours. The heuristics' gaps barely move with size (PyVRP 3.9%,
-ALNS 6.3% at 20 × 65), so the ranking holds; what doesn't scale is *proving* it. Larger fabs need
-column generation, which prices only the routes that can improve the plan instead of listing them all.
+**Where the full proof stops scaling, and what replaces it.** Enumeration grows explosively: about
+409,000 routes at 20 × 65 (27 minutes to prove) and 8.3 million at 30 × 100, where a direct MILP over
+every route didn't finish its first LP in hours. Column generation replaces it: solve a small LP, use
+its prices to scan *all* routes for any that could improve the plan, add those, repeat. The converged
+LP is a **certified lower bound** no plan can beat; an integer solve over the generated routes gives a
+real plan. On a 14 × 45 shift with a known optimum it brackets that optimum within 0.49% in 7 s
+(versus 83 s for the full proof), and its gaps match the exact ones.
+
+| Shift size | Routes | Lower bound | Best plan | PyVRP above optimum | ALNS above optimum |
+|---|---|---|---|---|---|
+| 14 × 45 (proven, 80 shifts) | ~34,000 | exact | exact | 2.7% mean | 5.7% mean |
+| 20 × 65 (proven) | 409,000 | exact | exact | 3.9% | 6.3% |
+| **30 × 100 (certified)** | **8.3 million** | **1828.0** | **1844.3 (within 0.89%)** | **7.5–8.4%** | **14.4–15.4%** |
+
+The 30 × 100 bound took 13 minutes of enumeration, 12 s of column generation and 40 minutes of
+integer search. **The heuristics' gap grows with problem size**: PyVRP goes from 2.7% to about 8%
+between 14 and 30 engineers. That's the measured case for decomposition (next section).
+Reproduce: `python -m scripts.certified_bound 30 100 0 out/cg_30x100`.
+
+### Scale: 20,000 engineers, measured
+
+A company of 20,000 engineers on three shifts has about 6,700 on shift. Fabs, skills and areas split
+that into independent subproblems; the study uses 222 areas of 30 engineers × 100 jobs, solved on this
+laptop (18 cores, 16 workers). Reproduce: `python -m scripts.scale_study out/company`.
+
+| What | Measured |
+|---|---|
+| Re-plan the **whole company** (6,660 engineers, 22,200 jobs, 222 areas, PyVRP) | **46.7 s** wall clock, 722 CPU-s; 3.25 s per area (p95 3.39 s) |
+| **Live tool-down** re-planned through the real live-dispatch code (50 events, ALNS) | **p50 217 ms, p95 270 ms**, max 288 ms |
+
+At roughly 0.6 tool-downs per second for 20,000 engineers, live re-planning needs under a fifth of one
+core. The same work *without* decomposition, as one problem:
+
+| One problem | Regret-2 | ALNS | PyVRP |
+|---|---|---|---|
+| 100 × 300 | 1.1 s, cost 3,504 | 3.9 s, cost 3,464 | 4.5 s, cost 2,493 |
+| 150 × 500 | 5.3 s, cost 6,446 | 6.1 s, cost 6,446 | 9.8 s, cost 4,049 |
+| 300 × 1,000 | 56 s, cost 10,891 | 58 s, cost 10,891 | 62 s, cost 6,994 |
+
+Two findings. **Decomposition is required, not optional**: one big problem is slower *and* further
+from optimal, while areas solve in seconds and in parallel. And **ALNS stops adding value at size**:
+from 150 × 500 its 3 s safety cap runs out before it improves on its regret-2 start, so it returns the
+regret-2 plan unchanged. PyVRP stays 36–42% cheaper than regret-2 at every size.
 
 ### Solve time (ms, one shift, an Apple M5 Pro laptop)
 
