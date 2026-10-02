@@ -1,0 +1,29 @@
+# Database per fab: layer over docker-compose.yml to give each fab its own Postgres.
+#   docker compose -f docker-compose.yml -f docker-compose.fabs.yml up --build
+# Each fab's shifts, events, assignments and cached plans go only to its own database; the
+# default database (postgres) keeps user-level data. CI checks this by querying each database.
+services:
+  postgres-fab1:
+    image: postgres:16-alpine
+    environment: { POSTGRES_DB: fab1, POSTGRES_USER: fab, POSTGRES_PASSWORD: fab }
+    volumes: [pgdata-fab1:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U fab -d fab1"], interval: 5s, timeout: 3s, retries: 10 }
+
+  postgres-fab2:
+    image: postgres:16-alpine
+    environment: { POSTGRES_DB: fab2, POSTGRES_USER: fab, POSTGRES_PASSWORD: fab }
+    volumes: [pgdata-fab2:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U fab -d fab2"], interval: 5s, timeout: 3s, retries: 10 }
+
+  api:
+    environment:
+      FAB_TENANT_DATABASES: >-
+        {"fab1-300mm-logic": "postgresql://fab:fab@postgres-fab1:5432/fab1",
+         "fab2-200mm-analog": "postgresql://fab:fab@postgres-fab2:5432/fab2"}
+    depends_on:
+      postgres-fab1: { condition: service_healthy }
+      postgres-fab2: { condition: service_healthy }
+
+volumes:
+  pgdata-fab1:
+  pgdata-fab2:
