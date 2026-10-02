@@ -215,6 +215,22 @@ Full solver numbers are in [ANALYSIS.md](ANALYSIS.md).
 | **Deterministic where possible** | Fixed seeds and iteration budgets make plans cacheable by content hash, and repair search breaks ties by id. |
 | **Simplest thing that holds at this scale** | Exact search instead of a vector database; Postgres polling instead of a message broker, with the next step named below. |
 
+### Scaling to an enterprise (measured)
+
+The design assumption is **decomposition**: engineers don't cross fabs, certifications split a fab
+into near-independent skill groups, and dispatch happens per shift and area. Thousands of engineers
+across hundreds of fabs is therefore hundreds of small problems, not one large one. Measured on one
+laptop (ANALYSIS, "Scale: 20,000 engineers, measured"):
+
+- the whole of a 20,000-engineer company (6,660 on shift, 222 areas) re-plans in **47 s** with 16 workers;
+- a live tool-down re-plans in **217 ms** (p95 270 ms);
+- solving the same work as one undecomposed problem is slower and costlier, and ALNS degrades to
+  its regret-2 start from 150 × 500 up.
+
+What has to change at that scale is the platform around the solver, in the table below: solves move
+to a queue with workers, live updates move to push, the database is partitioned by fab (every table
+already carries `fab_id`), and re-planning is keyed to the affected area only.
+
 ### Deliberate trade-offs, and the next step for each
 
 | Today | Why it's right here | At a real fab's scale |
