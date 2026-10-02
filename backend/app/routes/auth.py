@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from ..auth import Role, User, current_user, issue_demo_token
 from ..config import get_settings
-from ..deps import get_store
+from ..deps import all_stores, get_store
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -55,7 +55,9 @@ def delete_me(user: User = Depends(current_user)) -> dict:
     replays are deleted; your email in shared shift history becomes "a deleted user", so the
     audit trail keeps its shape without identifying you. On Supabase the sign-in account
     itself is removed too. Demo accounts are shared, so only their data is erased."""
-    store = get_store()
-    erased = store.delete_user_data(user.id, user.email)
-    account = user.provider in ("supabase", "guest") and store.delete_auth_user(user.id)
+    erased: dict[str, int] = {}
+    for store in all_stores():  # the default database and every fab's own
+        for table, n in store.delete_user_data(user.id, user.email).items():
+            erased[table] = erased.get(table, 0) + n
+    account = user.provider in ("supabase", "guest") and get_store().delete_auth_user(user.id)
     return {"erased": erased, "account_deleted": account}

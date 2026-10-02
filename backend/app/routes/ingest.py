@@ -62,7 +62,9 @@ def tool_down(
         raise HTTPException(404, f"fab {req.fab_id} not found") from None
     if req.job.skill not in {f.id for f in profile.families}:
         raise HTTPException(422, f"{req.fab_id} has no {req.job.skill!r} tools")
-    shift_id = req.shift_id or next((s["id"] for s in get_store().list_shifts(req.fab_id, 20) if not s["ended"]), None)
+    shift_id = req.shift_id or next(
+        (s["id"] for s in get_store(req.fab_id).list_shifts(req.fab_id, 20) if not s["ended"]), None
+    )
     if shift_id is None:
         raise HTTPException(409, f"{req.fab_id} has no live shift to receive the tool-down")
     job = req.job.model_copy(update={"kind": "down"})

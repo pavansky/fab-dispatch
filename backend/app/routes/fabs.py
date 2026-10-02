@@ -36,4 +36,4 @@ def engineer_assignments(
     """What an engineer has been given across this fab's live shifts, newest first: a query on
     the assignments read model, not a scan of shift documents."""
     check_fab(user, fab_id)
-    return get_store().engineer_assignments(fab_id, engineer_id, limit)
+    return get_store(fab_id).engineer_assignments(fab_id, engineer_id, limit)

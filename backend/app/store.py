@@ -300,6 +300,10 @@ class Store(ABC):
         """Remove the sign-in account itself, where the store also holds accounts (Supabase)."""
         return False
 
+    def close(self) -> None:
+        """Release held connections (Postgres opens one per call, so holds none)."""
+        return None
+
     def init_schema(self) -> None:
         """Alias kept for call sites written before versioned migrations."""
         self.migrate()
@@ -317,6 +321,10 @@ class SQLiteStore(Store):
         self._lock = threading.Lock()
         if path != ":memory:":
             self._conn.execute("PRAGMA journal_mode=WAL")
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
 
     def _q(self, sql: str, args: tuple = ()) -> list[sqlite3.Row]:
         with self._lock:
@@ -890,10 +898,14 @@ class PostgresStore(Store):
         return [{"intent": r["intent"], "total": r["total"], "helpful": r["helpful"]} for r in rows]
 
 
-def create_store(settings: Settings) -> Store:
-    if settings.is_postgres:
-        store: Store = PostgresStore(settings.database_url, settings.db_schema)
-    else:
-        store = SQLiteStore(settings.database_url.removeprefix("sqlite:///"))
+def open_store(url: str, schema: str = "public") -> Store:
+    """A migrated store for one database URL (the default database, or one fab's own)."""
+    store: Store = (
+        PostgresStore(url, schema) if url.startswith("postgres") else SQLiteStore(url.removeprefix("sqlite:///"))
+    )
     store.migrate()
     return store
+
+
+def create_store(settings: Settings) -> Store:
+    return open_store(settings.database_url, settings.db_schema)

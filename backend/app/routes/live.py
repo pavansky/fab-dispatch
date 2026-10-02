@@ -27,7 +27,7 @@ from .. import live
 from ..algorithms import ALGORITHMS
 from ..auth import User, require
 from ..config import get_settings
-from ..deps import get_store, rate_limit
+from ..deps import get_store, rate_limit, store_for_shift
 from ..http import etag_json
 from ..models import Job, Scenario, Weights
 from ..store import NotFound, VersionConflict
@@ -66,7 +66,7 @@ def _load(shift_id: str, user: User) -> tuple[live.LiveState, int]:
     # Tenant scope is enforced twice: in the SQL (a shift in another fab is never read) and
     # here, so a store that ignored the scope still couldn't leak one.
     try:
-        raw, version = get_store().get_shift(shift_id, fabs=user.fabs)
+        raw, version = store_for_shift(shift_id).get_shift(shift_id, fabs=user.fabs)
     except NotFound:
         raise HTTPException(404, f"shift {shift_id} not found") from None
     state = live.LiveState.model_validate(raw)
@@ -84,7 +84,7 @@ def _mutate(
 ) -> dict:
     """Read, apply, write with an optimistic version check. Retry on a lost race unless the
     caller pinned a version with If-Match (then report 409). Idempotency-Key replays."""
-    store = get_store()
+    store = store_for_shift(shift_id)
     scoped_key = f"{user.id}:{shift_id}:{idem_key}" if idem_key else None
     if scoped_key and (previous := store.get_idempotent(scoped_key)) is not None:
         return {**previous, "idempotent_replay": True}
@@ -123,7 +123,7 @@ def create_shift(
         raise HTTPException(422, f"unknown algorithm {req.algorithm!r}")
     check_scenario(user, req.scenario)
     state, events = live.start(req.scenario, req.weights, req.algorithm, user.email)
-    store = get_store()
+    store = get_store(state.fab_id)
     store.create_shift(
         state.id, state.model_dump(mode="json"), state.fab_id, user.email, assignments=live.assignment_rows(state)
     )
@@ -136,13 +136,13 @@ def list_shifts(
     fab_id: str = Query(...), limit: int = Query(20, ge=1, le=100), user: User = Depends(require("viewer"))
 ) -> list[dict]:
     fab_for(user, fab_id)
-    return get_store().list_shifts(fab_id, limit)
+    return get_store(fab_id).list_shifts(fab_id, limit)
 
 
 @router.get("/{shift_id}")
 def get_shift(shift_id: str, request: Request, user: User = Depends(require("viewer"))):
     state, version = _load(shift_id, user)
-    return etag_json(request, _view(state, version, get_store().presence(shift_id)))
+    return etag_json(request, _view(state, version, store_for_shift(shift_id).presence(shift_id)))
 
 
 @router.post("/{shift_id}/advance")
@@ -191,7 +191,7 @@ def engineer_off(
 def shift_assignments(shift_id: str, user: User = Depends(require("viewer"))) -> list[dict]:
     """The shift's current assignments from the read model: one row per known job."""
     _load(shift_id, user)
-    return get_store().shift_assignments(shift_id)
+    return store_for_shift(shift_id).shift_assignments(shift_id)
 
 
 @router.get("/{shift_id}/events")
@@ -202,7 +202,7 @@ def events(
     user: User = Depends(require("viewer")),
 ) -> list[dict]:
     _load(shift_id, user)
-    return get_store().events_after(shift_id, after, limit)
+    return store_for_shift(shift_id).events_after(shift_id, after, limit)
 
 
 @router.get("/{shift_id}/stream")
@@ -214,7 +214,7 @@ async def stream(
     Each response closes after ``sse_window_s``, which stays inside serverless limits;
     the browser reconnects on its own. Open streams double as presence heartbeats."""
     await to_thread.run_sync(_load, shift_id, user)
-    store, settings = get_store(), get_settings()
+    store, settings = store_for_shift(shift_id), get_settings()
     cursor = (
         int(last_event_id) if last_event_id and last_event_id.isdigit() else int(request.query_params.get("after", 0))
     )
