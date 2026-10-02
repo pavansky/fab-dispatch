@@ -32,9 +32,10 @@ class Settings(BaseSettings):
     )
     tenant_databases: dict[str, str] = Field(
         default_factory=dict,
-        description="fab id -> its own database URL. That fab's shifts, events, assignments, replays and "
-        "cached plans live only there; unlisted fabs use FAB_DATABASE_URL, which also keeps user-level "
-        "data (feedback, rate limits).",
+        description="fab id -> its own database URL, or env:VAR to read the URL from another variable "
+        "(e.g. one a hosting integration injects, so the secret is never copied). That fab's shifts, "
+        "events, assignments, replays and cached plans live only there; unlisted fabs use "
+        "FAB_DATABASE_URL, which also keeps user-level data (feedback, rate limits).",
     )
     ingest_tokens: dict[str, str] = Field(
         default_factory=dict,
@@ -102,6 +103,15 @@ class Settings(BaseSettings):
     @field_validator("tenant_databases")
     @classmethod
     def _tenant_schemes(cls, v: dict[str, str]) -> dict[str, str]:
+        resolved = {}
+        for fab, url in v.items():
+            if url.startswith("env:"):
+                name = url.removeprefix("env:")
+                url = os.environ.get(name, "")
+                if not url:
+                    raise ValueError(f"FAB_TENANT_DATABASES[{fab}] refers to {name}, which is not set")
+            resolved[fab] = url
+        v = resolved
         for fab, url in v.items():
             if not url.startswith(("sqlite:///", "postgresql://", "postgres://")):
                 raise ValueError(f"FAB_TENANT_DATABASES[{fab}] must be sqlite:///... or postgresql://...")
@@ -158,6 +168,7 @@ class Settings(BaseSettings):
 # psycopg refuse the URL, so it is dropped.
 _LIBPQ_PARAMS = {
     "sslmode",
+    "channel_binding",  # Neon sets require: protects the password exchange; libpq 13+ understands it
     "sslrootcert",
     "sslcert",
     "sslkey",

@@ -115,6 +115,28 @@ def test_health_covers_every_database_and_deletion_reaches_them_all(two_fab_data
         assert _rows(path, "shifts", f"id = '{sid}' AND created_by = 'a deleted user'") == 1
 
 
+def test_a_fab_database_can_come_from_another_variable(monkeypatch, tmp_path):
+    """env:VAR reads the URL a hosting integration injected, so nobody copies the secret."""
+    from app.config import Settings
+
+    monkeypatch.setenv("FAB2_DATABASE_URL", f"sqlite:///{tmp_path}/fab2.db")
+    s = Settings(tenant_databases={FAB2: "env:FAB2_DATABASE_URL"})
+    assert s.tenant_databases == {FAB2: f"sqlite:///{tmp_path}/fab2.db"}
+    monkeypatch.setenv("FAB2_PG", "postgres://u:p@db.example.com/neondb?sslmode=require&channel_binding=require")
+    url = Settings(tenant_databases={FAB2: "env:FAB2_PG"}).tenant_databases[FAB2]
+    assert "sslmode=require" in url and "channel_binding=require" in url  # security options kept
+
+
+def test_a_missing_variable_fails_at_startup_not_at_first_request(monkeypatch):
+    from pydantic import ValidationError
+
+    from app.config import Settings
+
+    monkeypatch.delenv("NOT_SET_ANYWHERE", raising=False)
+    with pytest.raises(ValidationError, match="NOT_SET_ANYWHERE"):
+        Settings(tenant_databases={FAB2: "env:NOT_SET_ANYWHERE"})
+
+
 def test_fab_databases_must_be_real_urls():
     from pydantic import ValidationError
 
