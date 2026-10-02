@@ -56,8 +56,9 @@ one vendor and wouldn't work locally without keys.
 **Decision.** An append-only `shift_events` table, and SSE that tails it by id with `Last-Event-ID`
 resume and a 25 s response window.
 **Why.** Works identically on a laptop, in Docker and on serverless. Multi-instance fan-out is free
-because the database is the bus. Polling the log every 0.5 s while a stream is open is cheap at
-dashboard scale. Postgres `LISTEN/NOTIFY` is the upgrade if streams ever number in the thousands.
+because the database is the bus. Polling the log while a stream is open is cheap at dashboard scale,
+and it backs off when a shift is quiet (every 0.25 s while busy, up to 2 s idle). Postgres
+`LISTEN/NOTIFY` is the upgrade if streams ever number in the thousands.
 
 ### D9. Server-owned clock, client-driven
 **Decision.** The live shift's clock only moves when a client calls `advance`.
@@ -69,9 +70,10 @@ time and events would come from the MES; the same `report_job` / `advance` entry
 **Why.** Re-optimising from scratch on every event produces "nervous" plans that would reshuffle the
 whole floor for a 1% gain. People need plans that stay put.
 
-### D11. Repair history: k-NN over Qdrant with a dependency-free embedder
-**Decision.** Qdrant (embedded locally, server in production), hashed n-gram embeddings, and k-NN
-regression for duration.
+### D11. Repair history: k-NN with a dependency-free embedder
+**Decision.** Hashed n-gram embeddings and k-NN regression for duration. The search backend was
+Qdrant at first; since D28 it's an exact NumPy search, with Qdrant used only when a server is
+configured.
 **Why.** Satisfies the "ML-based" option in a way that can be explained: every prediction comes with
 the neighbours behind it. No model download, so it works offline and cold-starts fast.
 `HashEmbedder` can be swapped for a neural model (e.g. fastembed) without changing anything else.
@@ -104,12 +106,14 @@ difference against the best excludes zero. Otherwise it's reported as tied.
 **Why.** Paying 1 s of latency for a 1% "saving" that wouldn't replicate is the false positive to
 avoid. A slower solver has to earn its latency with a difference that is real.
 
-### D15. Embedded Qdrant is in-memory per process
+### D15. Embedded Qdrant is in-memory per process *(superseded by D28)*
 **Context.** On-disk embedded Qdrant locks its folder exclusively, so a second process (a reloader,
 a second uvicorn worker, a second container) failed with 500s.
 **Decision.** In memory by default. The index is deterministic and rebuilds in about 0.6 s. On-disk is
 opt-in (`FAB_QDRANT_PATH`) and falls back to memory if locked. Shared state belongs on a Qdrant server
 (`FAB_QDRANT_URL`).
+**Superseded.** D28 made exact NumPy search the default, which removed the embedded index (and this
+problem) entirely. The fallback still applies when `FAB_QDRANT_PATH` is set.
 
 ### D16. Search budgets sized from the quality curve, not by feel
 **Context.** On Vercel, PyVRP at 3000 iterations hit the 3 s cap: slower, non-reproducible, and
@@ -260,4 +264,26 @@ expect it to be separable: backed up, retained, moved or deleted per fab. A shar
 `fab_id` filter isolates logically; a database per fab isolates physically and scales out with the
 number of fabs. The next step, where a fab requires it, is a deployment per fab on site, which needs
 no code change: the same images pointed at that fab's database.
+
+### D35. Scale by decomposition, and measure it
+**Decision.** Treat a large organisation as many small problems, split by fab, skill group, shift
+and area (about 15–60 engineers each), solved independently and in parallel. Don't build one solver
+for 20,000 engineers.
+**Why.** Engineers don't cross fabs, certifications split a fab into near-independent groups, and
+dispatch is per shift and area, so the split loses little. It was measured, not assumed: a
+20,000-engineer company (6,660 on shift, 222 areas) re-plans in 47 s on one laptop, and a live
+tool-down re-plans in 217 ms. Solving the same work undecomposed is slower and further from optimal:
+PyVRP's gap grows from 2.7% at 14 × 45 to about 8% at 30 × 100, and ALNS stops improving on its
+start from 150 × 500 (ANALYSIS, "Scale").
+**Trade-off.** Work that genuinely crosses a boundary (a shared expert, a cross-bay job) needs a
+coordination step between areas; at the measured sizes that hasn't been needed.
+
+### D36. Prove optimality gaps instead of estimating them
+**Decision.** Measure every strategy against the proven optimum at the size it runs: exact set
+partitioning (route enumeration + MILP) on all 80 benchmark shifts at 14 × 45, and certified bounds
+by column generation where full enumeration stops scaling (30 × 100: optimum between 1828.0 and
+1844.3).
+**Why.** Gaps measured on small shifts flattered the heuristics: ALNS looked 0.9% from optimal on
+4 × 12 and is 5.7% at 14 × 45. A claim about quality is only as good as the size it was measured at.
+The study fails if any heuristic beats the "optimum", which guards the proof itself.
 
