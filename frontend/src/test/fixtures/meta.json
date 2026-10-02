@@ -1,6 +1,6 @@
 {
  "version": "2026.10.1",
- "release": "2.6.0",
+ "release": "2.7.0",
  "commit": "local",
  "algorithms": {
   "greedy": {
@@ -40,6 +40,7 @@
   "stability": 25.0
  },
  "store": "sqlite",
+ "fab_databases": [],
  "vector_index": "exact",
  "solver_budget": {
   "alns_iterations": 60,

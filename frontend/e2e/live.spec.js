@@ -14,7 +14,7 @@ async function startShift(page) {
 test('a dispatcher drives the clock and the plan re-optimises', async ({ page, signIn }) => {
   await signIn()
   const id = await startShift(page)
-  expect(id).toMatch(/^[0-9a-f]{12}$/)
+  expect(id).toMatch(/^fab1-300mm-logic\.[0-9a-f]{12}$/) // ids carry their fab, which routes to its database
   await expect(clockOf(page)).toHaveText('07:00')
   await page.getByRole('button', { name: '+1 h' }).click()
   await expect(clockOf(page)).toHaveText('08:00')
