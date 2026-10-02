@@ -92,7 +92,7 @@ def release_clock(state: LiveState, actor: str) -> list[dict]:
 
 def start(scenario: Scenario, weights: Weights, algorithm: str, actor: str = "system") -> tuple[LiveState, list[dict]]:
     state = LiveState(
-        id=uuid.uuid4().hex[:12],
+        id=f"{scenario.fab_id}.{uuid.uuid4().hex[:12]}",  # the fab prefix routes it to that fab's database
         created_at=datetime.now(UTC).isoformat(),
         scenario=scenario,
         weights=weights,

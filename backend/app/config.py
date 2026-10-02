@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     qdrant_path: str | None = Field(
         None, description="optional on-disk path for embedded Qdrant; unset = in-memory per process"
     )
+    tenant_databases: dict[str, str] = Field(
+        default_factory=dict,
+        description="fab id -> its own database URL. That fab's shifts, events, assignments, replays and "
+        "cached plans live only there; unlisted fabs use FAB_DATABASE_URL, which also keeps user-level "
+        "data (feedback, rate limits).",
+    )
     ingest_tokens: dict[str, str] = Field(
         default_factory=dict,
         description="fab id -> SHA-256 hex of that fab's ingestion token, for equipment systems "
@@ -92,6 +98,14 @@ class Settings(BaseSettings):
         if not v.startswith(("sqlite:///", "postgresql://", "postgres://")):
             raise ValueError("FAB_DATABASE_URL must be sqlite:///... or postgresql://...")
         return v
+
+    @field_validator("tenant_databases")
+    @classmethod
+    def _tenant_schemes(cls, v: dict[str, str]) -> dict[str, str]:
+        for fab, url in v.items():
+            if not url.startswith(("sqlite:///", "postgresql://", "postgres://")):
+                raise ValueError(f"FAB_TENANT_DATABASES[{fab}] must be sqlite:///... or postgresql://...")
+        return {fab: libpq_url(url) if url.startswith("postgres") else url for fab, url in v.items()}
 
     @model_validator(mode="after")
     def _platform_database(self) -> Settings:

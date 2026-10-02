@@ -9,7 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from ..algorithms import ALGORITHMS
 from ..cache import ENGINE_VERSION
 from ..config import get_settings
-from ..deps import get_planning, get_store
+from ..deps import all_stores, get_planning, get_store
 from ..http import etag_json
 from ..models import Weights
 from ..version import APP_VERSION, COMMIT
@@ -52,16 +52,20 @@ def health() -> dict:
     """Readiness: can we reach the store, and is its schema current? Output stays minimal."""
     from ..store import SCHEMA_VERSION
 
+    db_ok = schema_ok = True
+    stores = 0
     try:
-        store = get_store()
-        db_ok = store.ping()
-        schema_ok = store.schema_version() >= SCHEMA_VERSION
+        for store in all_stores():  # the default database and every fab's own
+            stores += 1
+            db_ok = db_ok and store.ping()
+            schema_ok = schema_ok and store.schema_version() >= SCHEMA_VERSION
     except Exception:  # health must report, not raise
         db_ok = schema_ok = False
     return {
         "status": "ok" if db_ok and schema_ok else "degraded",
         "db_ok": db_ok,
         "schema_ok": schema_ok,
+        "databases": stores,
         "version": ENGINE_VERSION,
         "release": APP_VERSION,
         "commit": COMMIT,
@@ -76,7 +80,11 @@ def prune(authorization: str | None = Header(None)) -> dict:
     secret = get_settings().cron_secret
     if not secret or not hmac.compare_digest(authorization or "", f"Bearer {secret}"):
         raise HTTPException(401, "unauthorised")
-    return {"deleted": get_store().prune()}
+    deleted: dict[str, int] = {}
+    for store in all_stores():
+        for table, n in store.prune().items():
+            deleted[table] = deleted.get(table, 0) + n
+    return {"deleted": deleted}
 
 
 @router.get("/meta")
@@ -91,6 +99,7 @@ def meta(request: Request):
         "auth_mode": s.auth_mode,
         "default_weights": Weights().model_dump(),
         "store": get_store().kind,
+        "fab_databases": sorted(get_settings().tenant_databases),
         "vector_index": "qdrant-server" if s.qdrant_url else "qdrant-disk" if s.qdrant_path else "exact",
         "solver_budget": {
             "alns_iterations": s.alns_iterations,
