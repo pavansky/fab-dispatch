@@ -2,6 +2,18 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.7.0] - 2026-10-02
+
+### Added
+- **A database per fab** (`FAB_TENANT_DATABASES`): each listed fab's shifts, events, assignments,
+  replays and cached plans live only in its own database; the default database keeps user-level
+  data. Health, retention and account deletion cover every database.
+- Shift ids carry their fab (`fab1-300mm-logic.3f2a…`), so requests route to the right database
+  without a lookup.
+- Isolation tests that read each database directly, on SQLite and on separate Postgres databases,
+  and a CI job that starts one Postgres per fab (`docker-compose.fabs.yml`) and checks each fab's
+  rows exist only in its own database. Decision D34.
+
 ## [2.6.1] - 2026-10-02
 
 ### Added
