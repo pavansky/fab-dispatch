@@ -2,6 +2,20 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.6.1] - 2026-10-02
+
+### Added
+- **Certified bounds at scale** (`scripts/certified_bound.py`): column generation over all routes
+  gives a lower bound no plan can beat. At 30 × 100 (8.3 million routes) the optimum lies between
+  1828.0 and 1844.3; PyVRP is within 8.4% of it, ALNS within 15.4%.
+- **Scale study** (`scripts/scale_study.py`): a 20,000-engineer company re-plans in 47 s on one laptop
+  (222 areas in parallel); a live tool-down re-plans in 217 ms (p95 270 ms).
+- ANALYSIS "Scale" section and ARCHITECTURE "Scaling to an enterprise", with these measurements.
+
+### Found
+- Heuristic gaps grow with problem size (PyVRP 2.7% at 14 × 45, about 8% at 30 × 100), and ALNS
+  returns its regret-2 start unchanged from 150 × 500 up: decomposition into areas is required.
+
 ## [2.6.0] - 2026-10-02
 
 ### Added
