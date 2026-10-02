@@ -2,6 +2,17 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.7.1] - 2026-10-02
+
+### Added
+- `FAB_TENANT_DATABASES` values can be `env:VAR`: the fab's database URL is read from a variable a
+  hosting integration injects (e.g. Neon through Vercel), so nobody copies the secret. A missing
+  variable fails at startup, not at the first request.
+
+### Fixed
+- Postgres URLs keep `channel_binding` (Neon sets `require`), which protects the password exchange;
+  it was being dropped with unknown parameters.
+
 ## [2.7.0] - 2026-10-02
 
 ### Added
