@@ -368,7 +368,8 @@ What a production AI application needs, and where to see it here.
 - **A database per fab:** `FAB_TENANT_DATABASES` puts each fab's shifts, events, assignments and
   cached plans in its own database. CI starts one Postgres per fab and checks, by querying each
   database directly, that no fab's data appears anywhere else
-  (`docker compose -f docker-compose.yml -f docker-compose.fabs.yml up` to try it).
+  (`docker compose -f docker-compose.yml -f docker-compose.fabs.yml up` to try it). The live app runs
+  this way: fab 2's data lives in its own Neon database, separate from fab 1's Supabase.
 
 ## API
 

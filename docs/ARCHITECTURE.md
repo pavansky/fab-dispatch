@@ -60,7 +60,9 @@ flowchart LR
   fab (`fab1-300mm-logic.3f2a…`), so a link routes straight to the right database without a lookup.
   Fabs not listed share the default database, isolated by `fab_id` in every query. Health, retention
   and account deletion cover every database. CI starts a stack with one Postgres per fab and checks
-  each fab's rows exist only in its own database, by querying the databases directly.
+  each fab's rows exist only in its own database, by querying the databases directly. Production
+  runs this way: fab 2's data is in its own Neon database, fab 1's in Supabase
+  ([ENVIRONMENTS.md](ENVIRONMENTS.md)).
 - **Identity**: `app/auth.py`. Supabase-issued tokens are verified against the project's JWKS
   (ES256/RS256) or the legacy HS256 secret, with issuer and audience checks. Local development
   uses short-lived demo tokens, which settings refuse in production.
