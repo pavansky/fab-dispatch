@@ -2,6 +2,16 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.7.2] - 2026-10-03
+
+### Fixed
+- **Slow first load (20–30 s when the servers were cold).** The page no longer waits for the
+  sign-in settings: a returning browser starts from the last ones it saw and refreshes them in the
+  background, and the sign-in library loads in parallel. The signed-in user is checked once, not
+  twice (Supabase announces the same session more than once). The API starts about 4× faster:
+  SciPy and PyVRP load when something is first solved, not at startup. A ping every five minutes
+  keeps one instance and both databases warm.
+
 ## [2.7.1] - 2026-10-02
 
 ### Added
