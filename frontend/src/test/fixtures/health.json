@@ -4,7 +4,7 @@
  "schema_ok": true,
  "databases": 1,
  "version": "2026.10.1",
- "release": "2.7.1",
+ "release": "2.7.2",
  "commit": "local",
  "env": "local"
 }
