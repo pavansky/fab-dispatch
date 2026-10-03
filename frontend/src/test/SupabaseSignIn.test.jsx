@@ -33,6 +33,28 @@ function supabaseApi(guest_role = 'dispatcher', captcha_site_key = null) {
   })
 }
 
+describe('First load', () => {
+  it('signs a returning visitor in with one user check, however often Supabase repeats the session', async () => {
+    const api = supabaseApi('dispatcher')
+    auth.getSession.mockResolvedValue({ data: { session: { access_token: 'guest-token' } } })
+    renderApp()
+    expect(await screen.findByRole('region', { name: 'Recommendation' }, { timeout: 4000 })).toBeInTheDocument()
+    act(() => listener?.('INITIAL_SESSION', { access_token: 'guest-token' }))   // the same session again
+    act(() => listener?.('TOKEN_REFRESHED', { access_token: 'guest-token-2' }))  // a refresh, same user
+    await new Promise((r) => setTimeout(r, 50))
+    expect(api.find('GET', '/auth/me')).toHaveLength(1)
+  })
+
+  it("doesn't wait for a slow server: a returning browser uses the sign-in settings it saw last", async () => {
+    supabaseApi('dispatcher')
+    localStorage.setItem('fab-dispatch-auth-config', JSON.stringify({ mode: 'supabase', supabase_url: 'https://example.supabase.co', supabase_publishable_key: 'sb_publishable_test', guest_role: 'dispatcher', captcha_site_key: null }))
+    const api = mockApi({ ...workspaceRoutes(), 'GET /auth/config': () => new Promise(() => {}) })   // a server that never answers
+    renderApp()
+    expect(await screen.findByRole('button', { name: 'Try it as a guest' })).toBeInTheDocument()
+    expect(api.find('GET', '/auth/config')).toHaveLength(1)   // still refreshed in the background
+  })
+})
+
 describe('Supabase sign-in', () => {
   it('lets a guest in with one click, as the configured role', async () => {
     const api = supabaseApi('dispatcher')

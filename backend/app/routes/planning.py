@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from ..algorithms import ALGORITHMS
-from ..algorithms.exact import TooLarge, run_exact
 from ..auth import User, require
 from ..config import get_settings
 from ..deps import get_planning, rate_limit
@@ -136,6 +135,8 @@ def optimality_gap(
     req: GapRequest, user: User = Depends(require("dispatcher")), _rl: None = Depends(rate_limit("benchmark", 20, 6))
 ) -> dict:
     """Exact optimum (route enumeration + MILP) vs every heuristic, on small shifts."""
+    from ..algorithms.exact import TooLarge, run_exact  # SciPy's MILP: loaded only for this endpoint
+
     profile = _profile_and_preset(user, req.fab_id, req.preset)
     rows = []
     for seed in range(req.seeds):

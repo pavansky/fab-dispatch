@@ -1,0 +1,24 @@
+name: Keep warm
+
+# Serverless instances go cold after a few idle minutes, and a cold start (Python imports,
+# database connections, Neon waking from scale-to-zero) is what a first visitor would wait
+# for. A light ping every few minutes keeps one instance and both databases warm; Fluid
+# compute then serves the visitor's first requests from that instance.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Warm the API, both databases and the sign-in settings
+        env:
+          URL: ${{ vars.PRODUCTION_URL || 'https://fab-dispatch.vercel.app' }}
+        run: |
+          curl -fsS -o /dev/null -w "health %{http_code} in %{time_total}s\n" "$URL/api/health"
+          curl -fsS -o /dev/null -w "config %{http_code} in %{time_total}s\n" "$URL/api/auth/config"

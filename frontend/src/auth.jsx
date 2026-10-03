@@ -17,21 +17,32 @@ const store = {
   get: () => { try { return localStorage.getItem(DEMO_KEY) } catch { return null } },
   set: (t) => { try { t ? localStorage.setItem(DEMO_KEY, t) : localStorage.removeItem(DEMO_KEY) } catch { /* private mode */ } },
 }
+const CONFIG_KEY = 'fab-dispatch-auth-config'
+const configCache = {
+  get: () => { try { return JSON.parse(localStorage.getItem(CONFIG_KEY)) } catch { return null } },
+  set: (c) => { try { localStorage.setItem(CONFIG_KEY, JSON.stringify(c)) } catch { /* private mode */ } },
+}
 
 export function AuthProvider({ children }) {
   const [state, setState] = useState({ status: 'loading', user: null, config: null, error: null })
   const token = useRef(null)
+  const signedIn = useRef(false)
   const supabase = useRef(null)
   setTokenProvider(() => token.current)
 
   const adopt = useCallback(async (accessToken) => {
+    // Supabase announces the same session more than once (the stored session, then
+    // INITIAL_SESSION). Checking the user again for an unchanged token is a wasted round trip.
+    if (accessToken && accessToken === token.current && signedIn.current) return
     token.current = accessToken
-    if (!accessToken) { clearPlanCache(); setState((s) => ({ ...s, status: 'signedOut', user: null })); return }
+    if (!accessToken) { signedIn.current = false; clearPlanCache(); setState((s) => ({ ...s, status: 'signedOut', user: null })); return }
     try {
       const user = await getMe()
+      signedIn.current = true
       setState((s) => ({ ...s, status: 'signedIn', user, error: null }))
     } catch (e) {
       token.current = null
+      signedIn.current = false
       store.set(null)
       setState((s) => ({ ...s, status: 'signedOut', user: null, error: e.status === 401 ? null : e.message }))
     }
@@ -39,8 +50,14 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let unsubscribe = () => {}
-    authConfig().then(async (config) => {
+    // The sign-in configuration rarely changes, so start from the last one this browser saw
+    // and refresh it in the background: a cold server no longer blocks the first paint.
+    const cached = configCache.get()
+    const fresh = authConfig().then((config) => { configCache.set(config); return config })
+    if (cached?.mode === 'supabase') import('@supabase/supabase-js')   // fetch the client in parallel
+    ;(cached ? Promise.resolve(cached) : fresh).then(async (config) => {
       setState((s) => ({ ...s, config }))
+      if (cached) fresh.then((latest) => setState((s) => ({ ...s, config: latest }))).catch(() => {})
       if (config.mode === 'supabase') {
         const { createClient } = await import('@supabase/supabase-js')   // only loaded where used
         const client = createClient(config.supabase_url, config.supabase_publishable_key, {
@@ -49,7 +66,10 @@ export function AuthProvider({ children }) {
         supabase.current = client
         const { data } = await client.auth.getSession()
         await adopt(data.session?.access_token ?? null)
-        const sub = client.auth.onAuthStateChange((_event, session) => { adopt(session?.access_token ?? null) })
+        const sub = client.auth.onAuthStateChange((event, session) => {
+          if (event === 'TOKEN_REFRESHED') { token.current = session?.access_token ?? null; return }   // same user
+          adopt(session?.access_token ?? null)
+        })
         unsubscribe = () => sub.data.subscription.unsubscribe()
       } else {
         // Local demo only: ?as=dispatcher|viewer signs in directly (for screenshots and e2e runs).
