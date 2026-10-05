@@ -28,6 +28,11 @@ export default function FrontierChart({ points, margin, caption, wide = false })
   const xTicks = [1, 10, 100, 1000, 10000].filter((t) => Math.log10(t) >= xMin && Math.log10(t) <= xMax)
   const yTicks = Array.from({ length: 4 }, (_, i) => yMin + ((i + 0.5) * (yMax - yMin)) / 4)
   const front = points.filter((p) => p.front).sort((a, b) => a.latency - b.latency)
+  // A point off the frontier is beaten on both cost and speed. Name the strategy that beats
+  // it (the cheapest one that's also no slower), so a hollow point never looks unexplained.
+  const beatenBy = (p) => points
+    .filter((o) => o !== p && o.cost <= p.cost && o.latency <= p.latency && (o.cost < p.cost || o.latency < p.latency))
+    .sort((a, b) => a.cost - b.cost)[0]
 
   return (
     <figure style={{ margin: 0 }}>
@@ -52,13 +57,17 @@ export default function FrontierChart({ points, margin, caption, wide = false })
         <text x={(W + M.l) / 2} y={H - 6} textAnchor="middle">SOLVE LATENCY (LOG) →</text>
         <text transform={`translate(12 ${(H - M.b + M.t) / 2}) rotate(-90)`} textAnchor="middle">← OPERATING COST</text>
         {front.length > 1 && <path className="front-line" d={front.map((p, i) => `${i ? 'L' : 'M'} ${x(p.latency)} ${y(p.cost)}`).join(' ')} />}
+        {points.filter((p) => !p.front).map((p) => {
+          const by = beatenBy(p)
+          return by && <line key={`by-${p.key}`} className="beaten-link" x1={x(p.latency)} y1={y(p.cost)} x2={x(by.latency)} y2={y(by.cost)} />
+        })}
         {points.map((p) => (
           <g key={p.key}
             onMouseMove={(e) => show(e, (
               <>
                 <div className="t">{ALGO_SHORT[p.key]}{p.reco ? ' · recommended' : ''}</div>
                 <div className="r">Cost {fmt(p.cost)} pts{p.costLo !== undefined ? ` (95% CI ${fmt(p.costLo)}–${fmt(p.costHi)})` : ''}</div>
-                <div className="r">Latency {fmt(p.latency, p.latency < 10 ? 1 : 0)} ms · {p.front ? 'on the frontier' : 'dominated'}</div>
+                <div className="r">Latency {fmt(p.latency, p.latency < 10 ? 1 : 0)} ms · {p.front ? 'on the frontier' : `beaten on both by ${ALGO_SHORT[beatenBy(p)?.key] ?? 'another strategy'}`}</div>
               </>
             ))}
             onMouseLeave={hide}>
@@ -67,6 +76,9 @@ export default function FrontierChart({ points, margin, caption, wide = false })
             <circle className={`pt ${p.front ? 'front' : ''} ${p.reco ? 'is-reco' : ''}`} cx={x(p.latency)} cy={y(p.cost)} r={5} />
             <circle cx={x(p.latency)} cy={y(p.cost)} r={14} fill="transparent" />
             <text className={`lbl ${p.reco ? 'is-reco' : ''}`} x={x(p.latency) + 9} y={y(p.cost) - 8}>{ALGO_SHORT[p.key]}</text>
+            {!p.front && beatenBy(p) && (
+              <text className="lbl-note" x={x(p.latency) + 9} y={y(p.cost) + 16}>beaten by {ALGO_SHORT[beatenBy(p).key]} on cost and speed</text>
+            )}
           </g>
         ))}
       </svg>

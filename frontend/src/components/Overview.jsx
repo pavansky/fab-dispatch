@@ -59,7 +59,7 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
 
       <section className="card" data-tour="frontier">
         <div className="card-h"><div><div className="h-row"><h2><span className="section-no">01</span>Cost × latency</h2><InfoLink slug="recommendation" anchor="the-cost-latency-chart" label="Cost × latency chart" /></div>
-          <p>Lower-left is better on both. The line is the efficient frontier: nothing on it is beaten on both cost and speed. The shaded band is the noise margin ({reco.margin ? `±${fmt(reco.margin, 0)} pts` : 'per goal'}) above the cheapest plan; differences inside it aren't counted as wins.</p></div></div>
+          <p>Lower-left is better on both. The line is the efficient frontier: nothing on it is beaten on both cost and speed. A hollow point is beaten on both, and its dashed line points to the strategy that beats it. The shaded band is the noise margin ({reco.margin ? `±${fmt(reco.margin, 0)} pts` : 'per goal'}) above the cheapest plan; differences inside it aren't counted as wins.</p></div></div>
         <div className="card-b">
           <FrontierChart wide={wide} margin={goal === 'value' ? reco.margin : 0}
             points={(() => {
