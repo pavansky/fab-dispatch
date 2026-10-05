@@ -403,6 +403,8 @@ svg.floor.adding { cursor: crosshair; }
 .frontier .pt.is-reco { fill: var(--signal); stroke: var(--signal); }
 .frontier .ring { fill: none; stroke: var(--signal); stroke-width: 1; stroke-dasharray: 2 2; }
 .frontier .front-line { fill: none; stroke: var(--ink); stroke-width: 1.2; }
+.frontier .beaten-link { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 4; }
+.frontier .lbl-note { font: 400 10.5px Geist, system-ui, sans-serif; fill: var(--ink-3); }
 .frontier .band { fill: var(--signal-wash); }
 .frontier .whisker { stroke: var(--ink-3); stroke-width: 1; }
 .section-no { font: 500 11px var(--mono); color: var(--signal-text); margin-right: 8px; }
