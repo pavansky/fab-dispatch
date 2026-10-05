@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import Sidebar from '../Sidebar.jsx'
+import { shiftSizeErrors } from '../../shiftLimits.js'
 import { fixtures } from '../../test/api.js'
 
 const { fab1, fab2, meta } = fixtures
@@ -70,5 +71,15 @@ describe('Sidebar', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
     await userEvent.click(screen.getByRole('button', { name: 'Close controls' }))
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+})
+describe('shift size limits', () => {
+  it('flags sizes outside the API limits', () => {
+    expect(shiftSizeErrors({ seed: 100, n_engineers: 100, n_jobs: 1000 })).toEqual({
+      n_engineers: 'Engineers must be a whole number from 1 to 60 in the live demo.',
+      n_jobs: 'Jobs must be a whole number from 1 to 200 in the live demo.',
+    })
+    expect(shiftSizeErrors({ seed: 7, n_engineers: 14, n_jobs: 45 })).toEqual({})
+    expect(shiftSizeErrors({ seed: 7, n_engineers: 0, n_jobs: 4.5 })).toHaveProperty('n_jobs')
   })
 })

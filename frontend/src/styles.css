@@ -155,6 +155,8 @@ input.input[type=number] { font-family: var(--mono); font-size: 13px; }
 .row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
 .help { font-size: 12px; color: var(--ink-3); margin: 0 0 10px; }
+.help.field-error { color: var(--critical); margin-top: -4px; }
+.input[aria-invalid="true"] { border-color: var(--critical); }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px; border-radius: 3px; border: 1px solid var(--ink-3); background: var(--surface); cursor: pointer; font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .02em; color: var(--ink); }
 .btn:hover { background: var(--surface-2); }
 .btn.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }

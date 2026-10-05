@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { PRIORITY } from '../lib/format.js'
 import { shiftLength } from '../lib/fab.js'
 import InfoLink from './InfoLink.jsx'
+import { SIZE_FIELDS, shiftSizeErrors } from '../shiftLimits.js'
 
 const WEIGHTS = [
   ['priority_reward', 'Priority reward', 'per priority point served', 0, 200, 5],
@@ -24,6 +25,8 @@ export default function Sidebar({
   }, [open, onClose])
 
   const preset = profile.presets[params.preset] ?? Object.values(profile.presets)[0]
+  const sizeErrors = shiftSizeErrors(params)
+  const hasSizeErrors = Object.keys(sizeErrors).length > 0
   return (
     <>
       {open && <div className="backdrop" onClick={onClose} aria-hidden />}
@@ -44,11 +47,16 @@ export default function Sidebar({
           </label>
           <p className="help">{preset.description}</p>
           <div className="row-3">
-            <label className="field"><span>Seed</span><input className="input" type="number" inputMode="numeric" value={params.seed} onChange={(e) => setParams({ ...params, seed: +e.target.value })} /></label>
-            <label className="field"><span>Engineers</span><input className="input" type="number" inputMode="numeric" min={1} max={60} value={params.n_engineers} onChange={(e) => setParams({ ...params, n_engineers: +e.target.value })} /></label>
-            <label className="field"><span>Jobs</span><input className="input" type="number" inputMode="numeric" min={1} max={200} value={params.n_jobs} onChange={(e) => setParams({ ...params, n_jobs: +e.target.value })} /></label>
+            {SIZE_FIELDS.map(({ key, label, min, max }) => (
+              <label className="field" key={key}><span>{label}</span>
+                <input className="input" type="number" inputMode="numeric" min={min} max={max} value={params[key]}
+                  aria-invalid={!!sizeErrors[key]} aria-describedby={sizeErrors[key] ? `${key}-err` : undefined}
+                  onChange={(e) => setParams({ ...params, [key]: +e.target.value })} />
+              </label>
+            ))}
           </div>
-          <button className="btn primary block" onClick={() => { onGenerate(); onClose() }}>Generate shift</button>
+          {Object.entries(sizeErrors).map(([key, msg]) => <p className="help field-error" id={`${key}-err`} key={key} role="alert">{msg}</p>)}
+          <button className="btn primary block" disabled={hasSizeErrors} onClick={() => { onGenerate(); onClose() }}>Generate shift</button>
         </section>
 
         <details className="card card-b section" open data-tour="weights">
