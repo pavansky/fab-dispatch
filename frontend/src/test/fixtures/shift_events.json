@@ -6,7 +6,7 @@
   "message": "dispatcher@demo.local started the shift with 6 known jobs and 6 engineers.",
   "data": {},
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-03T15:38:18.322781+00:00",
+  "at": "2026-10-05T17:43:54.780520+00:00",
   "version": 1
  },
  {
@@ -25,7 +25,7 @@
     "J018"
    ],
    "dropped": [],
-   "runtime_ms": 3.33,
+   "runtime_ms": 2.91,
    "assignments": {
     "J005": "E03",
     "J006": "E01",
@@ -36,7 +36,7 @@
    }
   },
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-03T15:38:18.326252+00:00",
+  "at": "2026-10-05T17:43:54.783539+00:00",
   "version": 1
  },
  {
@@ -49,7 +49,7 @@
    "priority": 3
   },
   "actor": "system",
-  "at": "2026-10-03T15:38:18.329548+00:00",
+  "at": "2026-10-05T17:43:54.786177+00:00",
   "version": 2
  },
  {
@@ -63,13 +63,13 @@
     "J016"
    ],
    "dropped": [],
-   "runtime_ms": 4.14,
+   "runtime_ms": 3.72,
    "assignments": {
     "J016": "E01"
    }
   },
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-03T15:38:18.333829+00:00",
+  "at": "2026-10-05T17:43:54.790005+00:00",
   "version": 2
  },
  {
@@ -82,7 +82,7 @@
    "priority": 2
   },
   "actor": "system",
-  "at": "2026-10-03T15:38:18.333842+00:00",
+  "at": "2026-10-05T17:43:54.790011+00:00",
   "version": 2
  },
  {
@@ -96,13 +96,13 @@
     "J007"
    ],
    "dropped": [],
-   "runtime_ms": 3.71,
+   "runtime_ms": 3.5,
    "assignments": {
     "J007": "E03"
    }
   },
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-03T15:38:18.337673+00:00",
+  "at": "2026-10-05T17:43:54.793596+00:00",
   "version": 2
  },
  {
@@ -119,7 +119,7 @@
    "total": 18
   },
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-03T15:38:18.337687+00:00",
+  "at": "2026-10-05T17:43:54.793606+00:00",
   "version": 2
  }
 ]
