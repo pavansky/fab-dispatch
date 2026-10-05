@@ -32,7 +32,13 @@ export default function Sidebar({
         <section className="card card-b">
           <p className="eyebrow">Shift scenario <InfoLink slug="what-ifs" anchor="generate-a-shift" label="Generating shifts" /></p>
           <label className="field"><span>Preset</span>
-            <select className="input" value={params.preset} onChange={(e) => setParams({ ...params, preset: e.target.value })}>
+            <select className="input" value={params.preset} onChange={(e) => {
+              // A preset is a whole new kind of shift: generate it now, so the results on screen
+              // always match the preset shown. Seed and sizes are typed, so they wait for Generate.
+              const next = { ...params, preset: e.target.value }
+              setParams(next)
+              onGenerate(next)
+            }}>
               {Object.entries(profile.presets).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
             </select>
           </label>
