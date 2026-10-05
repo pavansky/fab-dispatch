@@ -63,6 +63,7 @@ function Workspace({ theme, setTheme }) {
   const [drawer, setDrawer] = useState(false)
   const closeDrawer = useCallback(() => setDrawer(false), [])
   const [params, setParams] = useState({ preset: 'normal', seed: 7, n_engineers: 14, n_jobs: 45 })
+  const [appliedPreset, setAppliedPreset] = useState('normal')   // the preset of the shift on screen
   const [scenario, setScenario] = useState(null)
   const [offShift, setOffShift] = useState(() => new Set())
   const [weights, setWeights] = useState(null)
@@ -139,7 +140,7 @@ function Workspace({ theme, setTheme }) {
   const regenerate = (p = params, { keepSelection = false, fab = profile } = {}) => {
     setError(null)
     generateScenario({ ...p, fab_id: fab.id })
-      .then((s) => { setScenario(s); setOffShift(new Set()); if (!keepSelection) setSelection(null); setPredicted(null) })
+      .then((s) => { setScenario(s); setAppliedPreset(p.preset); setOffShift(new Set()); if (!keepSelection) setSelection(null); setPredicted(null) })
       .catch((e) => setError(e.message))
   }
 
@@ -272,7 +273,7 @@ function Workspace({ theme, setTheme }) {
         busy={busy} pending={pending} onMenu={() => setDrawer(true)} onHelp={() => helpApi.openHelp()} onAbout={helpApi.openAbout}
         solvedNote={`${results.length} strategies solved${Object.values(cacheInfo).some((c) => c !== 'miss') ? ' · cached' : ''}`}
         chips={<>
-          <span className="chip">{profile.presets[params.preset]?.label}</span>
+          <span className="chip">{profile.presets[appliedPreset]?.label}</span>
           <span className="chip"><b>{effective.engineers.length}</b> engineers{offShift.size > 0 && ` (${offShift.size} off)`}</span>
           <span className="chip"><b>{scenario.jobs.length}</b> jobs</span>
           <span className="chip"><b>{scenario.jobs.filter((j) => j.priority === 3).length}</b> bottleneck downs</span>
@@ -280,7 +281,7 @@ function Workspace({ theme, setTheme }) {
 
       <div className="layout">
         <Sidebar open={drawer} onClose={closeDrawer} profile={profile} params={params} setParams={setParams}
-          onGenerate={() => regenerate()} weights={weights} setWeights={setWeights} defaultWeights={meta.default_weights}
+          onGenerate={(p) => regenerate(p ?? params)} weights={weights} setWeights={setWeights} defaultWeights={meta.default_weights}
           addMode={addMode} setAddMode={(v) => { setAddMode(v); if (v) setTab('floor') }} newJob={newJob} setNewJob={setNewJob}
           predicted={predicted} onTogglePredicted={togglePredicted} offShiftCount={offShift.size} onRestoreAll={() => setOffShift(new Set())} />
 

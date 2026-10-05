@@ -30,12 +30,18 @@ describe('Sidebar', () => {
     expect(within(screen.getByRole('combobox', { name: 'Preset' })).getByRole('option', { name: 'Photo crunch' })).toBeInTheDocument()
   })
 
-  it('updates the scenario parameters and generates a shift', async () => {
-    const { setParams, onGenerate, onClose } = renderSidebar()
+  it('generates a new shift as soon as a preset is picked, so results always match the preset shown', async () => {
+    const { setParams, onGenerate } = renderSidebar()
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Preset' }), 'litho_crunch')
     expect(setParams).toHaveBeenCalledWith({ ...params, preset: 'litho_crunch' })
+    expect(onGenerate).toHaveBeenCalledWith({ ...params, preset: 'litho_crunch' })
+  })
+
+  it('applies typed sizes only on Generate shift', async () => {
+    const { setParams, onGenerate, onClose } = renderSidebar()
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Engineers' }), { target: { value: '20' } })
     expect(setParams).toHaveBeenLastCalledWith({ ...params, n_engineers: 20 })
+    expect(onGenerate).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Generate shift' }))
     expect(onGenerate).toHaveBeenCalledOnce()
     expect(onClose).toHaveBeenCalled() // closes the drawer on phones
