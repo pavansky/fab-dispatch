@@ -2,6 +2,14 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.7.4] - 2026-10-05
+
+### Fixed
+- **Shift sizes are checked in the form.** Seed, engineers and jobs outside the live demo's limits
+  (engineers 1–60, jobs 1–200) now get a plain message under the fields, and *Generate shift* stays
+  disabled until they are fixed, instead of a raw "Input should be less than or equal to 60" banner.
+  Larger organisations are covered by the offline scale study (ANALYSIS.md, Scale).
+
 ## [2.7.3] - 2026-10-05
 
 ### Fixed
