@@ -1,8 +1,8 @@
 {
  "version": 1,
  "state": {
-  "id": "fab1-300mm-logic.f42b54863154",
-  "created_at": "2026-10-03T15:38:18.322749+00:00",
+  "id": "fab1-300mm-logic.8105ae6ba74f",
+  "created_at": "2026-10-05T17:43:54.780499+00:00",
   "scenario": {
    "fab_id": "fab1-300mm-logic",
    "engineers": [
@@ -621,7 +621,7 @@
     "engineers_used": 3.0,
     "workload_std": 1.15,
     "objective": 98.4,
-    "runtime_ms": 3.33
+    "runtime_ms": 2.91
    },
    "solver": {
     "iterations": 60,
@@ -668,7 +668,7 @@
    "message": "dispatcher@demo.local started the shift with 6 known jobs and 6 engineers.",
    "data": {},
    "actor": "dispatcher@demo.local",
-   "at": "2026-10-03T15:38:18.322781+00:00"
+   "at": "2026-10-05T17:43:54.780520+00:00"
   },
   {
    "kind": "replanned",
@@ -685,7 +685,7 @@
      "J018"
     ],
     "dropped": [],
-    "runtime_ms": 3.33,
+    "runtime_ms": 2.91,
     "assignments": {
      "J005": "E03",
      "J006": "E01",
@@ -696,7 +696,7 @@
     }
    },
    "actor": "dispatcher@demo.local",
-   "at": "2026-10-03T15:38:18.326252+00:00"
+   "at": "2026-10-05T17:43:54.783539+00:00"
   }
  ]
 }

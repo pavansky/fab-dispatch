@@ -1,6 +1,6 @@
 [project]
 name = "fab-dispatch"
-version = "2.7.2"
+version = "2.7.3"
 license = "MIT"
 description = "Resource allocation engine: equipment engineers to tool-downs and PMs in a semiconductor fab"
 requires-python = ">=3.11"

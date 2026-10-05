@@ -2,6 +2,16 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.7.3] - 2026-10-05
+
+### Fixed
+- **Choosing a preset now generates that shift.** Before, the header switched to the new preset while
+  the results still showed the previous shift until *Generate shift* was pressed. The header chips now
+  always describe the shift on screen.
+- **The cost × latency chart explains points off the frontier.** A hollow point now has a dashed line
+  to the strategy that beats it on both cost and speed, and a note saying so ("beaten by Greedy on
+  cost and speed"), so it no longer looks disconnected by mistake.
+
 ## [2.7.2] - 2026-10-03
 
 ### Fixed
