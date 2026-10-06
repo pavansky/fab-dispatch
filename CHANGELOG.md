@@ -2,6 +2,23 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.8.0] - 2026-10-06
+
+### Added
+- **Three industrial-AI studies** (`docs/ANALYSIS.md`, "Industrial AI"), each reproducible with one script:
+  - `scripts/duration_study.py`: repair-time estimates on 600 held-out repairs per fab. No model beats
+    the standard estimate (about 32 min mean error) because symptoms don't reveal the root cause; the
+    history's value is a calibrated P90 (90.5% coverage).
+  - `scripts/predictive_study.py`: a mock failure-prediction feed replayed through live dispatch. At 60%
+    recall and 90 minutes' lead, unplanned downtime falls by about 1,550 minutes per shift (95% CI
+    1,413 to 1,687); recall matters most, lead time saturates past about 90 minutes.
+  - `scripts/learned_policy_study.py`: a dispatch order learned by policy search, scored against proven
+    optima. 20.4% mean gap versus 27.4% for the hand-written rule; search methods stay far ahead (PyVRP 2.8%).
+
+### Fixed
+- The help article and generator no longer imply that history-predicted durations are more accurate
+  than the standard estimate; they now state the measured result.
+
 ## [2.7.4] - 2026-10-05
 
 ### Fixed
