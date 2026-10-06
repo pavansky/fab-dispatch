@@ -31,4 +31,6 @@ Click an engineer (on the floor plan, schedule or workforce view), then **Take o
 
 **Plan with history-predicted durations** replaces each tool-down's standard estimate with what
 similar past repairs actually took (from repair history), and re-plans. The panel tells you how
-many durations changed.
+many durations changed. On held-out repairs the prediction is no more accurate than the standard
+estimate on average (both are about 32 minutes off), because a symptom doesn't reveal the root cause;
+its value is the P10-P90 range, which 90% of repairs fall inside.
