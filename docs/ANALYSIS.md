@@ -151,6 +151,77 @@ budgets sit at the knee. Teams that value cost over latency can raise them with
 `FAB_PYVRP_ITERATIONS` / `FAB_ALNS_ITERATIONS`; the plan cache keys on the budget, so the change is
 safe.
 
+### Industrial AI: durations, failure predictions, a learned policy
+
+Three studies on the questions a predictive-maintenance team asks first. All data is synthetic
+(generated from each fab's fault catalogue with fixed seeds), so the numbers measure the method,
+not a real fab. Each reproduces in seconds to minutes with the command shown.
+
+**1. How good are the repair-time estimates?** Trained on each fab's 1,800-repair history and
+tested on 600 repairs it never saw (`python -m scripts.duration_study out/durations`):
+
+| Estimate (fab 1; fab 2 within 1.5 min) | MAE (min) | Repairs over the estimate | P90 coverage |
+|---|---|---|---|
+| Standard estimate per fault code (today's default) | 32.2 | 44% | n/a |
+| Fault-code mean from history | 32.7 | 46% | 88.5% |
+| k-NN over repair history (the app's retrieval) | 34.3 | 46% | **90.5%** |
+| Quantile gradient boosting (P50/P90) | 34.0 | 52% | 86.0% |
+| Oracle that knows the root cause | **15.5** | 48% | 90.0% |
+
+No model beats the standard estimate on point accuracy, and that's the finding: the symptom text
+identifies the fault code but says nothing about which root cause it is, and the root cause drives
+about half the error (the oracle halves MAE). The history's real value is the **range**: k-NN's P90
+is calibrated (90.5% of repairs finish within it), so a planner can protect bottleneck tools with
+P90 instead of the mean. Getting below 32 minutes needs a signal of root cause (sensor data,
+alarm codes, time since last PM), not a better regressor.
+
+**2. Does planning on failure predictions pay?** Each tool-down is a failure at a known minute. A
+mock predictor flags a share of them (recall) some minutes ahead (lead time) and raises false
+alarms (precision), each a 45-minute inspection. Flagged failures enter the live plan at prediction
+time; a repair started before the failure means no unplanned downtime. 40 shifts (14 × 45) replayed
+through the real live-dispatch code, paired against reactive dispatch, bootstrap 95% CIs
+(`python -m scripts.predictive_study out/predictive`):
+
+| Predictor (lead 90 min, precision 70% unless stated) | Unplanned downtime saved per shift | Of which bottleneck tools | Failures prevented |
+|---|---|---|---|
+| Reactive (today) | baseline: 3,262 min | baseline: 1,342 min | 0% |
+| Recall 30% | 729 min (621–838) | 317 min | 25% |
+| Recall 60% | 1,550 min (1,413–1,687) | 683 min | 51% |
+| Recall 90% | 2,194 min (2,061–2,331) | 1,045 min | 72% |
+| Recall 60%, lead 30 min | 1,163 min | 546 min | 41% |
+| Recall 60%, lead 120 min | 1,588 min | 668 min | 51% |
+| Recall 60%, precision 40% | 999 min | 555 min | 42% |
+| Recall 60%, precision 100% | 1,637 min | 711 min | 52% |
+
+Recall matters most, then lead time; false alarms cost real capacity (precision 40% gives back about
+a third of the saving) but never make prediction worse than reacting here. Past about 90 minutes of
+lead, extra warning adds little: the limit becomes engineer capacity, which is the dispatcher's job.
+The mock predictor's errors are random; a real one's would be correlated with tool age and load.
+
+**3. Can a learned dispatch policy compete?** Greedy dispatch with a learned job order: each job
+is scored on seven features (priority, window start, end and width, duration, certification level,
+and scarcity = how few engineers can do it), and the weights are learned by the cross-entropy method,
+a gradient-free policy-search form of reinforcement learning, on 40 training shifts (training takes
+seconds; the shift generator is the environment, reward = minus plan cost). Tested on 40 unseen
+shifts (10 per preset) against their proven optima
+(`python -m scripts.learned_policy_study out/learned`):
+
+| Strategy | Mean gap to optimum | Worst gap |
+|---|---|---|
+| Greedy, hand-written order | 27.4% | 75.4% |
+| **Greedy, learned order** | **20.4%** | **42.6%** |
+| Regret-2 | 18.3% | 49.7% |
+| ALNS | 5.6% | 13.4% |
+| PyVRP | 2.8% | 10.0% |
+
+Learning the order is worth 7.0 gap points over the hand-written rule (95% CI 3.0 to 11.2) and
+nearly halves the worst case, bringing a one-pass rule close to regret-2. It does not get near the
+search methods: a learned *order* still commits each job once, and the remaining gap comes from
+revisiting decisions, which search does. The proven optimum is what makes this a fair test; a
+learned policy scored only against other heuristics could look better than it is. The useful role
+for learning here is inside search (learning which ALNS moves to try), not replacing it.
+
+
 ## 2. What I learned
 
 **1. Search beats any one-pass rule, by a lot.** PyVRP had the cheapest plan in 78 of 80 shifts. Against
