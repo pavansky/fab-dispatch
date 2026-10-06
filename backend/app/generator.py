@@ -101,7 +101,8 @@ def generate(
             priority = 3 if critical else 2
             latest = earliest + (cfg.sla_critical if critical else cfg.sla_down)
             # The planner's duration is the standard estimate for the fault code; the
-            # repair history (knowledge.py) can predict a better one from the symptom.
+            # repair history (knowledge.py) adds a P10-P90 range from similar past repairs
+            # (scripts/duration_study.py measures both).
             _, symptom, duration = fault_symptom(rng, profile, fam)
             kind = "down"
         else:

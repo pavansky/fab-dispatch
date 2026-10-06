@@ -6,3 +6,4 @@ ruff==0.16.9
 pip-audit==2.10.1
 pyyaml==6.0.3            # docs-site consistency test reads mkdocs.yml
 highspy==1.15.1             # certified bounds at scale (scripts/certified_bound.py); dev only
+scikit-learn==1.9.1         # quantile model in scripts/duration_study.py; dev only

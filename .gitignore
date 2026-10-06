@@ -29,3 +29,4 @@ docs/api/openapi.json
 docs/assets/favicon.svg
 docs/assets/og.png
 docs/__pycache__/
+backend/out/
