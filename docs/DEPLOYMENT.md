@@ -7,7 +7,8 @@ Three ways to run it, in increasing order of production-likeness. All use free a
 ## 1. Local (default)
 
 See the README quick start. SQLite at `backend/data/fab.db` (created on first use) and an
-in-memory Qdrant index built on first query (~0.6 s). No configuration needed.
+exact NumPy repair-history index built on first query. No configuration needed; set `FAB_QDRANT_URL`
+to use a Qdrant server instead.
 
 ## 2. Docker Compose (production-like)
 
@@ -16,17 +17,17 @@ docker compose up --build        # http://localhost:8080
 docker compose down -v           # stop and delete volumes
 ```
 
-The stack signs in with one-click demo accounts. Each release also publishes signed images:
-`ghcr.io/pavansky/fab-dispatch-api` and `ghcr.io/pavansky/fab-dispatch-ui`, tagged with the version
-and `latest`. Check where one came from with
+The stack signs in with one-click demo accounts. Each release also publishes images with a GitHub
+build-provenance attestation (not a cosign signature): `ghcr.io/pavansky/fab-dispatch-api` and
+`ghcr.io/pavansky/fab-dispatch-ui`, tagged with the version and `latest`. Check where one came from with
 `gh attestation verify oci://ghcr.io/pavansky/fab-dispatch-api:latest -R pavansky/fab-dispatch`.
 
 | Service | Image | Notes |
 |---|---|---|
 | `postgres` | postgres:16-alpine | volume `pgdata`, healthcheck |
 | `qdrant` | qdrant/qdrant:v1.19.0 | volume `qdrant` |
-| `api` | `backend/Dockerfile` | python:3.12-slim, non-root, 2 uvicorn workers, JSON logs, healthcheck on `/api/livez` |
-| `web` | `frontend/Dockerfile` | nginx serving the Vite build. Proxies `/api` with SSE buffering off and caches hashed assets for a year |
+| `api` | `backend/Dockerfile` | python:3.12-slim, non-root, 2 uvicorn workers, JSON logs, healthcheck on `/api/livez`. Trusts `X-Forwarded-*` only from `FORWARDED_ALLOW_IPS` (default `127.0.0.1`; compose sets `*` because nginx is the only thing that can reach it) |
+| `web` | `frontend/Dockerfile` | unprivileged nginx (`nginxinc/nginx-unprivileged`, port 8080, healthcheck) serving the Vite build. Proxies `/api` with SSE buffering off, caches hashed assets for a year and sends the security headers from every location |
 
 ## 3. Vercel + Supabase (+ Qdrant Cloud, optional)
 
@@ -53,7 +54,8 @@ receives the original `/api/...` path, so routes need no changes.
 |---|---|
 | `FAB_DATABASE_URL` | Supabase pooled URL. Or skip it and connect Supabase through Vercel's Storage integration: the app also reads the `POSTGRES_URL` it injects, and strips the `supa=` parameter libpq rejects |
 | `FAB_QDRANT_URL`, `FAB_QDRANT_API_KEY` | optional: repair search on a Qdrant server (exact NumPy search otherwise) |
-| `FAB_TENANT_DATABASES` | optional: `{"<fab id>": "<database URL>"}` gives that fab its own database; `"env:VAR"` reads the URL from a variable a hosting integration injects, so the secret is never copied |
+| `FAB_TENANT_DATABASES` | optional: `{"<fab id>": "env:VAR"}` gives that fab its own database, reading the URL from a variable a hosting integration injects (so the secret is never copied into this one); a literal `"postgresql://..."` URL also works |
+| `FAB_STREAM_TICKET_SECRET` | signs the 90 s tickets that open a live stream. Optional when `SUPABASE_JWT_SECRET` (or a non-default `FAB_AUTH_SECRET`) is set, which is then reused; **required** otherwise on any deployment with more than one instance, or tickets from one instance are refused by another |
 | `FAB_INGEST_TOKENS` | optional: `{"<fab id>": "<sha256 of token>"}` enables equipment ingestion for that fab |
 | `FAB_CORS_ORIGINS` | not needed: same origin |
 
@@ -65,8 +67,13 @@ receives the original `/api/...` path, so routes need no changes.
 - **SSE** responses close after 25 s and browsers reconnect with `Last-Event-ID`. This stays well under
   the function duration limit (`maxDuration: 60`).
 - **Benchmark** requests are per preset, so each finishes in well under a minute.
-- **Rate limits** are per instance (in memory): a guard against runaway clients, not a quota system.
-  Use Vercel's firewall for edge rate limiting.
+- **Rate limits** have two layers. A token bucket per instance (in memory) absorbs bursts; for
+  signed-in users a per-minute counter in the default database then holds the quota across every
+  instance. Unauthenticated endpoints (`/api/help/search`, ingestion) use the in-memory bucket only,
+  so they never cost a database write. If the counter can't be reached, cheap endpoints let the
+  request through; expensive ones (`/benchmark`, `/optimality-gap`, `POST /shifts`, the assistant
+  when a paid model is on) answer 503 with `Retry-After`. Vercel's firewall is still the place for
+  edge rate limiting of unauthenticated traffic.
 - **Bundle**: the runtime requirements install to about 320 MB (measured; SciPy and gRPC are the largest),
   under Vercel's 500 MB Python limit.
 
@@ -79,7 +86,9 @@ Deploy two projects from the same repository instead:
 - Liveness: `GET /api/livez` (no dependencies). Readiness: `GET /api/health` (database reachable).
 - Every response carries `X-Request-ID`, which is also in the JSON log line, so you can trace a user
   report to the exact request.
-- Cache: `GET /api/cache/stats` gives in-process hit and miss counts. Bump `ENGINE_VERSION` in
+- Cache: `GET /api/cache/stats` (signed in) gives in-process hit and miss counts. Bump `ENGINE_VERSION` in
   `app/cache.py` whenever solver behaviour changes.
-- Database growth: `shift_events` and `plan_cache` are append-only. Prune old rows with a scheduled job
-  (for example Supabase `pg_cron`: delete `plan_cache` rows older than 30 days).
+- Database growth: `shift_events` and `plan_cache` are append-only. Vercel Cron calls
+  `POST /api/internal/prune` daily (production only; see the retention section of
+  [ENVIRONMENTS.md](ENVIRONMENTS.md) for what it deletes and how to prune UAT). Outside Vercel, call
+  that endpoint from any scheduler with `Authorization: Bearer $CRON_SECRET`.

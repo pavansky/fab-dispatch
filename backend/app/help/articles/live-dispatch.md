@@ -28,7 +28,8 @@ Choose a **Re-dispatch strategy** (ALNS by default) and click **Start live shift
 ## Report a bottleneck down
 
 Turn on **Tap floor to report a bottleneck down** and click inside a tool area. The job enters the
-shift with a 45-minute response window, the plan re-optimises, and everyone gets an alert.
+shift with the preset's bottleneck response window (45 minutes in Fab 1's normal shift, 40 in
+Fab 2's), the plan re-optimises, and everyone gets an alert.
 
 ## Take an engineer off shift
 

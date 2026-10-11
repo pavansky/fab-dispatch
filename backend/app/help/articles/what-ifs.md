@@ -19,7 +19,8 @@ it. Presets come from your fab's profile, for example *Normal shift*, *Lithograp
 
 Turn on **Report a job by tapping the floor**, choose its type and when it's reported, then click
 inside a tool area. A new job appears there, every strategy re-plans, and the new job opens in the
-inspector. Response windows: bottleneck down 45 min, tool down 120 min, PM 240 min.
+inspector. Response windows follow the preset (Fab 1 normal shift: bottleneck down 45 min, tool
+down 120 min; Fab 2: 40 and 120; an excursion is tighter) and a PM gets 240 min.
 
 ## Take an engineer off shift
 
@@ -31,6 +32,7 @@ Click an engineer (on the floor plan, schedule or workforce view), then **Take o
 
 **Plan with history-predicted durations** replaces each tool-down's standard estimate with what
 similar past repairs actually took (from repair history), and re-plans. The panel tells you how
-many durations changed. On held-out repairs the prediction is no more accurate than the standard
-estimate on average (both are about 32 minutes off), because a symptom doesn't reveal the root cause;
-its value is the P10-P90 range, which 90% of repairs fall inside.
+many durations changed. On held-out repairs the prediction is about 27 minutes off on average,
+against about 35 for the standard estimate (Fab 1), because most symptoms describe the root cause;
+when a symptom doesn't, it is no better than the standard estimate. About 8 in 10 repairs fall
+inside its P10-P90 range, and about 9 in 10 finish by its P90.
