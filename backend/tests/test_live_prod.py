@@ -431,3 +431,52 @@ def test_guests_can_only_change_the_shifts_they_started():
         assert lead.post(f"/api/shifts/{own}/engineers/{eng}/off").status_code == 200
     finally:
         app.dependency_overrides.clear()
+
+
+# ------------------------------------------------------------------ stream limits
+def test_open_streams_are_capped_per_user_and_raise_the_poll_floor_when_busy(monkeypatch):
+    from app.routes import live as live_routes
+
+    reg = live_routes.OpenStreams(per_user=2)
+    assert reg.acquire("u1") and reg.acquire("u1") and not reg.acquire("u1")  # the cap
+    assert reg.acquire("u2")  # per user, not global
+    reg.release("u1")
+    assert reg.acquire("u1") and reg.total == 3
+    assert reg.poll_floor() == live_routes.SSE_POLL_MIN_S
+    monkeypatch.setattr(live_routes, "SSE_BUSY_STREAMS", 2)
+    assert reg.poll_floor() == live_routes.SSE_BUSY_POLL_MIN_S == 1.0
+    for _ in range(5):
+        reg.release("u2")  # never negative
+    assert reg.total == 2 and reg.poll_floor() == live_routes.SSE_POLL_MIN_S
+
+
+def test_a_stream_beyond_the_per_user_cap_is_refused_and_a_closed_stream_frees_its_slot(monkeypatch):
+    from app.routes import live as live_routes
+
+    sid = _shift()
+    reg = live_routes.OpenStreams(per_user=1)
+    monkeypatch.setattr(live_routes, "open_streams", reg)
+    url = f"/api/shifts/{sid}/stream?ticket={alice.post(f'/api/shifts/{sid}/stream-ticket').json()['ticket']}"
+    anon = TestClient(app)
+    assert reg.acquire("demo-dispatcher")  # this user's one allowed stream is open on another tab
+    refused = anon.get(url)
+    assert refused.status_code == 429 and refused.json()["error"]["code"] == "rate_limited"
+    assert refused.headers["retry-after"] and "streams open" in refused.json()["error"]["message"]
+    assert reg.total == 1  # a refused stream holds no slot
+    reg.release("demo-dispatcher")
+    status, text = _stream_text(anon, url)  # runs to the end of its window
+    assert status == 200 and "retry:" in text
+    assert reg.total == 0  # and gave its slot back
+    assert TestClient(app, headers=auth_headers("viewer")).get(url.split("?")[0]).status_code == 200  # another user
+
+
+def test_stream_opens_are_rate_limited_per_user(monkeypatch):
+    """The stream carries the same two-layer limit as every other endpoint (off in FAB_ENV=test)."""
+    import inspect
+
+    from app.routes import live as live_routes
+
+    params = inspect.signature(live_routes.stream).parameters
+    assert "_rl" in params  # Depends(rate_limit("stream", ...))
+    dep = params["_rl"].default.dependency
+    assert dep.__qualname__.startswith("rate_limit")

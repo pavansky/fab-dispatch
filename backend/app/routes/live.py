@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from collections.abc import Callable
 
@@ -42,6 +43,46 @@ from ..validation import check_scenario, fab_for
 
 router = APIRouter(prefix="/api/shifts", tags=["live"])
 SSE_POLL_MIN_S, SSE_POLL_MAX_S = 0.25, 2.0
+SSE_BUSY_POLL_MIN_S = 1.0  # the poll floor once this instance serves more than SSE_BUSY_STREAMS streams
+SSE_BUSY_STREAMS = 32
+SSE_MAX_STREAMS_PER_USER = 4  # open streams per user per instance; beyond it the stream answers 429
+
+
+class OpenStreams:
+    """How many SSE streams each user holds open on this instance. Every open stream polls the
+    database, so a client that keeps opening streams (a tab loop, a script) is capped per user,
+    and the polling floor rises for everyone once the instance is busy."""
+
+    def __init__(self, per_user: int = SSE_MAX_STREAMS_PER_USER):
+        self.per_user = per_user
+        self._by_user: dict[str, int] = {}
+        self._lock = threading.Lock()
+
+    def acquire(self, user_id: str) -> bool:
+        with self._lock:
+            if self._by_user.get(user_id, 0) >= self.per_user:
+                return False
+            self._by_user[user_id] = self._by_user.get(user_id, 0) + 1
+            return True
+
+    def release(self, user_id: str) -> None:
+        with self._lock:
+            left = self._by_user.get(user_id, 0) - 1
+            if left > 0:
+                self._by_user[user_id] = left
+            else:
+                self._by_user.pop(user_id, None)
+
+    @property
+    def total(self) -> int:
+        with self._lock:
+            return sum(self._by_user.values())
+
+    def poll_floor(self) -> float:
+        return SSE_BUSY_POLL_MIN_S if self.total > SSE_BUSY_STREAMS else SSE_POLL_MIN_S
+
+
+open_streams = OpenStreams()
 
 
 class CreateShift(BaseModel):
@@ -289,6 +330,7 @@ async def stream(
     after: int = Query(0, ge=0, description="resume after this event id (Last-Event-ID wins when sent)"),
     last_event_id: str | None = Header(None),
     user: User = Depends(require("viewer")),
+    _rl: None = Depends(rate_limit("stream", 30, 10)),
 ):
     """Server-Sent Events. The stream tails the shift's event log by id, so it works with
     many server instances and resumes on reconnect (EventSource sends Last-Event-ID).
@@ -298,6 +340,12 @@ async def stream(
     Authenticate with ``?ticket=`` from ``POST .../stream-ticket`` (``?access_token=`` is
     accepted for one more release and logs a deprecation warning)."""
     await to_thread.run_sync(_load, shift_id, user)
+    if not open_streams.acquire(user.id):
+        raise HTTPException(
+            429,
+            f"You already have {open_streams.per_user} live streams open; close one first",
+            headers={"Retry-After": str(int(get_settings().sse_window_s))},
+        )
     store, settings = store_for_shift(shift_id), get_settings()
     # isascii: "²".isdigit() is True but int("²") raises, which would be a 500.
     valid_header = last_event_id and last_event_id.isascii() and last_event_id.isdigit()
@@ -305,25 +353,29 @@ async def stream(
 
     async def gen():
         nonlocal cursor
-        yield "retry: 1500\n\n"
-        deadline = time.monotonic() + settings.sse_window_s
-        last_beat = 0.0
-        idle = SSE_POLL_MIN_S
-        while time.monotonic() < deadline:
-            if await request.is_disconnected():
-                return
-            if time.monotonic() - last_beat > 10:
-                await to_thread.run_sync(store.touch_presence, shift_id, user.id, user.email)
-                yield ": keep-alive\n\n"
-                last_beat = time.monotonic()
-            batch = await to_thread.run_sync(store.events_after, shift_id, cursor, 100)
-            for e in batch:
-                cursor = e["id"]
-                yield f"id: {e['id']}\nevent: {e['kind']}\ndata: {json.dumps(e)}\n\n"
-            # Back off while the shift is quiet; snap back the moment something happens. A busy
-            # shift is polled every 0.25 s, an idle one every 2 s: ~8x fewer queries per viewer.
-            idle = SSE_POLL_MIN_S if batch else min(idle * 1.5, SSE_POLL_MAX_S)
-            await asyncio.sleep(0.05 if len(batch) == 100 else idle)
+        try:
+            yield "retry: 1500\n\n"
+            deadline = time.monotonic() + settings.sse_window_s
+            last_beat = 0.0
+            idle = open_streams.poll_floor()
+            while time.monotonic() < deadline:
+                if await request.is_disconnected():
+                    return
+                if time.monotonic() - last_beat > 10:
+                    await to_thread.run_sync(store.touch_presence, shift_id, user.id, user.email)
+                    yield ": keep-alive\n\n"
+                    last_beat = time.monotonic()
+                batch = await to_thread.run_sync(store.events_after, shift_id, cursor, 100)
+                for e in batch:
+                    cursor = e["id"]
+                    yield f"id: {e['id']}\nevent: {e['kind']}\ndata: {json.dumps(e)}\n\n"
+                # Back off while the shift is quiet; snap back the moment something happens. A busy
+                # shift is polled every 0.25 s, an idle one every 2 s: ~8x fewer queries per viewer.
+                # Once this instance serves many streams, the floor rises to 1 s for all of them.
+                idle = open_streams.poll_floor() if batch else min(idle * 1.5, SSE_POLL_MAX_S)
+                await asyncio.sleep(0.05 if len(batch) == 100 else idle)
+        finally:
+            open_streams.release(user.id)
 
     return StreamingResponse(
         gen(),
