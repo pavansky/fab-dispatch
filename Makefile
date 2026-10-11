@@ -1,7 +1,7 @@
 # Common tasks. Everything also works without make: see README.
 PY := backend/.venv/bin/python
 
-.PHONY: start docs setup dev api web test e2e lint format cov audit check bench gap up down clean fixtures
+.PHONY: start docs setup dev api web test e2e lint format cov slow audit check bench gap up down clean fixtures
 
 start:            ## one command: install what's missing, start API + UI, open the browser
 	python3 run.py
@@ -36,9 +36,12 @@ lint:             ## ruff + format check + eslint (what CI runs)
 format:           ## auto-fix formatting and safe lint issues
 	cd backend && .venv/bin/ruff format app tests scripts && .venv/bin/ruff check --fix app tests scripts
 
-cov:              ## tests with the CI coverage floors (backend 90%, frontend per vite.config.js)
-	cd backend && .venv/bin/pytest -q --cov=app --cov-fail-under=90
+cov:              ## tests with the CI coverage floors (backend 92% over app + scripts, frontend per vite.config.js)
+	cd backend && .venv/bin/pytest -q --cov=app --cov=scripts --cov-fail-under=92
 	cd frontend && npm run test:coverage
+
+slow:             ## the slow backend tests (full-size optimality proofs, shipped solver budgets); CI runs them on main
+	cd backend && .venv/bin/pytest -q -m slow --durations=0
 
 audit:            ## known-vulnerability scan of both dependency trees
 	cd backend && .venv/bin/pip-audit -r requirements.txt --progress-spinner off

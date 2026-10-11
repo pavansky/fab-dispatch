@@ -96,7 +96,7 @@
    "latest": 477,
    "duration": 60,
    "tool": "WET-04C",
-   "symptom": "bath concentration out of range intermittently"
+   "symptom": "bath concentration out of range intermittently; tech recommends: replace dispense pump"
   },
   {
    "id": "J002",
@@ -110,7 +110,7 @@
    "latest": 295,
    "duration": 105,
    "tool": "TFM-03A",
-   "symptom": "leak check failed during production lot"
+   "symptom": "leak check failed during production lot; suspect door seal leaking"
   },
   {
    "id": "J003",
@@ -194,7 +194,7 @@
    "latest": 126,
    "duration": 105,
    "tool": "WET-01B",
-   "symptom": "robot homing failed on chamber B"
+   "symptom": "robot homing failed on chamber B; suspect end effector misaligned"
   },
   {
    "id": "J009",
@@ -236,7 +236,7 @@
    "latest": 91,
    "duration": 75,
    "tool": "PTS-01A",
-   "symptom": "SMU self-test error"
+   "symptom": "SMU self-test error; tech recommends: replace SMU module"
   },
   {
    "id": "J012",
@@ -264,14 +264,14 @@
    "latest": 215,
    "duration": 105,
    "tool": "WET-04C",
-   "symptom": "cassette transfer error on chamber B"
+   "symptom": "cassette transfer error on chamber B; suspect robot axis encoder fault"
   },
   {
    "id": "J014",
    "x": 181.6,
    "y": 91.4,
    "skill": "photo",
-   "min_level": 3,
+   "min_level": 2,
    "priority": 1,
    "kind": "pm",
    "earliest": 76,
@@ -320,7 +320,7 @@
    "latest": 296,
    "duration": 135,
    "tool": "TFM-03D",
-   "symptom": "deposition rate unstable after PM"
+   "symptom": "deposition rate unstable after PM; suspect power supply arcing"
   },
   {
    "id": "J018",
@@ -334,7 +334,7 @@
    "latest": 352,
    "duration": 60,
    "tool": "PHO-03B",
-   "symptom": "stepper alignment error after PM"
+   "symptom": "stepper alignment error after PM; tech recommends: recalibrate reticle stage"
   }
  ],
  "settings": {

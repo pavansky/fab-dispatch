@@ -47,8 +47,28 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
 import numpy as np  # noqa: E402
 
 OUT = "out/predictive"
+E, J = 14, 45  # shift size; --engineers / --jobs exist for the smoke test
 ALGO = "regret"  # live re-plans run at every event; regret-2 keeps 40 shifts x 9 scenarios in minutes
 INSPECTION_MIN = 45
+
+
+class _Inline:
+    """``--workers 1``: run in this process instead of forking one worker. The smoke test runs the
+    study under pytest, where a fork after the solvers' threads have started can hang."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def map(self, fn, iterable, chunksize=None):
+        return list(map(fn, iterable))
+
+
+def _pool(workers, **kwargs):
+    return ProcessPoolExecutor(max_workers=workers, **kwargs) if workers > 1 else _Inline()
+
 
 SCENARIOS = [  # name, recall, precision, lead minutes
     ("reactive", 0.0, 1.0, 0),
@@ -78,13 +98,13 @@ def log(m):
 
 
 def run(args):
-    seed, recall, precision, lead = args
+    seed, recall, precision, lead, e, j = args
     from app import live
     from app.fabs import get_profile
     from app.generator import generate
     from app.models import Weights
 
-    sc = generate(seed, 14, 45, "normal")
+    sc = generate(seed, e, j, "normal")
     rng = random.Random(1000 + seed)  # the same failures are flagged across lead/precision sweeps
     fails = {j.id: j.earliest for j in sc.jobs if j.kind == "down"}
     jobs, flagged = [], 0
@@ -163,25 +183,28 @@ def ci(base, other):
     ]
 
 
-def main():
+def main(argv=None):
     global OUT
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("out", nargs="?", default=OUT, help="output path prefix (.log and .json are added)")
     ap.add_argument("--quick", action="store_true", help="4 shifts and three scenarios (smoke test)")
-    ap.add_argument("--shifts", type=int, default=40, help="paired shifts (seeds) per scenario")
+    ap.add_argument("--shifts", type=int, help="paired shifts (seeds) per scenario (default 40; 4 with --quick)")
+    ap.add_argument("--engineers", type=int, default=E)
+    ap.add_argument("--jobs", type=int, default=J)
     ap.add_argument("--workers", type=int, default=8, help="worker processes")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     OUT = args.out
-    seeds = range(4 if args.quick else args.shifts)
+    seeds = range(args.shifts or (4 if args.quick else 40))
+    e, j = args.engineers, args.jobs
     scenarios = [s for s in SCENARIOS if s[0] in QUICK] if args.quick else SCENARIOS
 
     def mean(rows, key):
         return round(float(np.mean([x[key] for x in rows])), 1)
 
     results = {}
-    with ProcessPoolExecutor(max_workers=args.workers) as ex:
+    with _pool(args.workers) as ex:
         for name, recall, precision, lead in scenarios:
-            r = results[name] = list(ex.map(run, [(s, recall, precision, lead) for s in seeds]))
+            r = results[name] = list(ex.map(run, [(s, recall, precision, lead, e, j) for s in seeds]))
             log(
                 f"{name:15s} unplanned {mean(r, 'unplanned'):7.1f}  unavailable {mean(r, 'unavailable'):7.1f}  "
                 f"(planned repair {mean(r, 'planned_repair'):6.1f}, inspections {mean(r, 'inspection'):5.1f})  "
@@ -222,10 +245,17 @@ def main():
         )
     with open(OUT + ".json", "w") as f:
         json.dump(
-            {"shifts": len(seeds), "algorithm": ALGO, "size": "14x45 normal", "quick": args.quick, "scenarios": report},
+            {
+                "shifts": len(seeds),
+                "algorithm": ALGO,
+                "size": f"{e}x{j} normal",
+                "quick": args.quick,
+                "scenarios": report,
+            },
             f,
             indent=1,
         )
+    return report
 
 
 if __name__ == "__main__":

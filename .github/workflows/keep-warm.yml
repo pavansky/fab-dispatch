@@ -2,8 +2,13 @@ name: Keep warm
 
 # Serverless instances go cold after a few idle minutes, and a cold start (Python imports,
 # database connections, Neon waking from scale-to-zero) is what a first visitor would wait
-# for. A light ping every few minutes keeps one instance and both databases warm; Fluid
+# for. A light ping every five minutes keeps one instance and both databases warm; Fluid
 # compute then serves the visitor's first requests from that instance.
+#
+# To be clear about what this buys and costs: the "fast first load" the README describes is
+# this cron, not the app's own cold-start time, and because the ping never stops, the Neon
+# database never scales to zero. Without it, the first visitor after an idle spell waits for
+# both. The README says so too.
 on:
   schedule:
     - cron: "*/5 * * * *"

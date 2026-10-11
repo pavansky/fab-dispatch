@@ -35,5 +35,14 @@ The differences are **paired**: strategies are compared on the same shifts, usin
 
 ## Distance from the proven optimum
 
-**Measure gaps** solves small shifts (4 engineers, 12 jobs) exactly, by enumerating every feasible
-route and solving a set-partitioning problem, then shows each heuristic's mean gap. 0% means optimal.
+**Measure gaps** is the **small-shift study**: it solves 4-engineer, 12-job shifts of your fab's
+current preset exactly, by enumerating every feasible route and solving a set-partitioning problem,
+then shows each heuristic's mean gap to that optimum. 0% means optimal. It is small because the
+hosted API answers each request within 60 seconds (the API accepts at most 6 × 16), and a proof at
+full shift size takes up to a couple of minutes.
+
+Small shifts flatter the heuristics: the one-pass strategies look a few percent from optimal here
+and are 19–28% away at full size, and ALNS looks closer than PyVRP here while PyVRP is closer at full
+size. The results that matter for a real shift, every strategy against the proven optimum on 80
+shifts of 14 engineers × 45 jobs, are in
+[the analysis](https://pavansky.github.io/fab-dispatch/ANALYSIS/#distance-from-the-proven-optimum-at-full-size).

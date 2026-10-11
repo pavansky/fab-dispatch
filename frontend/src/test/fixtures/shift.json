@@ -1,8 +1,8 @@
 {
  "version": 1,
  "state": {
-  "id": "fab1-300mm-logic.8105ae6ba74f",
-  "created_at": "2026-10-05T17:43:54.780499+00:00",
+  "id": "fab1-300mm-logic.29264a019ff0",
+  "created_at": "2026-10-11T15:04:53.796168+00:00",
   "scenario": {
    "fab_id": "fab1-300mm-logic",
    "engineers": [
@@ -89,62 +89,6 @@
    ],
    "jobs": [
     {
-     "id": "J001",
-     "x": 319.6,
-     "y": 67.5,
-     "skill": "deposition",
-     "min_level": 1,
-     "priority": 2,
-     "kind": "down",
-     "earliest": 306,
-     "latest": 426,
-     "duration": 105,
-     "tool": "DEP-03D",
-     "symptom": "film thickness non-uniformity on chamber B"
-    },
-    {
-     "id": "J002",
-     "x": 322.8,
-     "y": 95.0,
-     "skill": "deposition",
-     "min_level": 1,
-     "priority": 3,
-     "kind": "down",
-     "earliest": 524,
-     "latest": 569,
-     "duration": 120,
-     "tool": "DEP-04C",
-     "symptom": "base pressure too high after PM"
-    },
-    {
-     "id": "J003",
-     "x": 193.0,
-     "y": 63.5,
-     "skill": "metrology",
-     "min_level": 1,
-     "priority": 2,
-     "kind": "down",
-     "earliest": 508,
-     "latest": 628,
-     "duration": 90,
-     "tool": "MET-01C",
-     "symptom": "image focus failing on CD-SEM"
-    },
-    {
-     "id": "J004",
-     "x": 98.1,
-     "y": 29.9,
-     "skill": "etch",
-     "min_level": 1,
-     "priority": 2,
-     "kind": "down",
-     "earliest": 355,
-     "latest": 475,
-     "duration": 60,
-     "tool": "ETC-03D",
-     "symptom": "plasma will not strike after PM"
-    },
-    {
      "id": "J005",
      "x": 319.3,
      "y": 42.5,
@@ -173,81 +117,11 @@
      "symptom": "scheduled scanner PM: lens and stage checks"
     },
     {
-     "id": "J007",
-     "x": 306.8,
-     "y": 43.5,
-     "skill": "deposition",
-     "min_level": 1,
-     "priority": 2,
-     "kind": "down",
-     "earliest": 12,
-     "latest": 132,
-     "duration": 120,
-     "tool": "DEP-01B",
-     "symptom": "pump down too slow on chamber B"
-    },
-    {
-     "id": "J008",
-     "x": 168.1,
-     "y": 122.4,
-     "skill": "litho",
-     "min_level": 2,
-     "priority": 3,
-     "kind": "down",
-     "earliest": 527,
-     "latest": 572,
-     "duration": 165,
-     "tool": "LIT-03B",
-     "symptom": "laser energy fluctuating"
-    },
-    {
-     "id": "J009",
-     "x": 225.2,
-     "y": 60.0,
-     "skill": "metrology",
-     "min_level": 1,
-     "priority": 3,
-     "kind": "down",
-     "earliest": 410,
-     "latest": 455,
-     "duration": 60,
-     "tool": "MET-04D",
-     "symptom": "measurement drift on reference wafer"
-    },
-    {
-     "id": "J010",
-     "x": 37.1,
-     "y": 73.1,
-     "skill": "etch",
-     "min_level": 1,
-     "priority": 2,
-     "kind": "down",
-     "earliest": 372,
-     "latest": 492,
-     "duration": 180,
-     "tool": "ETC-01A",
-     "symptom": "particle adders on monitor wafer"
-    },
-    {
-     "id": "J011",
-     "x": 281.3,
-     "y": 45.2,
-     "skill": "deposition",
-     "min_level": 1,
-     "priority": 3,
-     "kind": "down",
-     "earliest": 499,
-     "latest": 544,
-     "duration": 120,
-     "tool": "DEP-03C",
-     "symptom": "chamber leak check failed during production lot"
-    },
-    {
      "id": "J012",
      "x": 164.2,
      "y": 109.0,
      "skill": "litho",
-     "min_level": 2,
+     "min_level": 1,
      "priority": 1,
      "kind": "pm",
      "earliest": 82,
@@ -271,53 +145,11 @@
      "symptom": "scheduled metrology PM: calibration and standards"
     },
     {
-     "id": "J014",
-     "x": 170.0,
-     "y": 139.0,
-     "skill": "litho",
-     "min_level": 2,
-     "priority": 3,
-     "kind": "down",
-     "earliest": 199,
-     "latest": 244,
-     "duration": 105,
-     "tool": "LIT-03B",
-     "symptom": "alignment residuals trending high on chamber B"
-    },
-    {
-     "id": "J015",
-     "x": 64.1,
-     "y": 27.3,
-     "skill": "etch",
-     "min_level": 1,
-     "priority": 3,
-     "kind": "down",
-     "earliest": 352,
-     "latest": 397,
-     "duration": 120,
-     "tool": "ETC-01C",
-     "symptom": "backside helium flow alarm after PM"
-    },
-    {
-     "id": "J016",
-     "x": 164.2,
-     "y": 117.9,
-     "skill": "litho",
-     "min_level": 3,
-     "priority": 3,
-     "kind": "down",
-     "earliest": 1,
-     "latest": 46,
-     "duration": 75,
-     "tool": "LIT-03B",
-     "symptom": "best focus shifted after PM"
-    },
-    {
      "id": "J017",
      "x": 214.5,
      "y": 148.7,
      "skill": "litho",
-     "min_level": 2,
+     "min_level": 1,
      "priority": 1,
      "kind": "pm",
      "earliest": 222,
@@ -371,68 +203,53 @@
    "label": "ALNS (adaptive large neighbourhood search)",
    "assignments": [
     {
-     "job_id": "J012",
+     "job_id": "J018",
      "tech_id": "E01",
      "sequence": 1,
-     "arrival": 0.3,
-     "start": 82.0,
-     "end": 172.0,
-     "travel_m": 16.2,
-     "cost": -52.86,
+     "arrival": 4.2,
+     "start": 87.0,
+     "end": 207.0,
+     "travel_m": 254.6,
+     "cost": -49.16,
      "cost_breakdown": {
-      "travel": 1.08,
-      "waiting": -11.94,
-      "overqualification": 8.0,
-      "workload": 10.0,
+      "travel": 17.58,
+      "waiting": -11.73,
+      "overqualification": 0.0,
+      "workload": 5.0,
       "priority": -60.0
      },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E01 at cost -52.9; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
-     "alternatives": [],
+     "explanation": "ALNS kept this assignment: best plan found at iteration 1 of 60. Re-inserting it alone would cost E01 at cost -49.2; next best E05 at -32.5. Rejected: 3 lacks the skill.",
+     "alternatives": [
+      {
+       "tech_id": "E05",
+       "cost": -32.5
+      },
+      {
+       "tech_id": "E06",
+       "cost": -23.35
+      }
+     ],
      "rejections": {
-      "skill_missing": 4,
-      "level_too_low": 1
+      "skill_missing": 3
      }
     },
     {
      "job_id": "J006",
      "tech_id": "E01",
      "sequence": 2,
-     "arrival": 172.8,
-     "start": 172.8,
-     "end": 412.8,
-     "travel_m": 45.7,
-     "cost": -51.7,
+     "arrival": 210.7,
+     "start": 210.7,
+     "end": 450.7,
+     "travel_m": 219.7,
+     "cost": -38.21,
      "cost_breakdown": {
-      "travel": 0.0,
-      "waiting": -9.7,
-      "overqualification": 8.0,
-      "workload": 10.0,
-      "priority": -60.0
-     },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E01 at cost -51.7; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
-     "alternatives": [],
-     "rejections": {
-      "skill_missing": 4,
-      "level_too_low": 1
-     }
-    },
-    {
-     "job_id": "J017",
-     "tech_id": "E01",
-     "sequence": 3,
-     "arrival": 413.5,
-     "start": 413.5,
-     "end": 593.5,
-     "travel_m": 44.3,
-     "cost": -40.23,
-     "cost_breakdown": {
-      "travel": 1.77,
+      "travel": 8.79,
       "waiting": 0.0,
       "overqualification": 8.0,
-      "workload": 10.0,
+      "workload": 5.0,
       "priority": -60.0
      },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E01 at cost -40.2; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
+     "explanation": "ALNS kept this assignment: best plan found at iteration 1 of 60. Re-inserting it alone would cost E01 at cost -38.2; no other feasible engineer. Rejected: 4 lacks the skill, 1 certification too low.",
      "alternatives": [],
      "rejections": {
       "skill_missing": 4,
@@ -455,15 +272,15 @@
       "workload": 5.0,
       "priority": -60.0
      },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E03 at cost -80.1; next best E06 at -50.6. Rejected: 2 lacks the skill, 1 certification too low.",
+     "explanation": "ALNS kept this assignment: best plan found at iteration 1 of 60. Re-inserting it alone would cost E03 at cost -80.1; next best E04 at -58.0. Rejected: 2 lacks the skill, 1 certification too low.",
      "alternatives": [
+      {
+       "tech_id": "E04",
+       "cost": -57.98
+      },
       {
        "tech_id": "E06",
        "cost": -50.61
-      },
-      {
-       "tech_id": "E04",
-       "cost": -40.03
       }
      ],
      "rejections": {
@@ -487,38 +304,64 @@
       "workload": 5.0,
       "priority": -60.0
      },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E03 at cost -41.9; no other feasible engineer. Rejected: 5 lacks the skill.",
+     "explanation": "ALNS kept this assignment: best plan found at iteration 1 of 60. Re-inserting it alone would cost E03 at cost -41.9; no other feasible engineer. Rejected: 5 lacks the skill.",
      "alternatives": [],
      "rejections": {
       "skill_missing": 5
      }
     },
     {
-     "job_id": "J018",
-     "tech_id": "E05",
+     "job_id": "J012",
+     "tech_id": "E04",
      "sequence": 1,
-     "arrival": 1.0,
-     "start": 87.0,
-     "end": 207.0,
-     "travel_m": 57.2,
-     "cost": -32.5,
+     "arrival": 3.0,
+     "start": 82.0,
+     "end": 172.0,
+     "travel_m": 177.4,
+     "cost": -70.09,
      "cost_breakdown": {
-      "travel": 2.29,
-      "waiting": 17.21,
-      "overqualification": 8.0,
-      "workload": 0.0,
+      "travel": 3.18,
+      "waiting": -18.26,
+      "overqualification": 0.0,
+      "workload": 5.0,
       "priority": -60.0
      },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E05 at cost -32.5; next best E06 at -23.4. Rejected: 3 lacks the skill, 1 cannot arrive inside the time window.",
+     "explanation": "ALNS kept this assignment: best plan found at iteration 1 of 60. Re-inserting it alone would cost E04 at cost -70.1; next best E01 at -33.1. Rejected: 4 lacks the skill.",
      "alternatives": [
       {
-       "tech_id": "E06",
-       "cost": -23.35
+       "tech_id": "E01",
+       "cost": -33.13
       }
      ],
      "rejections": {
-      "window_missed": 1,
-      "skill_missing": 3
+      "skill_missing": 4
+     }
+    },
+    {
+     "job_id": "J017",
+     "tech_id": "E04",
+     "sequence": 2,
+     "arrival": 173.5,
+     "start": 222.0,
+     "end": 402.0,
+     "travel_m": 90.0,
+     "cost": -41.7,
+     "cost_breakdown": {
+      "travel": 3.6,
+      "waiting": 9.7,
+      "overqualification": 0.0,
+      "workload": 5.0,
+      "priority": -60.0
+     },
+     "explanation": "ALNS kept this assignment: best plan found at iteration 1 of 60. Re-inserting it alone would cost E04 at cost -41.7; next best E01 at -32.2. Rejected: 4 lacks the skill.",
+     "alternatives": [
+      {
+       "tech_id": "E01",
+       "cost": -32.23
+      }
+     ],
+     "rejections": {
+      "skill_missing": 4
      }
     }
    ],
@@ -528,29 +371,22 @@
      "tech_id": "E01",
      "stops": [
       {
-       "job_id": "J012",
-       "arrival": 0.3,
-       "start": 82.0,
-       "end": 172.0,
+       "job_id": "J018",
+       "arrival": 4.2,
+       "start": 87.0,
+       "end": 207.0,
        "locked": false
       },
       {
        "job_id": "J006",
-       "arrival": 172.8,
-       "start": 172.8,
-       "end": 412.8,
-       "locked": false
-      },
-      {
-       "job_id": "J017",
-       "arrival": 413.5,
-       "start": 413.5,
-       "end": 593.5,
+       "arrival": 210.7,
+       "start": 210.7,
+       "end": 450.7,
        "locked": false
       }
      ],
-     "metres": 106.2,
-     "end_time": 593.5
+     "metres": 474.3,
+     "end_time": 450.7
     },
     {
      "tech_id": "E02",
@@ -581,23 +417,30 @@
     },
     {
      "tech_id": "E04",
-     "stops": [],
-     "metres": 0.0,
-     "end_time": 0.0
-    },
-    {
-     "tech_id": "E05",
      "stops": [
       {
-       "job_id": "J018",
-       "arrival": 1.0,
-       "start": 87.0,
-       "end": 207.0,
+       "job_id": "J012",
+       "arrival": 3.0,
+       "start": 82.0,
+       "end": 172.0,
+       "locked": false
+      },
+      {
+       "job_id": "J017",
+       "arrival": 173.5,
+       "start": 222.0,
+       "end": 402.0,
        "locked": false
       }
      ],
-     "metres": 57.2,
-     "end_time": 207.0
+     "metres": 267.4,
+     "end_time": 402.0
+    },
+    {
+     "tech_id": "E05",
+     "stops": [],
+     "metres": 0.0,
+     "end_time": 0.0
     },
     {
      "tech_id": "E06",
@@ -613,27 +456,30 @@
     "critical_coverage_pct": 100.0,
     "priority_weighted_coverage_pct": 100.0,
     "mean_response_min": 0.0,
-    "walk_m_total": 400.0,
-    "walk_m_per_job": 66.7,
-    "wait_min_total": 212.0,
-    "overqualification_levels": 5.0,
+    "walk_m_total": 978.0,
+    "walk_m_per_job": 163.1,
+    "wait_min_total": 254.0,
+    "overqualification_levels": 2.0,
     "utilization_pct": 24.3,
     "engineers_used": 3.0,
-    "workload_std": 1.15,
-    "objective": 98.4,
-    "runtime_ms": 2.91
+    "workload_std": 1.0,
+    "objective": 121.0,
+    "operating_cost": 106.0,
+    "workload_cost": 15.0,
+    "reassignment_cost": 0.0,
+    "runtime_ms": 12.77
    },
    "solver": {
     "iterations": 60,
-    "best_iteration": 0,
+    "best_iteration": 1,
     "hit_time_cap": false,
     "operator_weights": {
-     "random": 1.2,
-     "worst": 1.15,
-     "related": 1.17,
-     "route": 1.13,
-     "greedy": 1.14,
-     "regret": 1.2
+     "random": 1.13,
+     "worst": 1.24,
+     "related": 1.28,
+     "route": 1.2,
+     "greedy": 1.18,
+     "regret": 1.25
     }
    }
   },
@@ -668,7 +514,7 @@
    "message": "dispatcher@demo.local started the shift with 6 known jobs and 6 engineers.",
    "data": {},
    "actor": "dispatcher@demo.local",
-   "at": "2026-10-05T17:43:54.780520+00:00"
+   "at": "2026-10-11T15:04:53.796237+00:00"
   },
   {
    "kind": "replanned",
@@ -685,18 +531,18 @@
      "J018"
     ],
     "dropped": [],
-    "runtime_ms": 2.91,
+    "runtime_ms": 12.77,
     "assignments": {
      "J005": "E03",
      "J006": "E01",
-     "J012": "E01",
+     "J012": "E04",
      "J013": "E03",
-     "J017": "E01",
-     "J018": "E05"
+     "J017": "E04",
+     "J018": "E01"
     }
    },
    "actor": "dispatcher@demo.local",
-   "at": "2026-10-05T17:43:54.783539+00:00"
+   "at": "2026-10-11T15:04:53.809349+00:00"
   }
  ]
 }

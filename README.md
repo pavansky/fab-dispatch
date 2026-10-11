@@ -17,7 +17,7 @@ greedy to a state-of-the-art vehicle-routing solver, compared live, with every d
 [![Docs](https://github.com/pavansky/fab-dispatch/actions/workflows/docs.yml/badge.svg?branch=main)](https://pavansky.github.io/fab-dispatch/)
 [![Uptime](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml)
 [![Release](https://img.shields.io/github/v/release/pavansky/fab-dispatch?color=020202)](CHANGELOG.md)
-[![Tests](https://img.shields.io/badge/tests-455-ef6f2e)](#testing)
+[![Tests](https://img.shields.io/badge/tests-606-ef6f2e)](#testing)
 [![License: MIT](https://img.shields.io/badge/license-MIT-020202)](LICENSE)
 
 [**Quick start**](#quick-start) · [**Review in 10 minutes**](https://pavansky.github.io/fab-dispatch/reviewers/) · [Requirements map](#requirements-map) · [Results](#results) ·
@@ -173,6 +173,11 @@ https://fab-dispatch.vercel.app runs the same build on Vercel with Supabase (Pos
 Press **?** in the app for help, **/** to ask the assistant, and open **About & support** in the
 user menu for the version, live status, docs and support links.
 
+The first request after an idle spell would otherwise wait for a serverless cold start and for the
+Neon database to wake, so a [GitHub Actions cron](.github/workflows/keep-warm.yml) pings the API
+every five minutes. That is what keeps the first load fast; it also means the database never scales
+to zero, and the app would feel slower without it.
+
 ## A 5-minute tour
 
 1. **Overview.** The five strategies solve the same shift in parallel. The top card names the
@@ -200,10 +205,11 @@ user menu for the version, live status, docs and support links.
 
 | Symptom | Fix |
 |---|---|
-| `npm run dev` fails with a syntax or engine error | Node is too old. Install Node 22 LTS. |
+| `Python 3.11–3.14 is required` (from `run.py`) | Install a supported Python, then run it explicitly, for example `python3.12 run.py`. |
+| `Node.js 20.19+ is required` (from `run.py`), or `npm run dev` fails with a syntax or engine error | Node is too old. Install Node 22 LTS from [nodejs.org](https://nodejs.org). |
 | `pip install` tries to compile numpy, scipy or pyvrp | Your Python is outside 3.11–3.14, or pip is old: `python -m pip install --upgrade pip` and retry. |
-| *Can't reach the API. Is the backend running?* | Start the API (step 2). The UI proxies `/api` to port 8000. |
-| `address already in use` on 8000 or 5173 | Another process holds the port. Stop it (`lsof -i :8000` on macOS/Linux), then restart. |
+| *Can't reach the API. Is the backend running?* | Start the API (step 2 of the manual steps), or check the terminal running `run.py`. The UI proxies `/api` to port 8000. |
+| `address already in use` on 8000 or 5173, or `Is port 8000 free?` from `run.py` | Another process holds the port. Stop it (`lsof -i :8000` on macOS/Linux), then restart. |
 | **Run benchmark** or **Start live shift** is disabled | You're signed in as a viewer. Use the avatar menu to sign out, then **Continue as Dispatcher**. |
 | You want a clean slate | Stop the API, delete `backend/data/`, start it again. |
 
@@ -235,9 +241,11 @@ user menu for the version, live status, docs and support links.
   and the rewrite is checked against the draft so it can't add facts.
 - **Works on a phone.** The controls become a drawer, the tabs scroll, the floor plan works by touch,
   and the light theme is the default.
-- **Tested at every layer.** 320 backend tests, 102 frontend component tests rendered against real API
-  responses, and 33 Playwright end-to-end tests that drive the real app on desktop and on a phone,
-  including WCAG 2.1 AA accessibility checks on every screen.
+- **Tested at every layer.** 411 backend tests, 167 frontend component tests rendered against real API
+  responses, and 28 Playwright end-to-end tests that drive the real app on desktop and on a phone,
+  including WCAG 2.1 AA accessibility checks on every screen. The study scripts behind the numbers
+  in [ANALYSIS.md](docs/ANALYSIS.md) are smoke-tested and coverage-counted too, and these counts
+  are checked by a test, not typed in.
 - **Engineered for change.** Versioned database migrations, CI with coverage, security audits and a
   Postgres matrix, a release pipeline that promotes UAT-tested commits to production, and
   post-deploy smoke tests.
@@ -295,16 +303,19 @@ comparison fair. Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Testing
 
-Three layers, all run in CI on every pull request:
+Three layers, all run in CI on every pull request (the counts below are checked by
+`tests/test_release.py` against the suites, so they cannot go stale):
 
 | Layer | Tool | Count | What it proves |
 |---|---|---|---|
-| Backend | pytest | **320** (11 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency |
-| Frontend components | Vitest + Testing Library | **102** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, account deletion, the crash screen, against **real API responses** |
-| End-to-end | Playwright | **33** (28 desktop, 5 phone) | The real API and UI together in Chromium: two browsers on one live shift, and axe-core WCAG 2.1 AA checks on every screen and panel |
+| Backend | pytest | **411** (11 need Postgres; 5 are slow and run on pushes to `main`) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency, the study scripts behind ANALYSIS.md |
+| Frontend components | Vitest + Testing Library | **167** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, account deletion, the crash screen, against **real API responses** |
+| End-to-end | Playwright | **28** (23 desktop, 5 phone) | The real API and UI together in Chromium: two browsers on one live shift, and axe-core WCAG 2.1 AA checks on every screen and panel |
 
-Coverage: **94%** of the API (with Postgres, as CI measures it) and **88%** of the UI. CI fails below
-90% for the API, or below the UI floors in `frontend/vite.config.js`.
+CI enforces coverage floors rather than the README quoting a figure: **92%** over the API and
+its study scripts together (`--cov=app --cov=scripts`, [ci.yml](.github/workflows/ci.yml)), and
+85% lines / 80% statements / 75% functions / 70% branches for the UI
+([vite.config.js](frontend/vite.config.js)). The measured numbers are in every CI run's log.
 
 ```bash
 # Backend (from backend/, with the virtualenv active)
@@ -321,12 +332,22 @@ npm run test:e2e
 
 `make check` runs everything CI runs: lint, format, all three layers with coverage floors, dependency
 audits and the frontend build. To include the Postgres tests locally, point `FAB_TEST_PG_URL` at any
-Postgres database. To reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.md), run
+Postgres database. `pytest -m slow` (or `make slow`) runs the slow tests: the full-size optimality
+proof of every preset and the search solvers at the shipped budgets, a few minutes in all. To
+reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.md), run
 `python -m scripts.benchmark --seeds 20` from `backend/` (a few minutes).
 
 **What the tests cover**
-- **Hard constraints** re-derived from scratch for every strategy, on every preset of **every fab**.
-- **Optimality:** heuristics checked against the exact MILP optimum, and never allowed to beat it.
+- **Hard constraints** re-derived from scratch for every strategy, on every preset of **every fab**,
+  and for the exact solver whose plans every optimality claim is measured against.
+- **Optimality:** heuristics checked against the exact MILP optimum, and never allowed to beat it,
+  at full shift size for every preset (the normal preset on every run, the others on pushes to `main`).
+- **The evidence base:** every study script behind ANALYSIS.md (benchmark, scale, certified bounds,
+  the three industrial-AI studies) runs end to end at a tiny size in the suite, with its tables
+  checked for the expected keys and no heuristic beating a proven optimum.
+- **Shipped budgets:** the suites run ALNS and PyVRP at a fraction of the shipped iteration budgets to
+  stay fast; one slow test runs them at the real budgets on a full shift and checks feasibility,
+  determinism and that more search never costs more.
 - **Fab 1 golden test:** converting the hard-coded fab into a profile reproduces its scenarios byte for byte.
 - **Auth:** 401 without a token, forged and expired tokens rejected, 403 for viewers on dispatcher
   actions (in the API and in the browser), 404 across fabs, demo mode refused in production.
@@ -463,8 +484,9 @@ backend/
     store.py               SQLite / Postgres repository + versioned migrations
     routes/                system · auth · fabs · planning · live (SSE) · repairs
   scripts/benchmark.py     reproduces every table in docs/ANALYSIS.md
+  scripts/                 scale, certified-bound, duration, predictive and learned-policy studies (all smoke-tested)
   scripts/export_ui_fixtures.py   real API responses for the UI tests
-  tests/                   320 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval)
+  tests/                   411 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval, the scripts)
 frontend/src/
   App.jsx auth.jsx api.js  workspace, sign-in, API client
   lib/                     fab context, recommendation logic, statistics, progressive planning
@@ -517,6 +539,12 @@ More in [SUPPORT.md](SUPPORT.md) and the [support guide](https://pavansky.github
 - **Deterministic durations.** The repair-history range (p10–p90) is shown but not yet planned against;
   buffering to p80 would make schedules more robust.
 - **One engineer per job; no parts availability.** Both are natural extensions of the constraint engine.
+  The full list of what the model leaves out (and what each omission costs) is in
+  [ANALYSIS.md](docs/ANALYSIS.md), *What the model does not capture*.
+- **The full-size optimality proof does not fit the hosted app.** Proving a 14 × 45 shift optimal takes
+  up to about two minutes; the hosted API function is capped at 60 s (`vercel.json`), so the live app's
+  *Measure gaps* only proves small shifts (4 × 12, at most 6 × 16). The full-size gaps come from
+  `scripts/benchmark.py --only gaps-full` and are in [ANALYSIS.md](docs/ANALYSIS.md).
 - **Enterprise SSO** (SAML/OIDC via Supabase) and **audit export** to a fab's SIEM are configuration
   and integration work, not redesign.
 
