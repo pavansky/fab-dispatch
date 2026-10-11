@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
-import { clearPlanCache, setTokenProvider } from '../api.js'
+import { clearPlanCache, setTokenProvider, setTokenRefresher } from '../api.js'
 
 // jsdom has no layout engine: provide the browser APIs the UI reads.
 if (!window.matchMedia) {
@@ -16,6 +16,7 @@ afterEach(() => {
   cleanup()
   clearPlanCache()
   setTokenProvider(() => null)
+  setTokenRefresher(null)
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   localStorage.clear()

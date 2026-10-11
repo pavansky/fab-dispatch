@@ -1,7 +1,7 @@
 // Supabase sign-in paths (guest, emailed one-time code or link) with a fake client.
 import { act, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fixtures, mockApi, workspaceRoutes } from './api.js'
+import { fixtures, json, mockApi, workspaceRoutes } from './api.js'
 import { renderApp } from './app.jsx'
 
 const auth = vi.hoisted(() => ({}))
@@ -19,6 +19,7 @@ beforeEach(() => {
     signInWithOtp: vi.fn().mockResolvedValue({ error: null }),
     verifyOtp: vi.fn(async () => { signIn('email-token'); return { error: null } }),
     signOut: vi.fn().mockResolvedValue({ error: null }),
+    refreshSession: vi.fn().mockResolvedValue({ data: { session: null }, error: { message: 'refresh_token_not_found' } }),
   })
 })
 
@@ -156,5 +157,34 @@ describe('CAPTCHA (Cloudflare Turnstile)', () => {
     renderApp()
     expect(await screen.findByRole('button', { name: 'Try it as a guest' })).toBeEnabled()
     expect(window.turnstile.render).not.toHaveBeenCalled()
+  })
+})
+
+describe('An expired access token', () => {
+  it('is renewed through Supabase and the request retried, without signing out', async () => {
+    const api = supabaseApi('dispatcher')
+    auth.getSession.mockResolvedValue({ data: { session: { access_token: 'guest-token' } } })
+    renderApp()
+    expect(await screen.findByRole('region', { name: 'Recommendation' }, { timeout: 4000 })).toBeInTheDocument()
+    // The next API call meets a 401 for the old token; Supabase can still renew the session.
+    api.fetchMock.mockImplementationOnce(async () => json(401, { error: { code: 'unauthorized', message: 'Token expired' } }))
+    auth.refreshSession.mockResolvedValue({ data: { session: { access_token: 'guest-token-renewed' } }, error: null })
+    await act(async () => { await (await import('../api.js')).getHealth() })
+    expect(auth.refreshSession).toHaveBeenCalledOnce()
+    expect(auth.signOut).not.toHaveBeenCalled()
+    expect(api.calls.at(-1).headers.Authorization).toBe('Bearer guest-token-renewed')
+    expect(screen.getByRole('region', { name: 'Recommendation' })).toBeInTheDocument()
+  })
+
+  it('signs out only when the session cannot be renewed', async () => {
+    const api = supabaseApi('dispatcher')
+    auth.getSession.mockResolvedValue({ data: { session: { access_token: 'guest-token' } } })
+    renderApp()
+    expect(await screen.findByRole('region', { name: 'Recommendation' }, { timeout: 4000 })).toBeInTheDocument()
+    api.fetchMock.mockImplementationOnce(async () => json(401, { error: { code: 'unauthorized', message: 'Token expired' } }))
+    await act(async () => { await (await import('../api.js')).getHealth().catch(() => {}) })
+    expect(auth.refreshSession).toHaveBeenCalledOnce()
+    await waitFor(() => expect(auth.signOut).toHaveBeenCalled())
+    expect(await screen.findByRole('button', { name: 'Try it as a guest' })).toBeInTheDocument()
   })
 })

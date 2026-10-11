@@ -195,6 +195,16 @@ describe('findings', () => {
     expect(agree.text).toMatch(/Of the 3 jobs at least one strategy serves, all 2 send the same engineer to 1 \(33%\)/)
   })
 
+  it('is plain data, never HTML: markup in a job id or tool name stays literal text', () => {
+    const jobs2 = [{ id: '<img src=x onerror=alert(1)>', priority: 3, skill: 'etch', kind: 'down', tool: '<b>T</b>' }]
+    const x = plan('greedy', {}, [], [{ job_id: jobs2[0].id }])
+    const y = plan('pyvrp', {}, [], [{ job_id: jobs2[0].id }])
+    const gap = insights([x, y], { jobs: jobs2 }).find((n) => n.icon === '!')
+    expect(gap.parts.every((p) => typeof p === 'string' || (typeof p.b === 'string' && Object.keys(p).length === 1))).toBe(true)
+    expect(gap.text).toBe(gap.parts.map((p) => (typeof p === 'string' ? p : p.b)).join(''))
+    expect(Object.keys(gap)).not.toContain('html')
+  })
+
   it('names tool families by their labels', () => {
     const x = plan('greedy', {}, [a('J1', 'E1')], [{ job_id: 'J2' }])
     const y = plan('pyvrp', {}, [a('J1', 'E2')], [{ job_id: 'J2' }])

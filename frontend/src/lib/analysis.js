@@ -1,4 +1,4 @@
-import { ALGO_ORDER, ALGO_SHORT, METRICS, costSplit, improvement } from './metrics.js'
+import { ALGO_ORDER, ALGO_SHORT, METRICS, absentText, costSplit, hasMetric, improvement } from './metrics.js'
 import { fmt, listOf, ms, plural } from './format.js'
 import { familyIds, familyLabel } from './fab.js'
 
@@ -32,7 +32,7 @@ const tol = (key) => TIE[key] ?? 0
 const short = (r) => ALGO_SHORT[r.algorithm] ?? r.algorithm
 const names = (rs) => listOf(rs.map(short))
 const order = (r) => ALGO_ORDER.indexOf(r.algorithm)
-const value = (key, v) => (METRICS[key].unit === '%' ? `${fmt(v)}%` : `${fmt(v)} ${METRICS[key].unit}`)
+const value = (key, v) => (!Number.isFinite(v) ? absentText(key) : METRICS[key].unit === '%' ? `${fmt(v)}%` : `${fmt(v)} ${METRICS[key].unit}`)
 const pctOf = (part, whole) => `${Math.round((100 * part) / (whole || 1))}%`
 
 /**
@@ -73,8 +73,11 @@ export function costSplitText(m) {
 }
 
 function recommendValue(results) {
-  const crit = (r) => r.metrics.critical_coverage_pct
-  const pri = (r) => r.metrics.priority_weighted_coverage_pct
+  // critical_coverage_pct is null when the shift has no bottleneck downs: then every plan
+  // "keeps" the (empty) coverage, and the guard reduces to priority-weighted coverage.
+  const noDowns = results.every((r) => !hasMetric(r.metrics, 'critical_coverage_pct'))
+  const crit = (r) => (hasMetric(r.metrics, 'critical_coverage_pct') ? r.metrics.critical_coverage_pct : 0)
+  const pri = (r) => (hasMetric(r.metrics, 'priority_weighted_coverage_pct') ? r.metrics.priority_weighted_coverage_pct : 0)
   const cost = (r) => r.metrics.objective
   const time = (r) => r.metrics.runtime_ms
   const byCostThenOrder = (a, b) => cost(a) - cost(b) || order(a) - order(b)
@@ -104,7 +107,9 @@ function recommendValue(results) {
   if (pool.length === 1) {
     why = results.length === 1
       ? 'Only strategy with a plan.'
-      : `Only strategy that keeps the best bottleneck coverage (${fmt(bestCrit)}% of bottleneck downs)${bottleneckOnly ? '' : ' and priority-weighted coverage'}.`
+      : noDowns
+        ? `Only strategy that keeps the best priority-weighted coverage (${fmt(bestPri)}%).`
+        : `Only strategy that keeps the best bottleneck coverage (${fmt(bestCrit)}% of bottleneck downs)${bottleneckOnly ? '' : ' and priority-weighted coverage'}.`
   } else if (winner === cheapest && nearTie.length === 1) {
     const next = byCost[1]
     const gap = cost(next) - cost(winner)
@@ -129,8 +134,9 @@ function recommendValue(results) {
       : `${short(winner)} is the fastest of ${nearTie.length} equivalent plans, though only just (${ms(time(winner))} vs ${ms(time(cheapest))}).`
     why = `${costPart} ${speedPart}`
   }
-  why += ` Covers ${fmt(m.assigned)} of ${plural(m.jobs, 'job')}, ${fmt(m.critical_coverage_pct)}% of bottleneck downs.`
-  if (bottleneckOnly) why += ' No plan leads on both bottleneck and priority-weighted coverage, so bottleneck coverage alone set the shortlist.'
+  why += ` Covers ${fmt(m.assigned)} of ${plural(m.jobs, 'job')}`
+  why += hasMetric(m, 'critical_coverage_pct') ? `, ${fmt(m.critical_coverage_pct)}% of bottleneck downs.` : '; no bottleneck downs this shift.'
+  if (bottleneckOnly && !noDowns) why += ' No plan leads on both bottleneck and priority-weighted coverage, so bottleneck coverage alone set the shortlist.'
 
   const tradeoff = []
   if (excluded.length) {
@@ -148,10 +154,15 @@ function recommendValue(results) {
 }
 
 const bestOn = (items, key) => items.reduce((a, b) => (improvement(key, b.metrics[key], a.metrics[key]) > 0 ? b : a))
-/** Items within the tie tolerance of the best one on `key` (anchored on the best, so it's transitive). */
+/**
+ * Items within the tie tolerance of the best one on `key` (anchored on the best, so it's
+ * transitive). Items without a value on `key` tie with each other, behind those with one.
+ */
 const leaders = (items, key) => {
-  const best = bestOn(items, key)
-  return items.filter((r) => r === best || improvement(key, best.metrics[key], r.metrics[key]) <= tol(key))
+  const have = items.filter((r) => hasMetric(r.metrics, key))
+  if (!have.length) return items
+  const best = bestOn(have, key)
+  return have.filter((r) => r === best || improvement(key, best.metrics[key], r.metrics[key]) <= tol(key))
 }
 
 /**
@@ -194,14 +205,18 @@ function recommendGoal(results, goalKey) {
       group = leaders(group, key)
       if (!group.includes(runnerUp)) { splitKey = key; break }
     }
-    if (splitKey === lead) {
+    if (splitKey === lead && !hasMetric(runnerUp.metrics, lead)) {
+      why = `Only strategy with a value for ${label(lead)} (${value(lead, m[lead])}); ${short(runnerUp)} has ${absentText(lead)}.`
+    } else if (splitKey === lead) {
       why = `Best ${label(lead)}: ${value(lead, m[lead])}, ${value(lead, Math.abs(m[lead] - runnerUp.metrics[lead]))} ahead of ${short(runnerUp)}, the next best.`
     } else if (splitKey) {
       const tiedOnLead = leaders(results, lead).filter((r) => r !== winner)
       why = `Ties with ${names(tiedOnLead)} on ${label(lead)} (${value(lead, m[lead])}) and wins on ${label(splitKey)}: `
         + `${value(splitKey, m[splitKey])} vs ${value(splitKey, runnerUp.metrics[splitKey])} for ${short(runnerUp)}.`
     } else if (group.length === results.length) {
-      why = `All ${results.length} strategies tie on this goal, so ${short(winner)} is listed first by default order.`
+      why = !hasMetric(m, lead)
+        ? `No strategy has a value for ${label(lead)} (${absentText(lead)}), and all ${results.length} tie on the rest of this goal, so ${short(winner)} is listed first by default order.`
+        : `All ${results.length} strategies tie on this goal, so ${short(winner)} is listed first by default order.`
     } else {
       why = `Ties with ${names(group.filter((r) => r !== winner))} on every criterion of this goal; listed first by default order.`
     }
@@ -215,7 +230,7 @@ function recommendGoal(results, goalKey) {
     let best = null
     for (const r of results) {
       if (r === winner) continue
-      const gain = improvement(key, r.metrics[key], m[key])
+      const gain = improvement(key, r.metrics[key], m[key]) // NaN when either lacks the metric: no trade-off to report
       if (gain > (TIE[key] ?? 0.5) && (!best || gain > best.gain)) best = { r, gain }
     }
     if (best) tradeoffs.push({ key, algo: best.r.algorithm, gain: best.gain, rel: Math.abs(best.gain) / (Math.abs(m[key]) || 1) })
@@ -342,11 +357,14 @@ export function insights(results, scenario, { weights } = {}) {
   // 4. Hungarian's round structure: idle time, and balance only when it's really better.
   if (by.hungarian && by.regret) {
     const h = by.hungarian.metrics, r = by.regret.metrics
-    if (h.wait_min_total > r.wait_min_total * 1.1) {
+    if (hasMetric(h, 'wait_min_total') && hasMetric(r, 'wait_min_total') && h.wait_min_total > r.wait_min_total * 1.1) {
       const extra = `adds ${fmt(h.wait_min_total - r.wait_min_total, 0)} min of idle wait over Regret-2`
       const cause = '. Each round is optimal on its own, but later jobs land in routes where engineers wait for the window to open.'
-      out.push(h.workload_std < r.workload_std - 0.05
-        ? finding('◷', [em('Hungarian spreads work more evenly'), ` (workload std ${fmt(h.workload_std)} vs ${fmt(r.workload_std)} jobs) `, em(`but ${extra}`), cause])
+      // Workload spread in minutes when both report it, else the older jobs-based spread.
+      const wk = hasMetric(h, 'workload_minutes_std') && hasMetric(r, 'workload_minutes_std') ? 'workload_minutes_std' : 'workload_std'
+      const evener = hasMetric(h, wk) && hasMetric(r, wk) && h[wk] < r[wk] - (wk === 'workload_std' ? 0.05 : 1)
+      out.push(evener
+        ? finding('◷', [em('Hungarian spreads work more evenly'), ` (workload spread ${fmt(h[wk])} vs ${fmt(r[wk])} ${METRICS[wk].unit}) `, em(`but ${extra}`), cause])
         : finding('◷', [em(`Hungarian ${extra}`), ` (${fmt(h.wait_min_total, 0)} vs ${fmt(r.wait_min_total, 0)} min)`, cause]))
     }
   }

@@ -22,7 +22,7 @@ const relationTo = (p, o) => (o.cost === p.cost ? `same cost as ${ALGO_SHORT[o.k
  */
 export default function FrontierChart({ points, band, caption, wide = false }) {
   const W = wide ? 960 : 560, H = wide ? 300 : 300
-  const { tip, show, hide } = useTooltip()
+  const { tip, show, hide, id: tipId } = useTooltip()
   if (!points.length) return null
   const lat = points.map((p) => Math.max(p.latency, 0.5))
   const xMin = Math.log10(Math.min(...lat) / 2), xMax = Math.log10(Math.max(...lat) * 2)
@@ -115,7 +115,7 @@ export default function FrontierChart({ points, band, caption, wide = false }) {
         {bandTop !== null && <tfoot><tr><td colSpan={4}>Noise margin: up to {fmt(band.margin, 0)} pts above {fmt(band.from)} pts counts as equally cheap.</td></tr></tfoot>}
       </table>
       {caption && <figcaption className="help" style={{ marginTop: 6 }}>{caption}</figcaption>}
-      <Tooltip tip={tip} />
+      <Tooltip tip={tip} id={tipId} />
     </figure>
   )
 }
