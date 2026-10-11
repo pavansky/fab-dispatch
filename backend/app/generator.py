@@ -72,7 +72,7 @@ def generate(
     for i in range(n_engineers):
         primary = constraint if i < n_constraint else others[(i - n_constraint) % len(others)]
         skills = {primary: rng.choice([2, 3, 3] if primary == constraint else [2, 2, 3])}
-        for extra in rng.sample([f for f in all_families if f != primary], k=rng.choice([1, 1, 2])):
+        for extra in rng.sample([f for f in all_families if f != primary], k=rng.choice(cfg.cross_training)):
             # Cross-training onto the constraint family is rare and shallow: level 1 is enough
             # for some of its PMs, never for a tool-down on it.
             skills[extra] = 1 if extra == constraint else rng.choice([1, 2])

@@ -18,7 +18,7 @@ Copy `backend/app/fabs/profiles/fab2-200mm-analog.json` to `backend/app/fabs/pro
 | `constraint_family` | The bottleneck tool family (usually lithography/photo). |
 | `families[]` | One per tool family: `id`, `label`, tool-ID `prefix`, bay rectangle `area` `[x0, y0, x1, y1]` (must lie inside the floor), the `pm_task` text, and a `faults` catalogue. |
 | `faults` | Per fault code: typical `symptoms`, and `causes` with `fix`, `mean_min`, `sd_min`. These drive the repair-history predictions. |
-| `presets` | Planning drills, e.g. `normal`, `<constraint>_crunch`, `excursion`: job mix per family, constraint-certified engineer share, share of unplanned downs, response SLAs in minutes. |
+| `presets` | Planning drills, e.g. `normal`, `<constraint>_crunch`, `excursion`, `overstaffed`: job mix per family, constraint-certified engineer share, share of unplanned downs, response SLAs in minutes, and optionally `cross_training` (how many extra families an engineer is certified on, one value drawn per engineer; default `[1, 1, 2]`). |
 
 ## 2. Validate locally
 

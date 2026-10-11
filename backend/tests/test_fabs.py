@@ -60,6 +60,26 @@ def test_priority_3_means_a_tool_down_on_the_constraint_family():
                     assert j.priority == expected, (p.id, preset, seed, j.id)
 
 
+def test_overstaffed_preset_really_adds_certified_engineers():
+    """Overstaffed must mean more bottleneck-certified engineers and broader cross-training than a
+    normal shift at the same headcount, not only wider response windows."""
+    for p in all_profiles().values():
+        c = p.constraint_family
+        for seed in range(3):
+            normal = generate(seed, 14, 45, "normal", p.id).engineers
+            over = generate(seed, 14, 45, "overstaffed", p.id).engineers
+            certified = lambda engs: sum(1 for e in engs if e.skills.get(c, 0) >= 2)
+            assert certified(over) >= certified(normal) + 1 and certified(over) >= 4, (p.id, seed)
+            assert sum(len(e.skills) for e in over) > sum(len(e.skills) for e in normal), (p.id, seed)
+
+
+def test_profile_rejects_impossible_cross_training(fab1):
+    raw = fab1.model_dump()
+    raw["presets"]["normal"]["cross_training"] = [len(fab1.families)]
+    with pytest.raises(ValueError, match="cross_training"):
+        FabProfile.model_validate(raw)
+
+
 def test_api_lists_fabs_and_plans_for_fab2():
     client = TestClient(app, headers=auth_headers("dispatcher"))
     ids = [f["id"] for f in client.get("/api/fabs").json()]

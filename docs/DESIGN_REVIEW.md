@@ -95,7 +95,7 @@ Four presets per fab, each with a reason to exist:
 | Normal shift | Typical mix of PMs and tool-downs; staffing roughly matches load |
 | Lithography crunch | Scanner problems pile up while few engineers hold litho certifications |
 | Excursion / surge | Mostly unplanned downs (90%) with tight response targets (25 min critical) |
-| Overstaffed | Plenty of engineers; the question is cost, not coverage |
+| Overstaffed | More certified engineers than the work needs (a larger bottleneck-certified share, broader cross-training, wider windows); the question is cost, not coverage |
 
 ---
 

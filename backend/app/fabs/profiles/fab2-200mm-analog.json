@@ -62,6 +62,11 @@
                      "constraint_engineer_share": 0.12, "down_share": 0.7, "sla_critical": 40, "sla_down": 120},
     "excursion": {"label": "Excursion / surge", "description": "Mostly unplanned downs with tight response targets.",
                   "family_mix": {"photo": 0.25, "diffusion": 0.25, "thinfilm": 0.2, "wet": 0.15, "test": 0.15},
-                  "constraint_engineer_share": 0.2, "down_share": 0.9, "sla_critical": 25, "sla_down": 60}
+                  "constraint_engineer_share": 0.2, "down_share": 0.9, "sla_critical": 25, "sla_down": 60},
+    "overstaffed": {"label": "Overstaffed",
+                    "description": "More certified engineers than the work needs (a larger photo-certified share, broad cross-training); the question is cost, not coverage.",
+                    "family_mix": {"photo": 0.2, "diffusion": 0.25, "thinfilm": 0.2, "wet": 0.2, "test": 0.15},
+                    "constraint_engineer_share": 0.35, "down_share": 0.5, "sla_critical": 60, "sla_down": 150,
+                    "cross_training": [2, 2, 3]}
   }
 }
