@@ -130,7 +130,14 @@ class Planner:
 
     # ------------------------------------------------------------------ simulation
     def _simulate(self, tech_id: str, route: list[str]) -> tuple[RouteSim | None, str | None]:
-        """Walk the route from the home bay; return the timing or the first hard violation."""
+        """Walk the route from the home bay; return the timing or the first hard violation.
+
+        An engineer leaves the home bay just in time for their first job, so any slack
+        before it is spent at the bay, not idle at a tool: no idle wait is charged before
+        the first stop (its ``arrival`` is still the earliest the engineer could be there).
+        From the second stop on, arriving before a window opens is idle wait. Every strategy
+        and the exact solver cost routes through this one simulation, so they all share the
+        rule."""
         tech = self.techs[tech_id]
         frozen = self.frozen[tech_id]
         t, here = float(tech.shift_start), tech_id
@@ -151,7 +158,8 @@ class Planner:
                 if arrival > job.latest:
                     return None, WINDOW_MISSED
                 start = max(arrival, job.earliest)
-            wait += start - arrival
+            if i > 0:  # slack before the first job is spent at the bay, not idle at a tool
+                wait += start - arrival
             overq += tech.skills[job.skill] - job.min_level
             t, here = start + job.duration, jid
             arrivals.append(arrival)
