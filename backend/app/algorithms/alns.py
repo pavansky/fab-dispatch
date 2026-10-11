@@ -11,18 +11,20 @@ The loop is simple:
      related  - a seed job plus its neighbours in space, time window and tool family
                 (Shaw removal). Related jobs are the ones worth swapping between engineers.
      route    - every open job on one engineer's route, so the plan can be rebuilt without them
-3. *Repair*: reinsert open jobs with greedy (cheapest-first) or regret-2 insertion.
+3. *Repair*: reinsert open jobs with greedy (cheapest-first) or regret-2 insertion,
+   committing only insertions that lower the total cost (see planner.py).
 4. *Accept* the new plan if it's better, or with simulated-annealing probability if it's
    worse, so the search can climb out of local optima.
 5. *Adapt*: operators that keep finding improvements are picked more often.
 
 Unlike PyVRP, ALNS minimises *exactly* our objective, including the convex
-workload-balance term. Being pure Python it runs a few hundred iterations per second
-rather than PyVRP's tens of thousands.
+workload-balance term. Being pure Python it runs roughly 2,000 iterations per second on a
+14 x 45 shift (a few hundred at 30 x 100), rather than PyVRP's tens of thousands.
 
-It stops after a fixed number of iterations, with the time limit only as a safety cap,
-so the same input always gives the same plan. Users don't see plans change on refresh,
-and results can be cached safely.
+It stops after a fixed number of iterations (seeded), so as long as the time limit
+doesn't bind the same input gives the same plan: users don't see plans change on refresh,
+and results can be cached safely. When the cap does bind (live re-plans use a much
+shorter one), the plan depends on machine speed; ``solver.hit_time_cap`` reports it.
 """
 
 from __future__ import annotations
@@ -60,7 +62,9 @@ def run_alns(
     weights = {k: 1.0 for k in [*destroy_ops, *repair_ops]}
     scores = {k: 0.0 for k in weights}
     uses = {k: 0 for k in weights}
-    # Start hot enough to accept a 5% worse plan half the time, then cool to near-greedy.
+    # Start hot enough to accept a 5% worse plan half the time, then cool geometrically. At
+    # 0.9975 per iteration the default 300 iterations end at about half the starting
+    # temperature, so worse plans are still accepted late on; the best plan seen is kept.
     temp = max(1.0, 0.05 * current / math.log(2))
     cooling = 0.9975
     it = best_it = 0

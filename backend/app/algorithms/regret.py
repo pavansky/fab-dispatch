@@ -6,8 +6,13 @@ waiting. A job only one engineer can do has infinite regret, so it is placed bef
 anyone else can take that engineer.
 
 That is the fab situation: lots of engineers can handle metrology, but maybe two people
-on shift are level-3 on the EUV/immersion scanners. A small priority term breaks ties so
-a bottleneck tool-down isn't beaten by a PM with the same regret.
+on shift are level-3 on the EUV/immersion scanners.
+
+The placement key is regret plus a quarter of the priority reward per priority level (15
+points at the default weights). Typical regrets are only a few points, so in practice
+priority orders first (bottleneck tool-downs, then tool-downs, then PMs) and regret orders
+jobs within a level. A lower-priority job goes first only when its regret is more than 15
+points per level higher, or when only one engineer can still take it.
 """
 
 from __future__ import annotations
