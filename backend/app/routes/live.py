@@ -4,7 +4,8 @@ Production behaviours on every mutating call:
 
 * **Roles**: viewers can watch; only dispatchers change a shift.
 * **Fab scoping**: a shift is visible only to users with access to its fab.
-* **Optimistic concurrency**: writes are version-checked; ``If-Match`` pins a version.
+* **Optimistic concurrency**: writes are version-checked; ``If-Match`` pins a version
+  (send back the ``ETag`` from ``GET /shifts/{id}``, or a quoted version).
 * **Ended shifts are final**: every write to an ended shift is refused with 409, and an
   action that changes nothing (releasing a clock you don't hold) doesn't bump the version.
 * **Idempotency**: an ``Idempotency-Key`` header makes a retried request return the
@@ -31,7 +32,7 @@ from ..algorithms import ALGORITHMS
 from ..auth import User, require
 from ..config import get_settings
 from ..deps import get_store, rate_limit, store_for_shift
-from ..http import etag_json
+from ..http import etag_json, if_match_version
 from ..models import Job, Scenario, Weights
 from ..store import DuplicateRequest, NotFound, VersionConflict
 from ..validation import check_scenario, fab_for
@@ -103,7 +104,7 @@ def _mutate(
         if (previous := replay()) is not None:
             return previous
         state, version = _load(shift_id, user)
-        if if_match is not None and if_match.strip('"') != str(version):
+        if if_match is not None and not if_match_version(if_match, version):
             raise HTTPException(409, f"shift changed (now version {version}); reload and retry")
         if state.ended:
             raise HTTPException(409, f"shift {shift_id} has ended; it can't be changed")
@@ -175,8 +176,11 @@ def list_shifts(
 
 @router.get("/{shift_id}")
 def get_shift(shift_id: str, request: Request, user: User = Depends(require("viewer"))):
+    """The shift as clients see it. The ETag starts with the shift's version, so it works as an
+    If-Match for the write endpoints; the rest of it changes with presence and the clock lease,
+    so a conditional GET still picks those up without a version bump."""
     state, version = _load(shift_id, user)
-    return etag_json(request, _view(state, version, store_for_shift(shift_id).presence(shift_id)))
+    return etag_json(request, _view(state, version, store_for_shift(shift_id).presence(shift_id)), version=version)
 
 
 @router.post("/{shift_id}/advance")

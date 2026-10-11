@@ -102,6 +102,36 @@ def test_a_write_that_fails_part_way_is_applied_once_on_retry(monkeypatch):
     assert again["idempotent_replay"] is True and again["state"]["clock"] == 60
 
 
+def test_the_etag_of_a_shift_works_as_its_if_match():
+    sid = _shift()
+    got = alice.get(f"/api/shifts/{sid}")
+    tag = got.headers["etag"]
+    assert tag.startswith(f'"{got.json()["version"]}-')
+    ok = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 10}, headers={"If-Match": tag})
+    assert ok.status_code == 200 and ok.json()["version"] == 2
+    stale = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 10}, headers={"If-Match": tag})
+    assert stale.status_code == 409  # the shift moved on since that read
+    off = alice.post(f"/api/shifts/{sid}/engineers/E01/off", headers={"If-Match": '"2"'})  # a quoted version
+    assert off.status_code == 200 and off.json()["version"] == 3
+    for pinned in ("3", 'W/"3-abc"', '"1-x", "3-y"', "*"):  # repeats are no-ops: still version 3
+        assert alice.post(f"/api/shifts/{sid}/engineers/E01/off", headers={"If-Match": pinned}).status_code == 200
+    assert alice.post(f"/api/shifts/{sid}/engineers/E01/off", headers={"If-Match": '"2"'}).status_code == 409
+    fresh = alice.get(f"/api/shifts/{sid}")
+    assert alice.get(f"/api/shifts/{sid}", headers={"If-None-Match": fresh.headers["etag"]}).status_code == 304
+
+
+def test_a_conditional_get_still_sees_presence_change_without_a_new_version():
+    sid = _shift()
+    before = alice.get(f"/api/shifts/{sid}")
+    viewer = TestClient(app, headers=auth_headers("viewer"))
+    token = issue_demo_token("viewer", get_settings())
+    with viewer.stream("GET", f"/api/shifts/{sid}/stream?access_token={token}") as r:
+        "".join(r.iter_text())
+    after = alice.get(f"/api/shifts/{sid}", headers={"If-None-Match": before.headers["etag"]})
+    assert after.status_code == 200 and "viewer@demo.local" in after.json()["viewers"]
+    assert after.json()["version"] == before.json()["version"]
+
+
 def test_ended_shifts_refuse_every_write():
     sid = _shift()
     end = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 24 * 60}).json()
