@@ -203,7 +203,9 @@ def main() -> None:
         "best_plan_gap_to_bound_pct_worst": max(r["best_plan_gap_to_bound_pct"] for r in reports),
         "heuristics": {
             a: {
-                "max_gap_to_optimum_pct_mean": statistics.fmean(r["heuristics"][a]["max_gap_to_optimum_pct"] for r in reports),
+                "max_gap_to_optimum_pct_mean": statistics.fmean(
+                    r["heuristics"][a]["max_gap_to_optimum_pct"] for r in reports
+                ),
                 "max_gap_to_optimum_pct_worst": max(r["heuristics"][a]["max_gap_to_optimum_pct"] for r in reports),
                 "max_gap_on_changeable_pct_mean": statistics.fmean(
                     r["heuristics"][a]["max_gap_on_changeable_pct"] for r in reports
