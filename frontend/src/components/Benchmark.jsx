@@ -13,7 +13,7 @@ const cellMean = (xs) => { const f = xs.filter(Number.isFinite); return f.length
 const cols = (runs) => ['coverage_pct', 'critical_coverage_pct', 'mean_response_min', 'wait_min_total', workloadKey(runs), 'objective', 'runtime_ms']
 
 function Strip({ runs, metric, min, max }) {
-  const { tip, show, hide } = useTooltip()
+  const { tip, show, hide, id: tipId } = useTooltip()
   const x = (v) => `${max === min ? 50 : ((v - min) / (max - min)) * 100}%`
   return (
     <>
@@ -36,7 +36,7 @@ function Strip({ runs, metric, min, max }) {
           </div>
         )
       })}
-      <Tooltip tip={tip} />
+      <Tooltip tip={tip} id={tipId} />
     </>
   )
 }

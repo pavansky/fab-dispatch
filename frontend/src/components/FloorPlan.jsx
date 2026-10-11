@@ -25,8 +25,11 @@ export default function FloorPlan({
   addMode, onFloorClick, showChanges, compact = false, status,
 }) {
   const svgRef = useRef(null)
-  const { tip, show, hide } = useTooltip()
+  const { tip, show, hide, id: tipId, describedBy } = useTooltip()
   const [hover, setHover] = useState(null)
+  // Side-by-side thumbnails are not operable by keyboard: five copies of every job and
+  // engineer would be ~300 tab stops. The single layout (and the tables) carry that path.
+  const interactive = !compact
   const W = scenario.settings.floor_width
   const H = scenario.settings.floor_height
 
@@ -98,8 +101,8 @@ export default function FloorPlan({
         className={`floor ${addMode ? 'adding' : ''}`}
         viewBox={`${-PAD} ${-PAD} ${W + 2 * PAD} ${H + 2 * PAD}`}
         onClick={handleClick}
-        role="group"
-        aria-label={`Fab floor plan${result ? `, ${result.label}` : ''}`}
+        role={interactive ? 'group' : 'img'}
+        aria-label={`Fab floor plan${result ? `, ${result.label}` : ''}${interactive ? '' : ' (thumbnail; use the Single layout to inspect jobs)'}`}
       >
         <rect className="f-bg" x={0} y={0} width={W} height={H} rx={3} />
         {!compact && Array.from({ length: Math.floor(W / 20) - 1 }, (_, i) => (
@@ -112,8 +115,9 @@ export default function FloorPlan({
         {Object.entries(areas).map(([fam, [x0, y0, x1, y1]]) => (
           <g key={fam}>
             <rect className="f-area" x={x0} y={H - y1} width={x1 - x0} height={y1 - y0} rx={2} />
-            <text className="f-area-label" x={x0 + 5} y={H - y1 + 10}>{familyLabel(fam).toUpperCase()}</text>
-            {!compact && <text className="f-area-sub" x={x0 + 5} y={H - y1 + 17}>{jobsPerArea[fam] ?? 0} jobs</text>}
+            {/* Decorative: the families and counts are in the Workforce table; marks carry their own labels. */}
+            <text className="f-area-label" x={x0 + 5} y={H - y1 + 10} aria-hidden="true">{familyLabel(fam).toUpperCase()}</text>
+            {!compact && <text className="f-area-sub" x={x0 + 5} y={H - y1 + 17} aria-hidden="true">{jobsPerArea[fam] ?? 0} jobs</text>}
           </g>
         ))}
 
@@ -133,13 +137,17 @@ export default function FloorPlan({
           const st = status?.[j.id]
           const cls = ['f-job', `p${j.priority}`, a ? '' : 'un', changed ? 'changed' : '', selected ? 'sel' : '', dim ? 'dim' : '',
             st === 'done' ? 'done' : '', st === 'in_progress' ? 'active' : ''].join(' ')
+          const label = `${j.id}, ${PRIORITY[j.priority].long}, ${a ? `assigned to ${a.tech_id}` : 'unassigned'}`
           return (
-            <g key={j.id} className={cls} role="button" tabIndex={0}
-              aria-label={`${j.id}, ${PRIORITY[j.priority].long}, ${a ? `assigned to ${a.tech_id}` : 'unassigned'}`}
-              aria-pressed={selected}
+            <g key={j.id} className={cls}
+              {...(interactive ? {
+                role: 'button', tabIndex: 0, 'aria-label': label, 'aria-pressed': selected, 'aria-describedby': describedBy(j.id),
+                onKeyDown: (e) => activate(e, { type: 'job', id: j.id }),
+                onFocus: (e) => { show(e, jobTip(j), j.id); setHover({ type: 'job', id: j.id }) },
+                onBlur: () => { hide(); setHover(null) },
+              } : { 'aria-hidden': true })}
               onClick={(e) => { e.stopPropagation(); onSelect?.({ type: 'job', id: j.id }) }}
-              onKeyDown={(e) => activate(e, { type: 'job', id: j.id })}
-              onMouseMove={(e) => { show(e, jobTip(j)); setHover({ type: 'job', id: j.id }) }}
+              onMouseMove={(e) => { show(e, jobTip(j), j.id); setHover({ type: 'job', id: j.id }) }}
               onMouseLeave={() => { hide(); setHover(null) }}>
               <circle cx={j.x} cy={H - j.y} r={9} fill="transparent" />
               {(changed || selected) && <circle className="halo" cx={j.x} cy={H - j.y} r={7.2} />}
@@ -151,7 +159,7 @@ export default function FloorPlan({
 
         {focusEng && focusStops.map((jid, i) => {
           const j = jobById[jid]
-          return <text key={jid} className="f-seq" x={j.x + 5} y={H - j.y - 5}>{i + 1}</text>
+          return <text key={jid} className="f-seq" x={j.x + 5} y={H - j.y - 5} aria-hidden="true">{i + 1}</text>
         })}
 
         {scenario.engineers.map((e) => {
@@ -159,19 +167,24 @@ export default function FloorPlan({
           const sel = selection?.type === 'engineer' && selection.id === e.id
           const dim = focusEng && focusEng !== e.id
           return (
-            <g key={e.id} className={`f-eng ${off ? 'off' : ''} ${sel ? 'sel' : ''} ${dim ? 'dim' : ''}`} role="button" tabIndex={0}
-              aria-label={`Engineer ${e.id}, ${e.name}${off ? ', off shift' : ''}`} aria-pressed={sel}
+            <g key={e.id} className={`f-eng ${off ? 'off' : ''} ${sel ? 'sel' : ''} ${dim ? 'dim' : ''}`}
+              {...(interactive ? {
+                role: 'button', tabIndex: 0, 'aria-label': `Engineer ${e.id}, ${e.name}${off ? ', off shift' : ''}`, 'aria-pressed': sel, 'aria-describedby': describedBy(e.id),
+                onKeyDown: (ev) => activate(ev, { type: 'engineer', id: e.id }),
+                onFocus: (ev) => { show(ev, engTip(e), e.id); setHover({ type: 'engineer', id: e.id }) },
+                onBlur: () => { hide(); setHover(null) },
+              } : { 'aria-hidden': true })}
               onClick={(ev) => { ev.stopPropagation(); onSelect?.({ type: 'engineer', id: e.id }) }}
-              onKeyDown={(ev) => activate(ev, { type: 'engineer', id: e.id })}
-              onMouseMove={(ev) => { show(ev, engTip(e)); setHover({ type: 'engineer', id: e.id }) }}
+              onMouseMove={(ev) => { show(ev, engTip(e), e.id); setHover({ type: 'engineer', id: e.id }) }}
               onMouseLeave={() => { hide(); setHover(null) }}>
               <rect x={e.x - 5.5} y={H - e.y - 5.5} width={11} height={11} rx={2.2} />
-              <text x={e.x} y={H - e.y + 1.9} textAnchor="middle">{e.id.slice(1)}</text>
+              {/* The number repeats the accessible name. */}
+              <text x={e.x} y={H - e.y + 1.9} textAnchor="middle" aria-hidden="true">{e.id.slice(1)}</text>
             </g>
           )
         })}
       </svg>
-      <Tooltip tip={tip} />
+      <Tooltip tip={tip} id={tipId} />
     </>
   )
 }

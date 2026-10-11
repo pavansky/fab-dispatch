@@ -24,11 +24,12 @@ function useOnline() {
   return online
 }
 
+/** The one live region of the view: polite, so a toast never cuts off what is being read. */
 function Toasts({ items, onDismiss }) {
   return (
-    <div className="toasts" aria-live="assertive">
+    <div className="toasts" role="status" aria-live="polite" aria-atomic="false">
       {items.map((t) => (
-        <div key={t.id} className={`toast ${t.tone}`} role="status">
+        <div key={t.id} className={`toast ${t.tone}`}>
           <span>{t.text}</span><button className="btn ghost" onClick={() => onDismiss(t.id)} aria-label="Dismiss">✕</button>
         </div>
       ))}
@@ -363,7 +364,8 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
               offShift={offShift} status={status} addMode={reportMode && canDispatch} onFloorClick={onFloor} />
           </div>
         </section>
-        <section className="card feed" aria-label="Dispatch log" aria-live="polite">
+        {/* Not a live region: up to 200 entries and buttons inside; new events reach the toasts instead. */}
+        <section className="card feed" aria-label="Dispatch log">
           <div className="card-h"><div><div className="h-row"><h2>Dispatch log</h2><InfoLink slug="live-dispatch" anchor="re-plans-don-t-reshuffle-people" label="Re-plans" /></div><p>Every change and who made it, as it streams in.</p></div></div>
           {selection?.type === 'engineer' && canDispatch && (
             <div className="card-b" style={{ display: 'flex', gap: 8, alignItems: 'center', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
