@@ -16,8 +16,13 @@ jobs:
       github.event.deployment_status.state == 'success'
       && github.event.deployment.environment != 'github-pages'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       PRODUCTION: ${{ github.event.deployment.environment == 'Production' }}
+      # Production runs a database per fab; with this repository variable set (e.g. 2), a production
+      # deploy that reports fewer (FAB_TENANT_DATABASES unset or unreadable) fails the smoke test.
+      # Unset = not checked. Previews and UAT run one database and are never checked.
+      EXPECTED_DATABASES: ${{ github.event.deployment.environment == 'Production' && vars.EXPECTED_DATABASES || '' }}
       URL: >-
         ${{ github.event.deployment.environment == 'Production'
             && (vars.PRODUCTION_URL || 'https://fab-dispatch.vercel.app')
@@ -41,6 +46,9 @@ jobs:
           fi
           cat health.json; echo
           python3 -c "import json; h=json.load(open('health.json')); assert h['status']=='ok' and h['schema_ok'], h"
+          if [ -n "$EXPECTED_DATABASES" ]; then
+            python3 -c "import json,os; h=json.load(open('health.json')); want=int(os.environ['EXPECTED_DATABASES']); assert h['databases']==want, f\"{h['databases']} databases, expected {want}: is FAB_TENANT_DATABASES set in production?\"; print('databases:', want)"
+          fi
           curl -sf "${hdr[@]}" "$URL/api/auth/config" | python3 -c "import json,sys; c=json.load(sys.stdin); assert c['mode']=='supabase', c; print('auth:', c['mode'])"
           # App tables must not be readable through Supabase's public Data API (migration 3).
           python3 - <<'PY'

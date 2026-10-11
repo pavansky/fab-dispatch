@@ -16,13 +16,19 @@ make e2e              # Playwright only (starts the API and UI itself)
 make fixtures         # refresh UI test fixtures after changing an API response
 ```
 
-CI runs the same checks, plus the suite on Python 3.11/3.12/3.14 and against Postgres.
+CI runs the same checks, plus the suite on every Python from 3.11 to 3.14, the component tests on
+Node 20 (the oldest supported) as well as 22, and everything against Postgres. The slow tests
+(`make slow`: full-size optimality proofs, solvers at the shipped budgets) run on pushes to `main`.
 
 ## Conventions
 
 - **Branches**: short-lived feature branches off `main`; merge by pull request.
 - **Commits**: [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`,
-  `docs:`, `ci:`, `refactor:`, `test:`, `chore:`. One logical change per commit.
+  `docs:`, `ci:`, `refactor:`, `test:`, `chore:`. One logical change per commit. CI checks the
+  subject line of every commit on pull requests and on pushes to `main`. Commits have a single
+  author: `Co-authored-by:` and tool-session trailers fail the check.
+- **History**: commits before v2.9.0 were authored in batches and the history was rewritten, so
+  their committer dates differ from their author dates.
 - **Versions**: [SemVer](https://semver.org/). Breaking API changes bump the major version. Release
   notes go in `CHANGELOG.md` under the new version before tagging.
 - **Database**: never edit a released migration. Add the next number in `backend/app/store.py`;

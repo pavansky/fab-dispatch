@@ -1,9 +1,11 @@
 name: Release
 
 # Promotion to production. Pushing a SemVer tag (vX.Y.Z):
-#   1. re-runs the full CI on that exact commit,
-#   2. checks it is already on main (so it has been through UAT),
-#   3. publishes the API and UI images to GHCR with an SBOM and signed build provenance,
+#   1. checks the tagged commit is already on main, and re-runs the full CI on that exact commit,
+#   2. publishes the API and UI images to GHCR with an SBOM and a build-provenance attestation
+#      (GitHub Artifact Attestations, verified with `gh attestation verify`; not cosign),
+#   3. waits for UAT: a successful Preview deployment of this commit AND a passing post-deploy
+#      smoke run for it, both reported to GitHub (up to 15 minutes),
 #   4. fast-forwards the `production` branch (Vercel deploys production only from it),
 #   5. waits until production serves this release, then publishes the GitHub release.
 on:
@@ -18,12 +20,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  on-main:
+    name: verify · tag is on main
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - name: Tag must be on main (shipped to UAT first), before anything is published
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
+
   verify:
+    needs: on-main
     uses: ./.github/workflows/ci.yml
 
   images:
     name: publish images
-    needs: verify
+    needs: [on-main, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions: { contents: read, packages: write, id-token: write, attestations: write }
@@ -33,12 +48,12 @@ jobs:
           - { name: api, context: backend }
           - { name: ui, context: frontend }
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ github.token }}" }
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ghcr.io/${{ github.repository }}-${{ matrix.name }}
           tags: |
@@ -49,7 +64,7 @@ jobs:
             org.opencontainers.image.title=Fab Dispatch ${{ matrix.name }}
             org.opencontainers.image.licenses=MIT
       - id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ matrix.context }}
           push: true
@@ -59,8 +74,8 @@ jobs:
           provenance: mode=max
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-      - name: Signed build provenance
-        uses: actions/attest-build-provenance@v2
+      - name: Build-provenance attestation (GitHub Artifact Attestations)
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/${{ github.repository }}-${{ matrix.name }}
           subject-digest: ${{ steps.push.outputs.digest }}
@@ -70,22 +85,55 @@ jobs:
           docker run --rm aquasec/trivy:0.67.0 image --quiet --severity CRITICAL,HIGH --ignore-unfixed \
             --exit-code 1 "ghcr.io/${{ github.repository }}-${{ matrix.name }}@${{ steps.push.outputs.digest }}"
 
+  uat:
+    name: UAT deployed and smoke-tested
+    needs: on-main
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      # The GitHub environment Vercel reports UAT (the main branch preview) under.
+      UAT_ENVIRONMENT: ${{ vars.UAT_ENVIRONMENT || 'Preview' }}
+    steps:
+      - name: Wait for a successful UAT deployment of this commit and a passing smoke run for it
+        run: |
+          # A tag can be pushed seconds after a merge, before Vercel has even started building UAT,
+          # so poll (up to 15 minutes) rather than check once. Both must hold for this exact SHA:
+          #   - a deployment to $UAT_ENVIRONMENT whose latest status is success;
+          #   - a run of the post-deploy smoke workflow that concluded success.
+          deployed=no; smoked=no
+          for _ in $(seq 1 90); do
+            if [ "$deployed" != yes ]; then
+              ids=$(gh api "repos/$GH_REPO/deployments?sha=$GITHUB_SHA&environment=$UAT_ENVIRONMENT&per_page=20" --jq '.[].id')
+              for id in $ids; do
+                state=$(gh api "repos/$GH_REPO/deployments/$id/statuses?per_page=1" --jq '.[0].state')
+                [ "$state" = success ] && { deployed=yes; echo "deployment $id to $UAT_ENVIRONMENT: success"; break; }
+              done
+            fi
+            if [ "$smoked" != yes ]; then
+              n=$(gh api "repos/$GH_REPO/actions/workflows/smoke.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=1" --jq '.total_count')
+              [ "${n:-0}" -gt 0 ] && { smoked=yes; echo "smoke workflow: passed for $GITHUB_SHA"; }
+            fi
+            [ "$deployed" = yes ] && [ "$smoked" = yes ] && exit 0
+            sleep 10
+          done
+          echo "::error::no successful $UAT_ENVIRONMENT deployment (${deployed}) and passing smoke run (${smoked}) for $GITHUB_SHA within 15 minutes; UAT must be deployed and green before a release"
+          exit 1
+
   promote:
     name: promote to production
-    needs: [verify, images]
+    needs: [on-main, verify, images, uat]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: { contents: write }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { fetch-depth: 0 }
-      - name: Tag must be on main (shipped to UAT first)
-        run: |
-          git fetch origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
       - name: Fast-forward production
         run: |
-          git fetch origin production || true
+          git fetch origin main production || true
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
           if git rev-parse --verify -q origin/production >/dev/null; then
             git merge-base --is-ancestor origin/production "$GITHUB_SHA" || { echo "::error::production would move backwards"; exit 1; }
           fi
@@ -99,8 +147,9 @@ jobs:
     permissions: { contents: write }
     env:
       URL: ${{ vars.PRODUCTION_URL || 'https://fab-dispatch.vercel.app' }}
+      EXPECTED_DATABASES: ${{ vars.EXPECTED_DATABASES }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Wait for the new release in production
         run: |
           want="${GITHUB_REF_NAME#v}"
@@ -110,6 +159,9 @@ jobs:
             sleep 10
           done
           [ "$got" = "$want" ] || { echo "::error::production still reports '${got:-unhealthy}', expected $want"; exit 1; }
+          if [ -n "$EXPECTED_DATABASES" ]; then
+            curl -sf "$URL/api/health" | python3 -c "import json,os,sys; h=json.load(sys.stdin); want=int(os.environ['EXPECTED_DATABASES']); assert h['databases']==want, f\"production reports {h['databases']} databases, expected {want}: is FAB_TENANT_DATABASES set?\""
+          fi
           curl -sf -o /dev/null "$URL/" && curl -sf -o /dev/null "$URL/api/docs"
       - name: GitHub release from the changelog
         env: { GH_TOKEN: "${{ github.token }}" }
@@ -118,7 +170,7 @@ jobs:
           awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {on=0} on' CHANGELOG.md > notes.md
           {
             echo
-            echo "**Images** (SBOM and signed provenance attached):"
+            echo "**Images** (SBOM and GitHub build-provenance attestation attached; verify with \`gh attestation verify\`):"
             echo "- \`ghcr.io/${GITHUB_REPOSITORY}-api:${version}\`"
             echo "- \`ghcr.io/${GITHUB_REPOSITORY}-ui:${version}\`"
           } >> notes.md
