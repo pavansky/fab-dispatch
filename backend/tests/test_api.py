@@ -216,3 +216,48 @@ def test_unhandled_errors_still_carry_cors_headers(monkeypatch):
     assert r.status_code == 500 and r.json()["error"]["code"] == "internal"
     assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
     assert r.headers["x-request-id"]
+
+
+# ------------------------------------------------------------------ security headers on the API
+def test_every_api_response_carries_a_no_script_csp_and_the_docs_their_own():
+    import base64
+    import hashlib
+    import re
+
+    for path in ("/api/health", "/api/openapi.json", "/api/meta", "/api/nope"):
+        r = anonymous.get(path)
+        assert r.headers["content-security-policy"] == "default-src 'self'; frame-ancestors 'none'", path
+        assert r.headers["x-frame-options"] == "DENY" and r.headers["x-content-type-options"] == "nosniff"
+    for path in ("/api/docs", "/api/redoc"):
+        r = anonymous.get(path)
+        csp = r.headers["content-security-policy"]
+        assert csp.startswith("default-src 'self'; script-src 'self' https://cdn.jsdelivr.net")
+        assert "'unsafe-inline'" not in csp.split("style-src")[0]  # scripts are never unsafe-inline
+        assert "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in csp
+        assert "img-src 'self' data: https://fastapi.tiangolo.com" in csp and "connect-src 'self'" in csp
+        assert "frame-ancestors 'none'" in csp
+        # Every inline script on the page is pinned by hash, so the page works without unsafe-inline.
+        for m in re.finditer(r"<script>(.*?)</script>", r.text, re.S):
+            digest = base64.b64encode(hashlib.sha256(m.group(1).encode()).digest()).decode()
+            assert f"'sha256-{digest}'" in csp
+        # Everything the page loads is on the allow-list.
+        for src in re.findall(r'(?:src|href)="(https://[^"]+)"', r.text):
+            host = src.split("/")[2]
+            assert host in ("cdn.jsdelivr.net", "fastapi.tiangolo.com", "fonts.googleapis.com"), src
+
+
+def test_hsts_is_sent_in_production_or_over_https_and_not_on_a_plain_local_run():
+    from fastapi import FastAPI
+
+    from app.observability import HSTS, RequestContext
+
+    assert "strict-transport-security" not in anonymous.get("/api/health").headers  # FAB_ENV=test, http
+    plain, production = FastAPI(), FastAPI()
+    for a in (plain, production):
+        a.get("/x")(lambda: {"ok": True})
+    plain.add_middleware(RequestContext)
+    production.add_middleware(RequestContext, hsts=True)
+    assert "strict-transport-security" not in TestClient(plain).get("/x").headers
+    assert TestClient(plain, base_url="https://api.example").get("/x").headers["strict-transport-security"] == HSTS
+    assert TestClient(production).get("/x").headers["strict-transport-security"] == HSTS
+    assert HSTS.startswith("max-age=63072000")

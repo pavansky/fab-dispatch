@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import logging
+import re
 import sys
 import threading
 import time
@@ -18,6 +21,32 @@ from starlette.responses import JSONResponse, Response
 
 request_id: ContextVar[str] = ContextVar("request_id", default="-")
 log = logging.getLogger("fab")
+
+# The API serves JSON and event streams, which no browser renders, so its CSP allows nothing: a
+# response that somehow rendered as HTML (a content-type bug, an old browser sniffing) could run
+# no script and could not be framed. The interactive docs set their own (see ``docs_csp``).
+API_CSP = "default-src 'self'; frame-ancestors 'none'"
+HSTS = "max-age=63072000; includeSubDomains; preload"  # the same value vercel.json sends for the web app
+_INLINE_SCRIPT = re.compile(r"<script>(.*?)</script>", re.S)
+
+
+def docs_csp(html: str) -> str:
+    """The policy for FastAPI's bundled Swagger UI and ReDoc pages: scripts and styles from
+    cdn.jsdelivr.net, the FastAPI favicon, Google Fonts (ReDoc), ReDoc's search worker (a blob), and
+    the one inline bootstrap script, pinned by hash rather than by 'unsafe-inline'. Nothing else."""
+    hashes = " ".join(
+        f"'sha256-{base64.b64encode(hashlib.sha256(m.group(1).encode()).digest()).decode()}'"
+        for m in _INLINE_SCRIPT.finditer(html)
+    )
+    return (
+        "default-src 'self'; "
+        f"script-src 'self' https://cdn.jsdelivr.net{' ' + hashes if hashes else ''}; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: https://fastapi.tiangolo.com; "
+        "connect-src 'self'; worker-src blob:; frame-ancestors 'none'; base-uri 'self'; "
+        "form-action 'self'; object-src 'none'"
+    )
 
 
 class JsonFormatter(logging.Formatter):
@@ -48,7 +77,14 @@ def configure_logging(level: str, as_json: bool) -> None:
 
 class RequestContext(BaseHTTPMiddleware):
     """Request ID (honours an incoming X-Request-ID), access log, Server-Timing and
-    security headers on every response."""
+    security headers on every response.
+
+    ``hsts`` (set in production) sends Strict-Transport-Security on every response; otherwise it is
+    sent only on responses that arrived over HTTPS (so a plain-HTTP local run never pins its host)."""
+
+    def __init__(self, app, hsts: bool = False):
+        super().__init__(app)
+        self.hsts = hsts
 
     async def dispatch(self, request: Request, call_next) -> Response:
         rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
@@ -67,6 +103,9 @@ class RequestContext(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-Frame-Options"] = "DENY"
+        response.headers.setdefault("Content-Security-Policy", API_CSP)  # the docs pages set their own
+        if self.hsts or request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = HSTS
         if request.url.path != "/api/livez":
             log.info(
                 "%s %s %s %.1fms",
