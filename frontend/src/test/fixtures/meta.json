@@ -1,6 +1,6 @@
 {
  "version": "2026.10.1",
- "release": "2.8.0",
+ "release": "2.9.0",
  "commit": "local",
  "algorithms": {
   "greedy": {
