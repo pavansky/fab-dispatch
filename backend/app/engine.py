@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import statistics
 import time
 
@@ -111,7 +112,13 @@ def _why_unassigned(p: Planner, job_id: str) -> Unassigned:
     return Unassigned(job_id=job_id, reason=reason, rejections=dict(rejected))
 
 
-def _metrics(p: Planner, runtime_ms: float) -> dict[str, float]:
+def _percentile(sorted_values: list[float], q: float) -> float:
+    """Nearest-rank percentile of an ascending list (no interpolation, so it is a real value)."""
+    rank = max(1, math.ceil(q * len(sorted_values)))
+    return sorted_values[rank - 1]
+
+
+def _metrics(p: Planner, runtime_ms: float) -> dict[str, float | None]:
     # Only jobs known to the planner count; in live mode future tool-downs aren't known yet.
     known = set(p.open_jobs) | {j for r in p.frozen.values() for j in r.route}
     jobs = [p.jobs[j] for j in sorted(known)]
@@ -124,12 +131,18 @@ def _metrics(p: Planner, runtime_ms: float) -> dict[str, float]:
     for tid, route in p.routes.items():
         for jid, s in zip(route, p.sim(tid).starts, strict=True):
             starts[jid] = s
+    # Response is measured over served tool-downs only; unserved ones are counted separately.
     downs = [j for j in served_jobs if j.kind == "down"]
-    response = [starts[j.id] - j.earliest for j in downs]
+    response = sorted(starts[j.id] - j.earliest for j in downs)
+    unserved_downs = sum(1 for j in jobs if j.kind == "down" and j.id not in served)
 
     used = [t for t, r in p.routes.items() if r]
     walk = sum(p.sim(t).metres for t in used)
+    # Both spreads are over every engineer on shift, idle ones included: one in job counts
+    # (kept for compatibility) and one in assigned service minutes, so a 35-minute probe-card
+    # clean no longer weighs the same as a 240-minute wet clean.
     loads = [len(r) for r in p.routes.values()]
+    minutes = [sum(p.jobs[j].duration for j in r) for r in p.routes.values()]
     shift = sum(t.shift_end - t.shift_start for t in p.techs.values()) or 1
     # The objective is exactly what every method minimises (Planner.total_cost), so the
     # ranking shown is the ranking the solvers optimise; the parts let the UI show the split.
@@ -142,9 +155,14 @@ def _metrics(p: Planner, runtime_ms: float) -> dict[str, float]:
         "jobs": len(jobs),
         "assigned": len(served_jobs),
         "coverage_pct": pct(len(served_jobs), len(jobs)),
-        "critical_coverage_pct": pct(sum(1 for j in critical if j.id in served), len(critical)),
+        # None (JSON null) when there is no priority-3 work yet: an early live shift must not
+        # read as "100% of bottleneck downs covered".
+        "critical_jobs": len(critical),
+        "critical_coverage_pct": pct(sum(1 for j in critical if j.id in served), len(critical)) if critical else None,
         "priority_weighted_coverage_pct": pct(sum(j.priority for j in served_jobs), total_pri),
         "mean_response_min": round(statistics.fmean(response), 1) if response else 0.0,
+        "response_p95_min": round(_percentile(response, 0.95), 1) if response else 0.0,
+        "unserved_downs": unserved_downs,
         "walk_m_total": round(walk, 0),
         "walk_m_per_job": round(walk / len(served_jobs), 1) if served_jobs else 0.0,
         "wait_min_total": round(sum(p.sim(t).wait_min for t in used), 0),
@@ -152,6 +170,7 @@ def _metrics(p: Planner, runtime_ms: float) -> dict[str, float]:
         "utilization_pct": pct(sum(j.duration for j in served_jobs), shift),
         "engineers_used": len(used),
         "workload_std": round(statistics.pstdev(loads), 2) if loads else 0.0,
+        "workload_minutes_std": round(statistics.pstdev(minutes), 1) if minutes else 0.0,
         "objective": round(p.total_cost(), 1),
         "operating_cost": round(parts["operating"], 1),
         "workload_cost": round(parts["workload"], 1),
