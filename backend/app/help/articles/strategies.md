@@ -37,8 +37,9 @@ from the proven optimum on full-size shifts.
 
 ## PyVRP
 
-A state-of-the-art vehicle-routing solver (iterated local search, C++ core), warm-started from
-Regret-2. The **lowest operating cost of the five**, mostly by cutting idle wait: about 3% from
+The PyVRP library's iterated local search (C++ core), warm-started from Regret-2. PyVRP is the
+open-source solver whose hybrid genetic search won the recent VRPTW competitions; the version used
+here runs its iterated local search, a different algorithm from the same library. The **lowest operating cost of the five**, mostly by cutting idle wait: about 3% from
 the proven optimum on full-size shifts.
 
 ## Exact solver
