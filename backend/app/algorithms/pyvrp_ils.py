@@ -132,9 +132,13 @@ def run_pyvrp(
         return {}
 
     data = _with_matrices(m.data(), arcs, jobs, profiles, p)
+    t_warm = time.perf_counter()
     initial = _warm_start(p, data, vt_order, [j.id for j in jobs])
+    t_search = time.perf_counter()
+    # MaxRuntime starts here, after the warm start, the same split as ALNS reports.
     stop = MultipleCriteria([MaxIterations(max_iterations), MaxRuntime(runtime_s)])
     res = solve(data, stop, seed=seed, collect_stats=False, display=False, initial_solution=initial)
+    search_s = time.perf_counter() - t_search
 
     # Re-play PyVRP's routes through our planner, so every number uses one engine.
     client_ids = [c.name for c in data.clients()]
@@ -165,6 +169,8 @@ def run_pyvrp(
     p.meta["solver"] = {
         "iterations": res.num_iterations,
         "hit_time_cap": res.num_iterations < max_iterations,
+        "warm_start_s": round(t_search - t_warm, 4),
+        "search_s": round(search_s, 4),
         "runtime_ms": round((time.perf_counter() - t0) * 1000, 1),
     }
     return decisions

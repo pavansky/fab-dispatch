@@ -52,8 +52,13 @@ def run_alns(
     runtime_s = runtime_s if runtime_s is not None else p.time_limit_s or settings.solver_time_limit_s
     max_iterations = max_iterations if max_iterations is not None else settings.alns_iterations
     rng = random.Random(seed)
-    deadline = time.perf_counter() + runtime_s
+    t0 = time.perf_counter()
     run_regret(p)
+    # The time budget is for the search: it starts after the regret-2 warm start, as
+    # PyVRP's does, so the two solvers' iteration counts are comparable at a given cap.
+    t_search = time.perf_counter()
+    warm_start_s = t_search - t0
+    deadline = t_search + runtime_s
 
     current = best = p.total_cost()
     best_snap = p.snapshot()
@@ -105,6 +110,8 @@ def run_alns(
         "iterations": it,
         "best_iteration": best_it,
         "hit_time_cap": it < max_iterations,
+        "warm_start_s": round(warm_start_s, 4),
+        "search_s": round(time.perf_counter() - t_search, 4),
         "operator_weights": {k: round(v, 2) for k, v in weights.items()},
     }
     return explain_final(p, f"ALNS kept this assignment: best plan found at iteration {best_it} of {it}.")
