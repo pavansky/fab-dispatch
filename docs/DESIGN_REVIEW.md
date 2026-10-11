@@ -37,9 +37,9 @@ strategies on the same constraint engine, explains every decision, and runs live
 2. **The recommendation refuses false positives.** A slower solver has to beat the cheapest plan by
    more than the noise margin to be recommended, and the benchmark only calls a difference real when
    a paired bootstrap confidence interval excludes zero.
-3. **The scaling claim is measured.** A 20,000-engineer organisation re-plans in 47 s on one laptop
-   because the problem decomposes by fab, skill and area, and a live tool-down re-plans in about
-   200 ms.
+3. **The scaling claim is measured.** A 20,000-engineer organisation's 222 areas are each planned
+   as independent problems in parallel because the problem decomposes by fab, skill and area
+   (<<DR-SCALE-SHORT>>), and a live tool-down re-plans in well under a second.
 
 ---
 
@@ -229,21 +229,27 @@ agrees with the screen.
 ## 5. Results
 
 ### Which strategy wins, and by how much?
-80 seeded shifts (4 presets × 20), 14 engineers × 45 jobs. PyVRP has the lowest cost in **78 of 80**
-(ALNS the other 2). Against regret-2 it costs 23–30% less in three presets and 8% less in the litho
-crunch, and serves about 3 points more jobs. Most of the saving is **idle wait**, which falls by
-28–35%: one-pass methods leave engineers waiting for windows to open, and only re-sequencing whole
-routes fixes that.
+80 seeded shifts (4 presets × 20), 14 engineers × 45 jobs, every job known at t = 0. PyVRP has the
+lowest cost in **44 of 80** (ALNS the other 36). Against regret-2, the best one-pass rule, the search
+methods cost 65–173 points less per shift, and the paired bootstrap 95% interval excludes zero in
+every preset. Most of the saving is **idle wait**: one-pass methods leave engineers waiting for
+windows to open 2–4× longer than PyVRP, and only re-sequencing whole routes fixes that. (Idle wait
+is charged from the second stop on; an engineer leaves the bay just in time for the first job.)
 
-| Normal shift | Coverage | Bottleneck | Response min | Idle wait min | Load std | Cost |
-|---|---|---|---|---|---|---|
-| Greedy | 93.7% | 97.8% | 23.9 | 1819 | 1.7 | 924.5 |
-| Hungarian | 96.1% | 97.9% | **15.8** | 2333 | **0.6** | 967.2 |
-| Regret-2 | 94.7% | 97.1% | 22.2 | 1528 | 1.6 | 851.4 |
-| ALNS | **97.9%** | **98.4%** | 20.8 | 1263 | 1.6 | 664.6 |
-| PyVRP | 97.7% | **98.4%** | 22.5 | **1011** | 1.9 | **600.6** |
+| Normal shift | Coverage | Bottleneck | Response min | Idle wait min | Load std | Cost | Cost vs PyVRP [95% CI] |
+|---|---|---|---|---|---|---|---|
+| Greedy | 94.6% | 97.4% | **19.7** | 234 | 1.1 | 845.9 | +175.3 [+146.6, +204.7] |
+| Hungarian | 96.7% | **98.4%** | 20.2 | 481 | **0.5** | 840.4 | +169.8 [+144.5, +196.0] |
+| Regret-2 | 96.9% | **98.4%** | 22.1 | 182 | 1.0 | 768.8 | +98.3 [+72.1, +127.5] |
+| ALNS | 98.1% | **98.4%** | 24.6 | 75 | 0.9 | 689.2 | +18.7 [+6.2, +31.3] |
+| PyVRP | **98.3%** | **98.4%** | 24.3 | **49** | 1.4 | **670.5** | reference |
 
-Full tables for every preset: ANALYSIS §1. Reproduce: `python -m scripts.benchmark`.
+That table assumes full foresight. Replayed through the live code with tool-downs revealed at
+`reported_at` (`python -m scripts.benchmark --mode revealed`, 5 seeds), 19 of the 20 cost
+differences to PyVRP are not significant and greedy had the cheapest realised plan in 7 of 20
+shifts: the static ranking is the next-shift planning case, not the live one.
+
+Full tables for every preset, both modes: ANALYSIS §1. Reproduce: `python -m scripts.benchmark`.
 
 ### How far is each strategy from the best possible plan?
 Measured against the **proven optimum** on all 80 full-size shifts (D36):
@@ -257,14 +263,19 @@ Measured against the **proven optimum** on all 80 full-size shifts (D36):
 | **PyVRP** | **2.7%** | **10.0%** | **1/80** |
 
 PyVRP's mean gap by preset: 4.3% normal, 0.9% litho crunch, 2.1% surge, 3.6% overstaffed. Each
-proof took 20 s on average (138 s worst), over about 34,000 feasible routes per shift. Reproduce:
-`python -m scripts.benchmark --only gaps-full`.
+proof took 20 s on average (138 s worst), over about 39,000 feasible routes per shift (seed 0).
+These gaps predate the idle-wait change and the ALNS budget fix (regenerate:
+`python -m scripts.benchmark --seeds 20`). The litho-crunch gap is deflated by the penalty for jobs
+nobody on shift can take, so the study also reports the gap on the changeable cost (ANALYSIS §1).
+Reproduce: `python -m scripts.benchmark --only gaps-full`.
 
 ### How do you know the "optimum" is really optimal?
 Three checks. The exact plan is built and costed by the same planner as the heuristics, so it's a
 real, feasible plan. HiGHS proves optimality with a relative gap of 0. And the study **fails** if any
-heuristic ever beats it; none did. Giving ALNS 20,000 iterations instead of 300 brings it from 8.1%
-to 5.2% above the optimum and then it stops, never below.
+heuristic ever beats it; none did. Giving ALNS 20,000 iterations instead of 300 brought it from
+8.1% to 5.2% above the optimum and then it stopped, never below (now reproducible with
+`python -m scripts.benchmark --only gaps-full --alns-iterations 20000`; regenerate:
+`python -m scripts.benchmark --seeds 20`).
 
 ### Didn't you first report ALNS at 0.9% from optimal?
 Yes, and that's a lesson worth telling. The first exact solver had a cautious 22-job cap, so gaps
@@ -349,8 +360,8 @@ It produces "nervous" plans that reshuffle the whole floor for a 1% gain. People
 plan that changes under them.
 
 ### How fast is a live re-plan?
-Measured through the real live-dispatch code, 50 tool-downs into a live 30 × 100 shift: **median
-217 ms, 95th percentile 270 ms**, max 288 ms (ALNS).
+Measured through the real live-dispatch code, 50 tool-downs into a live 30 × 100 shift, spread
+over the whole shift: <<DR-LIVE>>
 
 ### What stops two dispatchers from corrupting a shift?
 Three mechanisms (D21):
@@ -519,35 +530,25 @@ near-independent skill groups, and dispatch is per shift and area. So 20,000 eng
 of independent problems of 15–60 engineers each, solved in parallel (D35).
 
 ### Is that measured?
-Yes (`python -m scripts.scale_study`, ANALYSIS "Scale"):
+Yes (`python -m scripts.scale_study`, ANALYSIS "Scale"). The company study plans 222 independent
+areas (each a fresh plan of its own 30 × 100 shift, not a re-plan of one shared plan) in parallel,
+and records per area whether the solver's safety cap stopped it:
 
-| What | Measured |
-|---|---|
-| Re-plan a whole 20,000-engineer company (6,660 on shift, 22,200 jobs, 222 areas, PyVRP, 16 workers on one laptop) | **46.7 s** wall clock, 722 CPU-seconds, 3.25 s per area (p95 3.39 s) |
-| Live tool-down re-plan through the real dispatch code | **217 ms** median, 270 ms p95 |
-| Live load at 20,000 engineers (about 0.6 tool-downs a second) | under a fifth of one CPU core |
+<<DR-SCALE-TABLE>>
 
 ### What if you don't decompose?
 It's slower and worse:
 
-| One problem | Regret-2 | ALNS | PyVRP |
-|---|---|---|---|
-| 100 × 300 | 1.1 s, cost 3,504 | 3.9 s, cost 3,464 | 4.5 s, cost 2,493 |
-| 150 × 500 | 5.3 s, cost 6,446 | 6.1 s, cost 6,446 | 9.8 s, cost 4,049 |
-| 300 × 1,000 | 56 s, cost 10,891 | 58 s, cost 10,891 | 62 s, cost 6,994 |
-
-From 150 × 500 up, ALNS returns its regret-2 start unchanged: its safety cap runs out before it
-improves anything. And the gaps grow with size: PyVRP is 2.7% from optimal at 14 × 45, about 4% at
-20 × 65, and 7.5–8.4% at 30 × 100.
+<<DR-SINGLE>>
 
 ### How did you get the optimum at 30 × 100?
-Full enumeration doesn't scale: 39,000 routes at 14 × 45, 409,000 at 20 × 65 (27 minutes to prove),
+Full enumeration doesn't scale: about 39,000 routes at 14 × 45 (seed 0), 409,000 at 20 × 65 (27 minutes to prove),
 and 8.3 million at 30 × 100, where a direct MILP over every route didn't finish its first LP in
 hours. **Column generation** replaced it: solve a small LP, use its prices to scan all 8.3 million
 routes for any that could improve the plan (one sparse matrix-vector product), add those, repeat.
 The converged LP value is a **certified lower bound** no plan can beat; an integer solve over the
-generated routes gives a real plan. At 30 × 100 the optimum lies between **1828.0 and 1844.3** (a
-0.89% band). Validated first on a 14 × 45 shift with a known optimum: it brackets it within 0.49% in
+generated routes gives a real plan. At 30 × 100, on one seed and before the idle-wait change, the
+optimum lies between **1828.0 and 1844.3** (a 0.89% band); `--seeds N --preset P` runs more. Validated first on a 14 × 45 shift with a known optimum: it brackets it within 0.49% in
 7 s, versus 83 s for the full proof (`python -m scripts.certified_bound`).
 
 ### What changes at real enterprise scale?
@@ -760,13 +761,13 @@ else.
 |---|---|
 | Strategies | 5, plus an exact solver |
 | Benchmark | 80 shifts (4 presets × 20), 14 engineers × 45 jobs |
-| PyVRP lowest cost | 78 of 80 shifts |
-| Gap to proven optimum | PyVRP 2.7%, ALNS 5.7%, regret-2 19.4%, Hungarian 25.8%, greedy 28.1% |
-| Exact proof time at 14 × 45 | 20 s mean, 138 s worst, about 34,000 routes |
-| Certified bound at 30 × 100 | optimum in [1828.0, 1844.3]; PyVRP within 8.4% |
-| Idle wait saved by search vs regret-2 | 28–35% |
-| Live re-plan | 217 ms median, 270 ms p95 |
-| 20,000-engineer company re-plan | 46.7 s on one laptop |
+| PyVRP lowest cost | 44 of 80 shifts (ALNS 36); not separable with revealed information |
+| Gap to proven optimum | PyVRP 2.7%, ALNS 5.7%, regret-2 19.4%, Hungarian 25.8%, greedy 28.1% (old code; regenerate: `python -m scripts.benchmark --seeds 20`) |
+| Exact proof time at 14 × 45 | 20 s mean, 138 s worst, about 39,000 routes (seed 0) |
+| Certified bound at 30 × 100 | optimum in [1828.0, 1844.3]; PyVRP within 8.4% (one seed, old code) |
+| Idle wait saved by search vs regret-2 | 54–74% (static; charged from the second stop) |
+| Live re-plan | <<DR-LIVE-ROW>> |
+| 20,000-engineer company, 222 areas planned in parallel | <<DR-COMPANY-ROW>> |
 | Repair search | 0.1 ms per query, 80 ms index build |
 | Assistant evaluation | 42/42 cited correctly, 8/8 off-topic refused |
 | Tests | 455 (320 backend, 102 components, 33 end-to-end) |

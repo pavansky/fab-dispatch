@@ -37,7 +37,7 @@ from app.generator import generate
 from app.models import Scenario, Weights
 from app.planner import Planner
 
-PRESETS = get_profile("fab1-300mm-logic").presets
+PRESETS = dict(get_profile("fab1-300mm-logic").presets)  # --presets narrows it
 REFERENCE = "pyvrp"  # the strategy every cost difference is measured against
 BOOTSTRAP_RESAMPLES = 5000
 TIMING_RUNS = 5
@@ -304,7 +304,12 @@ def main() -> None:
     ap.add_argument("--mode", choices=["static", "revealed"], default="static", help="see the module docstring")
     ap.add_argument("--only", choices=["quality", "gaps", "gaps-full", "scaling", "budgets"], help="run one study")
     ap.add_argument("--alns-iterations", type=int, help="ALNS budget for every study (default: the shipped 300)")
+    ap.add_argument("--presets", help="comma-separated preset ids to run (default: all four)")
     args = ap.parse_args()
+    if args.presets:
+        for name in list(PRESETS):
+            if name not in args.presets.split(","):
+                del PRESETS[name]
     if args.alns_iterations:
         set_alns_iterations(args.alns_iterations)
     studies = {
