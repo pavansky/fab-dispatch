@@ -7,8 +7,11 @@ Two modes behind one interface:
   keys from the project's JWKS endpoint, or the legacy shared HS256 secret. No password
   ever reaches this service.
 * ``demo`` (local development): a one-click sign-in issues a short-lived token signed
-  with ``FAB_AUTH_SECRET``. Settings refuse this mode in production unless explicitly
-  allowed, so it cannot leak into a real deployment.
+  with ``FAB_AUTH_SECRET``. Settings refuse this mode in any environment other than
+  ``local`` or ``test`` (staging and production included) unless
+  ``FAB_ALLOW_DEMO_AUTH_IN_PRODUCTION`` opts in, and then only with a non-default secret.
+  A deployment that sets ``FAB_ENV=local`` on a public host still gets demo sign-in, so
+  ``FAB_ENV`` must be set truthfully (on Vercel it defaults to ``production``).
 
 Guests (Supabase anonymous sign-in, no email) get ``FAB_GUEST_ROLE``, or are refused when
 it's ``none``; that lets a public demo open in one click without weakening named accounts.
@@ -112,7 +115,11 @@ def _verify_supabase(token: str, settings: Settings) -> User:
     role = meta.get("role")
     if role not in ROLE_RANK:
         role = "dispatcher" if email in {e.lower() for e in settings.dispatcher_emails} else settings.default_role
-    fabs = meta.get("fabs") or settings.default_fabs
+    # Presence, not truthiness: an admin setting ``fabs: []`` revokes access to every fab; only a
+    # user without the key falls back to the default (["*"] on the public demo: synthetic fabs).
+    fabs = meta.get("fabs", settings.default_fabs)
+    if not isinstance(fabs, list) or not all(isinstance(f, str) for f in fabs):
+        raise ValueError("app_metadata.fabs must be a list of fab ids")
     return User(id=claims["sub"], email=email or claims["sub"], role=role, fabs=list(fabs), provider="supabase")
 
 

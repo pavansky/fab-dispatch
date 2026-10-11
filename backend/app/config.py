@@ -16,11 +16,15 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Published in this repository, so it may sign tokens only where nothing real is at stake.
+DEFAULT_AUTH_SECRET = "local-demo-signing-secret-not-for-production-use"
+DEMO_AUTH_ENVS = frozenset({"local", "test"})  # where demo sign-in needs no opt-in
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="FAB_", env_file=".env", extra="ignore")
 
-    env: str = Field("local", description="local | test | production")
+    env: str = Field("local", description="local | test | staging | production; demo auth only in local/test")
     database_url: str = Field("sqlite:///./data/fab.db", description="sqlite:///path or postgresql://...")
     db_schema: str = Field(
         "public", pattern=r"^[a-z_][a-z0-9_]{0,62}$", description="Postgres schema; lets UAT share a database safely"
@@ -57,10 +61,16 @@ class Settings(BaseSettings):
 
     # ---- authentication ------------------------------------------------------------
     auth_mode: Literal["demo", "supabase"] = Field(
-        "demo", description="demo = one-click local sign-in (refused in production); supabase = Supabase Auth"
+        "demo",
+        description="demo = one-click local sign-in (refused outside local/test unless opted in); "
+        "supabase = Supabase Auth",
     )
-    auth_secret: str = Field("local-demo-signing-secret-not-for-production-use", description="signs demo-mode tokens")
-    allow_demo_auth_in_production: bool = Field(False, description="explicit opt-in for a public demo deployment")
+    auth_secret: str = Field(DEFAULT_AUTH_SECRET, description="signs demo-mode tokens")
+    allow_demo_auth_in_production: bool = Field(
+        False,
+        description="explicit opt-in for demo auth outside local/test (a public demo deployment); "
+        "needs a non-default FAB_AUTH_SECRET",
+    )
     supabase_url: str | None = Field(None, validation_alias=AliasChoices("FAB_SUPABASE_URL", "SUPABASE_URL"))
     supabase_publishable_key: str | None = Field(
         None,
@@ -143,20 +153,22 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _auth_safe(self) -> Settings:
-        """Fail closed: demo sign-in must never be reachable in production by accident."""
-        if self.env == "production" and self.auth_mode == "demo" and not self.allow_demo_auth_in_production:
-            raise ValueError(
-                "FAB_AUTH_MODE=demo is refused in production; use supabase "
-                "(or set FAB_ALLOW_DEMO_AUTH_IN_PRODUCTION=true for a public demo)"
-            )
+        """Fail closed: demo sign-in is for local development and tests. Any other environment
+        (staging, uat, production, or a typo) refuses it unless explicitly opted in, and never
+        accepts the signing secret that is published in this repository."""
         if self.auth_mode == "supabase" and not self.supabase_url:
             raise ValueError("FAB_AUTH_MODE=supabase needs SUPABASE_URL")
-        if (
-            self.env == "production"
-            and self.auth_mode == "demo"
-            and self.auth_secret == "local-demo-signing-secret-not-for-production-use"
-        ):
-            raise ValueError("set FAB_AUTH_SECRET when demo auth is allowed in production")
+        if self.auth_mode != "demo" or self.env in DEMO_AUTH_ENVS:
+            return self
+        if not self.allow_demo_auth_in_production:
+            raise ValueError(
+                f"FAB_AUTH_MODE=demo is refused outside local/test (FAB_ENV={self.env}); use supabase "
+                "(or set FAB_ALLOW_DEMO_AUTH_IN_PRODUCTION=true for a public demo)"
+            )
+        if self.auth_secret == DEFAULT_AUTH_SECRET:
+            raise ValueError(
+                f"set FAB_AUTH_SECRET: the default demo secret is refused outside local/test (FAB_ENV={self.env})"
+            )
         return self
 
     @property
