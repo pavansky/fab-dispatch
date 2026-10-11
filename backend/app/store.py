@@ -215,6 +215,7 @@ APP_TABLES = (
 )
 PRESENCE_WINDOW_S = 30
 FEEDBACK_DAYS = 180  # assistant feedback retention
+FEEDBACK_DEDUP_S = 24 * 3600  # one rating per user and question within this window: later ones update it
 DELETED_USER = "a deleted user"
 ASSIGNMENT_COLUMNS = ("job_id", "engineer_id", "status", "skill", "priority", "tool", "start_min", "end_min")
 
@@ -316,10 +317,18 @@ class Store(ABC):
     def prune(self, plan_days: int = 7, shift_days: int = 30, idempotency_hours: int = 24) -> dict[str, int]: ...
 
     @abstractmethod
-    def add_feedback(self, record: dict) -> None: ...
+    def add_feedback(self, record: dict) -> None:
+        """Record a rating. A second rating by the same user of the same question within
+        ``FEEDBACK_DEDUP_S`` replaces the first instead of adding a row."""
 
     @abstractmethod
     def feedback_stats(self, days: int = 30) -> list[dict]: ...
+
+    @abstractmethod
+    def recent_feedback(self, days: int = 30, helpful: bool | None = None, limit: int = 500) -> list[dict]:
+        """Ratings in the window, newest first, optionally only helpful or only unhelpful ones.
+        Each has question, intent, helpful, comment, citations, provider and created_at; never
+        the user id, since the export feeds the evaluation set."""
 
     def delete_auth_user(self, user_id: str) -> bool:
         """Remove the sign-in account itself, where the store also holds accounts (Supabase)."""
@@ -625,19 +634,29 @@ class SQLiteStore(Store):
         return out
 
     def add_feedback(self, record: dict) -> None:
+        fields = (
+            record["intent"],
+            int(record["helpful"]),
+            record.get("comment", ""),
+            json.dumps(record.get("citations", [])),
+            record.get("provider", "local"),
+        )
+        earlier = self._q(
+            """SELECT id FROM assistant_feedback WHERE user_id = ? AND question = ? AND created_at >= ?
+               ORDER BY id DESC LIMIT 1""",
+            (record["user_id"], record["question"], _ago(FEEDBACK_DEDUP_S)),
+        )
+        if earlier:
+            self._q(
+                """UPDATE assistant_feedback SET created_at = ?, intent = ?, helpful = ?, comment = ?, citations = ?,
+                   provider = ? WHERE id = ?""",
+                (_now(), *fields, earlier[0]["id"]),
+            )
+            return
         self._q(
-            """INSERT INTO assistant_feedback (created_at, user_id, intent, helpful, question, comment, citations,
+            """INSERT INTO assistant_feedback (created_at, user_id, question, intent, helpful, comment, citations,
                provider) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                _now(),
-                record["user_id"],
-                record["intent"],
-                int(record["helpful"]),
-                record["question"],
-                record.get("comment", ""),
-                json.dumps(record.get("citations", [])),
-                record.get("provider", "local"),
-            ),
+            (_now(), record["user_id"], record["question"], *fields),
         )
 
     def feedback_stats(self, days: int = 30) -> list[dict]:
@@ -647,6 +666,18 @@ class SQLiteStore(Store):
             (_ago(days * 86400),),
         )
         return [{"intent": r["intent"], "total": r["total"], "helpful": r["helpful"] or 0} for r in rows]
+
+    def recent_feedback(self, days: int = 30, helpful: bool | None = None, limit: int = 500) -> list[dict]:
+        where, args = "created_at >= ?", [_ago(days * 86400)]
+        if helpful is not None:
+            where += " AND helpful = ?"
+            args.append(int(helpful))
+        rows = self._q(
+            f"""SELECT created_at, question, intent, helpful, comment, citations, provider FROM assistant_feedback
+                WHERE {where} ORDER BY id DESC LIMIT ?""",
+            (*args, limit),
+        )
+        return [{**dict(r), "helpful": bool(r["helpful"]), "citations": json.loads(r["citations"])} for r in rows]
 
 
 # ----------------------------------------------------------------------------- Postgres
@@ -1044,18 +1075,29 @@ class PostgresStore(Store):
         return out
 
     def add_feedback(self, record: dict) -> None:
+        fields = (
+            record["intent"],
+            bool(record["helpful"]),
+            record.get("comment", ""),
+            json.dumps(record.get("citations", [])),
+            record.get("provider", "local"),
+        )
+        earlier = self._q(
+            """SELECT id FROM assistant_feedback WHERE user_id = %s AND question = %s
+               AND created_at >= now() - make_interval(secs => %s) ORDER BY id DESC LIMIT 1""",
+            (record["user_id"], record["question"], FEEDBACK_DEDUP_S),
+        )
+        if earlier:
+            self._q(
+                """UPDATE assistant_feedback SET created_at = now(), intent = %s, helpful = %s, comment = %s,
+                   citations = %s, provider = %s WHERE id = %s""",
+                (*fields, earlier[0]["id"]),
+            )
+            return
         self._q(
-            """INSERT INTO assistant_feedback (user_id, intent, helpful, question, comment, citations, provider)
+            """INSERT INTO assistant_feedback (user_id, question, intent, helpful, comment, citations, provider)
                VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            (
-                record["user_id"],
-                record["intent"],
-                bool(record["helpful"]),
-                record["question"],
-                record.get("comment", ""),
-                json.dumps(record.get("citations", [])),
-                record.get("provider", "local"),
-            ),
+            (record["user_id"], record["question"], *fields),
         )
 
     def feedback_stats(self, days: int = 30) -> list[dict]:
@@ -1066,6 +1108,28 @@ class PostgresStore(Store):
             (days,),
         )
         return [{"intent": r["intent"], "total": r["total"], "helpful": r["helpful"]} for r in rows]
+
+    def recent_feedback(self, days: int = 30, helpful: bool | None = None, limit: int = 500) -> list[dict]:
+        where, args = "created_at >= now() - make_interval(days => %s)", [days]
+        if helpful is not None:
+            where += " AND helpful = %s"
+            args.append(bool(helpful))
+        rows = self._q(
+            f"""SELECT created_at, question, intent, helpful, comment, citations, provider FROM assistant_feedback
+                WHERE {where} ORDER BY id DESC LIMIT %s""",
+            (*args, limit),
+        )
+        out = []
+        for r in rows:
+            cites = r["citations"]
+            out.append(
+                {
+                    **r,
+                    "created_at": str(r["created_at"]),
+                    "citations": cites if isinstance(cites, list) else json.loads(cites),
+                }
+            )
+        return out
 
 
 def open_store(url: str, schema: str = "public") -> Store:
