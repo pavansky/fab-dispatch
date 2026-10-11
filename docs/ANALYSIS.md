@@ -278,18 +278,22 @@ downs). At hard capacity limits the gap closes again, because nothing can be don
 ## 4. Why these algorithms, and not the newest ones in the literature?
 
 I checked the current research (October 2026) before settling the lineup. Short answer: the lineup
-already contains the state of the art for this problem class, I measured the headroom above it
-exactly instead of guessing (2.7% on average), and the open research frontier is somewhere else
-(uncertainty, not search).
+contains the state of the art for the *routing core* of this problem (the VRPTW), I measured the
+headroom above it exactly instead of guessing (2.7% on average), and the open research frontier is
+somewhere else (uncertainty, not search). One honest caveat up front: the problem class here is the
+technician routing and scheduling problem (TRSP), also studied as workforce scheduling and routing
+(WSRP), and none of these strategies was run on a published TRSP instance set. The benchmarks that
+back the "state of the art" label are VRPTW benchmarks, so the label covers the routing engine, not
+the whole problem.
 
-**The lineup spans every family, including the current best.**
+**The lineup spans every family, and its best member is the strongest open-source VRPTW engine.**
 
 | Family | Here | Why it's in |
 |---|---|---|
 | Construction | Greedy, Regret-2 | What dispatchers do by hand; the baseline every method must beat |
 | Assignment | Hungarian | Optimal one-job-per-round matching; best response time and fairness |
 | Large neighbourhood search | ALNS | Optimises *our* exact objective; the family that recent LLM-designed operators improve ([VRPAgent](https://arxiv.org/pdf/2510.07073)) |
-| Hybrid genetic search | PyVRP | The state of the art for VRPTW: first in the [2021 DIMACS VRPTW challenge](http://dimacs.rutgers.edu/news_archive/challenge) and the static [EURO meets NeurIPS 2022](https://arxiv.org/abs/2403.13795) competition |
+| Iterated local search | PyVRP | The pinned `pyvrp==0.14.0` ships iterated local search (ILS) only, with no population or genetic module. The competition wins belong to the hybrid genetic search (HGS) described in the [2024 PyVRP paper](https://arxiv.org/abs/2403.13795): first in the [2021 DIMACS VRPTW challenge](http://dimacs.rutgers.edu/programs/challenge/vrp/vrptw/) and in the static track of the [EURO meets NeurIPS 2022 competition](https://github.com/ortec/euro-neurips-vrp-2022-quickstart). The ILS is built on the same library's C++ local search and is what `pyvrp.solve` runs in this release |
 | Exact | Set-partitioning MILP | Proves the optimum at full size, so every gap is measured, not guessed |
 
 **The headroom is measured, and it's modest.** At full size, proven optimal on 80 shifts, the best
@@ -299,19 +303,37 @@ to plan ahead. So the open question isn't "which newer heuristic?", it's how to 
 *fast enough for live dispatch*: column generation (pricing routes instead of enumerating all of
 them) is the established way to do that, and it's the next step for the solver.
 
-**Why not neural solvers?** Learned routing solvers report their results *relative to* PyVRP's HGS
-on the VRPTW, and the best of them match or narrowly beat it
-([Neural Deconstruction Search](https://arxiv.org/pdf/2501.03715),
-[RouteFinder](https://arxiv.org/pdf/2406.15007v2)). They need GPU training for each instance
-distribution, can't express this objective's terms (convex workload balance, plan stability,
-certification levels), and give no per-decision explanation, which the brief requires.
+**Why not neural solvers?** Learned routing solvers are measured against PyVRP's HGS on the VRPTW
+([Neural Deconstruction Search](https://arxiv.org/pdf/2501.03715) reports matching or surpassing
+state-of-the-art operations research methods on three VRP variants), or against earlier learned solvers: [RouteFinder](https://arxiv.org/pdf/2406.15007v2)'s
+claim is beating prior learning-based methods across many VRP variants, not beating HGS. They need
+GPU training for each instance distribution, can't express this objective's terms (convex workload
+balance, plan stability, certification levels), and give no per-decision explanation, which the
+brief requires.
 
-**Why not LLM-evolved heuristics?** Methods like [ReEvo and EoH](https://arxiv.org/pdf/2409.16867),
+**Why not LLM-evolved heuristics?** Methods like [EoH](https://arxiv.org/abs/2401.02051) (Liu et
+al., ICML 2024), [ReEvo](https://arxiv.org/abs/2402.01145) (Ye et al., NeurIPS 2024), their
+multi-objective successor [MEoH](https://arxiv.org/abs/2409.16867) (Yao et al., AAAI 2025),
 [VRPAgent](https://arxiv.org/pdf/2510.07073) and [PyVRP+](https://arxiv.org/abs/2604.07872)
 (up to 2.7% better than HGS on hard variants) are design-time tools: an LLM evolves operators
 offline, evaluated by a solver like this one. They're a natural extension, evolving ALNS's destroy
 and repair operators against this evaluator, not a replacement strategy to run per request. The
 exact optimum here gives that kind of work something rare: a measured target (ALNS's 5.7% gap).
+
+**The TRSP literature this sits in.** The skills-by-levels model here (a certification per tool
+family, levels 1–3, a minimum level per job) is the one introduced for the ROADEF 2007 challenge and
+formalised by Cordeau, Laporte, Pasin and Ropke (2010, *Journal of Scheduling* 13:393–409,
+"Scheduling technicians and tasks in a telecommunications company", with a construction heuristic
+and ALNS). Pillac, Guéret and Medaglia (2013, *Optimization Letters* 7:1525–1535) named the TRSP and
+solved it with a parallel ALNS-based matheuristic; Kovacs et al. (2012, D4) applied ALNS to service
+technician routing with skills. Xie, Potts and Bektaş (2017, *Journal of Heuristics* 23:471–500)
+solved workforce scheduling and routing with iterated local search, the same family as the PyVRP
+strategy here. Two surveys map the class: Castillo-Salazar, Landa-Silva and Qu (2016, *Annals of
+Operations Research* 239:39–67, WSRP) and Paraskevopoulos, Laporte, Repoussis and Tarantilis (2017,
+*European Journal of Operational Research* 263:737–754, resource-constrained routing and scheduling).
+The strategies here were not run on any of those papers' instances; the comparison is internal, on
+synthetic shifts, against a proven optimum. Running ALNS and the PyVRP mapping on a published TRSP
+set would be the way to place them against that literature, and is listed in section 5.
 
 **Where the real frontier is: uncertainty.** Recent technician-routing research has moved from
 static to dynamic, stochastic problems: requests arriving during the day, uncertain repair times,
@@ -328,6 +350,34 @@ in anticipating what hasn't happened yet:
 
 ## 5. Limitations and next steps
 
+### What the model does not capture
+
+The constraint engine is deliberately small, and some of its simplifications would be wrong in a
+real fab. Each of these shapes the results above:
+
+- **Hard start-by windows, no lateness option.** A job either starts inside its window or is left
+  unserved; there is no penalty for starting a bottleneck down ten minutes late. Together with the
+  hard `max_jobs` cap this makes the *proven optimum* abandon priority-3 litho downs while a
+  certified engineer sits idle: in the excursion preset, seed 2, J022 and J024 are dropped because no
+  engineer can reach them inside the window, and the model has no way to prefer "late" over "never".
+  A soft window with a lateness cost is the standard fix in the technician-routing literature.
+- **`max_jobs` of 4–6 is a generator constant, not a fab fact.** Each synthetic engineer gets
+  `max_jobs` drawn from {4, 5, 5, 6}. Real fabs limit a shift by hours, fatigue rules and handover,
+  not by a job count; the cap exists so route enumeration stays finite for the exact solver.
+- **One engineer per job.** Two-person jobs (some PMs, source rebuilds, heavy lifts) are not modelled.
+- **No parts, no stores.** A repair is assumed to have its part on hand.
+- **No handover, breaks, gowning or sub-fab travel.** Shift start to shift end is uninterrupted
+  working time at floor level; a trip to the sub-fab or a gowning cycle between bays costs nothing.
+- **Fixed durations regardless of who is sent.** A level-3 engineer and a level-1 engineer take the
+  same time; the only skill effect is eligibility (and the over-qualification cost).
+- **Manhattan distance on open rectangles.** Walking is axis-aligned distance between points; bay
+  walls, aisles, doors and bay-to-bay routing are not drawn, so some walks are optimistic.
+- **The fault catalogue's durations are illustrative.** Several standard estimates are short for the
+  task named (an ESC swap at 180 min, a chamber wet clean and season at 240, a CD-SEM gun tip at
+  140), and every family draws PM durations from the same {90, 120, 180, 240}. They are placeholders
+  that make the shifts interesting at 14 × 45; a real fab supplies its own catalogue in the profile,
+  and the benchmark figures scale with whatever it supplies.
+
 - **Synthetic data.** Real MES events and maintenance history would replace the generator and the
   repair catalogue. The interfaces (`Scenario`, `report_job`, `RepairIndex`) are where they'd plug in.
 - **Stochastic durations.** The repair-history prediction gives a p10–p90 range. Planning against p80
@@ -339,3 +389,6 @@ in anticipating what hasn't happened yet:
   actually operates.
 - **Scaling past one fab.** ALNS's pure-Python iterations slow past about 100 jobs (it hits the 3 s cap
   at 200). PyVRP, or a compiled ALNS, would be the path.
+- **No external benchmark.** Every gap here is measured on this generator's shifts. Running the
+  strategies on a published technician routing and scheduling instance set (section 4) would show
+  where they stand against that literature, not only against each other.

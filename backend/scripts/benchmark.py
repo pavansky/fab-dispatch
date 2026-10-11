@@ -48,12 +48,13 @@ def quality(seeds: int, engineers: int, jobs: int) -> None:
             for a, m in res.items():
                 wins[a] += m["objective"] <= best + 1e-6
                 for k, _ in COLUMNS:
-                    rows[a][k].append(m[k])
+                    if m[k] is not None:  # critical_coverage_pct is null when a shift has no priority-3 work
+                        rows[a][k].append(m[k])
         print(f"\n#### {PRESETS[preset].label}\n")
         print("| Strategy | " + " | ".join(t for _, t in COLUMNS) + " | Lowest cost |")
         print("|---" * (len(COLUMNS) + 2) + "|")
         for a in ALGORITHMS:
-            cells = [f"{statistics.fmean(rows[a][k]):.1f}" for k, _ in COLUMNS]
+            cells = [f"{statistics.fmean(rows[a][k]):.1f}" if rows[a][k] else "n/a" for k, _ in COLUMNS]
             print(f"| {a} | " + " | ".join(cells) + f" | {wins[a]}/{seeds} |")
 
 

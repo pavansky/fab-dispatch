@@ -49,6 +49,11 @@ class Preset(BaseModel):
     down_share: float = Field(ge=0, le=1, description="unplanned tool-downs vs PMs")
     sla_critical: int = Field(gt=0, description="minutes allowed to start a bottleneck tool-down")
     sla_down: int = Field(gt=0)
+    cross_training: list[int] = Field(
+        [1, 1, 2],
+        min_length=1,
+        description="how many extra tool families an engineer is certified on; one value is drawn per engineer",
+    )
 
 
 class Shift(BaseModel):
@@ -93,6 +98,8 @@ class FabProfile(BaseModel):
             unknown = set(p.family_mix) - ids
             if unknown:
                 raise ValueError(f"preset {name} mixes unknown families {sorted(unknown)}")
+            if any(not 0 <= k < len(ids) for k in p.cross_training):
+                raise ValueError(f"preset {name}: cross_training must be between 0 and {len(ids) - 1} extra families")
         return self
 
     @property
@@ -113,7 +120,15 @@ class FabProfile(BaseModel):
             "walk_m_per_min": self.walk_m_per_min,
             "constraint_family": self.constraint_family,
             "families": [{"id": f.id, "label": f.label, "prefix": f.prefix, "area": f.area} for f in self.families],
-            "presets": {k: {"label": p.label, "description": p.description} for k, p in self.presets.items()},
+            "presets": {
+                k: {
+                    "label": p.label,
+                    "description": p.description,
+                    "sla_critical": p.sla_critical,
+                    "sla_down": p.sla_down,
+                }
+                for k, p in self.presets.items()
+            },
         }
 
 

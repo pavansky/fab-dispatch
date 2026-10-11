@@ -267,7 +267,9 @@ def _family(profile: FabProfile, family_id: str) -> str:
         return family_id
 
 
-def _fmt(v: float) -> str:
+def _fmt(v: float | None) -> str:
+    if v is None:
+        return "n/a"
     return f"{v:,.1f}".rstrip("0").rstrip(".") if isinstance(v, float) else str(v)
 
 
@@ -726,7 +728,7 @@ class Assistant:
         rows = []
         for a, r in plans.items():
             name = f"**{ALGO_NAMES[a]}**" if a == highlight else ALGO_NAMES[a]
-            rows.append(f"| {name} | " + " | ".join(_fmt(float(r.metrics[k])) for _, k in cols) + " |")
+            rows.append(f"| {name} | " + " | ".join(_fmt(r.metrics[k]) for _, k in cols) + " |")
         return head + "\n" + "\n".join(rows)
 
     def suggest(self, ctx: AskContext) -> list[str]:

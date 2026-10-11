@@ -61,8 +61,8 @@ per hour. Engineers are certified per tool family at levels 1–3, and the scarc
 industrial AI company that works on equipment reliability.
 
 ### Why isn't this a simple one-to-one assignment?
-Because an engineer does 4–6 jobs in a shift, and the **order** decides whether later time windows
-are reachable. Assigning job A to an engineer changes when they can start job B. So each engineer
+Because an engineer does several jobs in a shift (the generator caps each at 4–6, a modelling
+choice, not a fab statistic), and the **order** decides whether later time windows are reachable. Assigning job A to an engineer changes when they can start job B. So each engineer
 needs an ordered route, which makes this a vehicle routing problem with time windows (VRPTW) with
 skills, known in the literature as the technician routing and scheduling problem (TRSP). Decision
 D1 records this.
@@ -95,7 +95,7 @@ Four presets per fab, each with a reason to exist:
 | Normal shift | Typical mix of PMs and tool-downs; staffing roughly matches load |
 | Lithography crunch | Scanner problems pile up while few engineers hold litho certifications |
 | Excursion / surge | Mostly unplanned downs (90%) with tight response targets (25 min critical) |
-| Overstaffed | Plenty of engineers; the question is cost, not coverage |
+| Overstaffed | More certified engineers than the work needs (a larger bottleneck-certified share, broader cross-training, wider windows); the question is cost, not coverage |
 
 ---
 
@@ -113,7 +113,8 @@ Four presets per fab, each with a reason to exist:
 | **AllocationResult** | assignments, unassigned jobs with reasons, routes, metrics, solver statistics | One per strategy |
 | **Fab profile** | floor plan, tool families with bay areas, fault catalogue, shift pattern, presets | JSON, one per fab (D17) |
 
-Times are minutes since shift start, and positions are metres on a 400 × 240 m floor.
+Times are minutes since shift start, and positions are metres on the floor whose size the fab
+profile sets (400 × 240 m for fab 1, 300 × 180 m for fab 2).
 
 ### How is it persisted?
 Two models. The **write model** is one JSON document per live shift with an optimistic `version`,
@@ -177,8 +178,10 @@ that's what the user wants, for example "never give up bottleneck coverage".
 ## 4. The algorithms
 
 ### Why these five?
-They span every family of method, so the comparison means something, and they include the current
-state of the art (ANALYSIS §4, D4, D33):
+They span every family of method, so the comparison means something, and they include the strongest
+open-source engine for the routing core of the problem, the VRPTW (ANALYSIS §4, D4, D33). The
+problem class itself is the technician routing and scheduling problem, and no strategy here was run
+on its published instances, so the comparison is internal, against a proven optimum.
 
 | Strategy | Family | How it works | Strength | Weakness |
 |---|---|---|---|---|
@@ -186,7 +189,7 @@ state of the art (ANALYSIS §4, D4, D33):
 | **Hungarian in rounds** | Assignment | Each round builds an engineers × jobs matrix of marginal insertion costs and solves it optimally (`linear_sum_assignment`); every engineer gains at most one job per round | Fastest response to tool-downs; most even workload | Myopic across rounds; highest idle wait |
 | **Regret-2** | Construction | Place first the job with the biggest gap between its best and second-best engineer; a job only one engineer can do has infinite regret | Protects scarce certifications | Still one pass |
 | **ALNS** | Large neighbourhood search | From the regret-2 plan: destroy (random, worst, related/Shaw, route) and repair (greedy or regret), simulated-annealing acceptance, operator weights adapt | Optimises our exact objective, including the convex balance term | Pure Python; stalls on very large single problems |
-| **PyVRP** | Hybrid genetic search / iterated local search | The problem is mapped onto PyVRP (vehicles, optional clients with prizes, per-certification routing profiles, open routes), then the result is replayed through our planner | State of the art for VRPTW; won the 2021 DIMACS VRPTW challenge | Can't express the convex balance term natively |
+| **PyVRP** | Iterated local search (the PyVRP library) | The problem is mapped onto PyVRP (vehicles, optional clients with prizes, per-certification routing profiles, open routes), then the result is replayed through our planner | The pinned `pyvrp==0.14.0` runs ILS from the library whose hybrid genetic search won the 2021 DIMACS VRPTW challenge and the static EURO-NeurIPS 2022 track (the wins are HGS's, not this ILS's) | Can't express the convex balance term natively |
 | **Exact** | Set partitioning MILP | Enumerate every feasible route per engineer, then choose at most one route per engineer covering each job at most once (HiGHS) | Proves the optimum | Enumeration explodes past about 20 engineers |
 
 ### How is PyVRP made comparable to the others?
@@ -200,12 +203,14 @@ Heavier install (pandas, protobuf), slower cold starts on serverless, and weaker
 time limits on the published benchmarks (D4).
 
 ### Why not neural or LLM-designed solvers?
-Checked against current research (ANALYSIS §4, D33). Learned solvers such as Neural Deconstruction
-Search and RouteFinder report results *relative to* PyVRP's HGS on the VRPTW and at best match or
-narrowly beat it. They need GPU training for each instance distribution, can't express this
+Checked against current research (ANALYSIS §4, D33). Learned solvers are measured against PyVRP's
+HGS on the VRPTW (Neural Deconstruction Search reports matching or surpassing state-of-the-art
+operations research methods) or
+against earlier learned solvers (RouteFinder's claim is beating prior learning-based methods across
+VRP variants, not HGS). They need GPU training for each instance distribution, can't express this
 objective's terms, and give no per-decision explanation, which the brief requires. LLM-evolved
-heuristics (ReEvo, EoH, VRPAgent, PyVRP+) are design-time tools for improving operators offline, a
-natural extension for ALNS, not a strategy to run per request.
+heuristics (EoH, ReEvo, MEoH, VRPAgent, PyVRP+) are design-time tools for improving operators
+offline, a natural extension for ALNS, not a strategy to run per request.
 
 ### Are the solvers deterministic?
 Yes. Seeds are fixed, and search stops on an **iteration budget** (ALNS 300, PyVRP 1,000), with time
@@ -792,7 +797,7 @@ else.
 | **Bottleneck tool** | A tool whose downtime limits the fab's output, typically a lithography scanner |
 | **Certification level** | 1–3 per tool family; a job needs a minimum level |
 | **ALNS** | Adaptive large neighbourhood search: destroy and repair parts of a plan, adapting which operators to use |
-| **HGS / ILS** | Hybrid genetic search / iterated local search, the methods behind PyVRP |
+| **HGS / ILS** | Hybrid genetic search, the PyVRP method that won the VRPTW competitions; iterated local search, the method the pinned PyVRP release runs on the same local search |
 | **Regret** | The gap between a job's best and second-best option; high regret means place it first |
 | **Set partitioning** | Choosing a set of routes that covers each job at most once at minimum cost |
 | **Column generation** | Solving an LP over a subset of routes and using its prices to find routes worth adding |

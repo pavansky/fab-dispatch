@@ -19,7 +19,8 @@ it. Presets come from your fab's profile, for example *Normal shift*, *Lithograp
 
 Turn on **Report a job by tapping the floor**, choose its type and when it's reported, then click
 inside a tool area. A new job appears there, every strategy re-plans, and the new job opens in the
-inspector. Response windows: bottleneck down 45 min, tool down 120 min, PM 240 min.
+inspector. Response windows follow the preset (Fab 1 normal shift: bottleneck down 45 min, tool
+down 120 min; Fab 2: 40 and 120; an excursion is tighter) and a PM gets 240 min.
 
 ## Take an engineer off shift
 
