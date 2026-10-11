@@ -141,7 +141,7 @@ def run_pyvrp(
                     f"{len(p.routes[tech_id])} of {tech_id}'s route, at marginal cost {ins.cost:.1f}."
                 ),
             )
-    # Anything PyVRP left out that still fits gets a regret-insertion pass.
+    # Anything PyVRP left out that still fits and pays for itself (cost < 0) gets a regret-insertion pass.
     for jid, d in run_regret(p).items():
         d.explanation = "Added after PyVRP by regret repair: " + d.explanation
         decisions[jid] = d

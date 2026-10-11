@@ -189,7 +189,7 @@ def _greedy_repair(p: Planner, rng: random.Random) -> None:
     pending.sort(key=lambda j: -p.jobs[j].priority)
     for j in pending:
         feasible, _ = p.scan(j)
-        if feasible:
+        if feasible and feasible[0].cost < 0:
             p.commit(feasible[0])
 
 

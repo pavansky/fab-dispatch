@@ -16,8 +16,8 @@ def run_greedy(p: Planner) -> dict[str, Decision]:
     decisions: dict[str, Decision] = {}
     for n, job in enumerate(order, 1):
         feasible, rejected = p.scan(job.id)
-        if not feasible:
-            continue
+        if not feasible or feasible[0].cost >= 0:
+            continue  # nobody can take it, or serving it costs more than it earns
         best = feasible[0]
         p.commit(best)
         decisions[job.id] = decision(

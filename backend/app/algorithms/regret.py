@@ -26,6 +26,7 @@ def run_regret(p: Planner) -> dict[str, Decision]:
         best_job, best_key, best_scan = None, None, None
         for j in sorted(open_jobs):
             feasible, rejected = p.scan(j)
+            feasible = [i for i in feasible if i.cost < 0]  # only insertions that pay for themselves
             if not feasible:
                 continue
             regret = feasible[1].cost - feasible[0].cost if len(feasible) > 1 else SOLE_OPTION_REGRET

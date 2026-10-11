@@ -11,6 +11,12 @@ Algorithms only ever ask two questions:
 
 Because every algorithm uses the same feasibility check and cost function, their results
 are directly comparable: the only difference is the *order* and *scope* of decisions.
+
+Serving a job is optional. ``total_cost`` charges the reward of every unserved job, so an
+insertion's cost already nets that reward off: a cost >= 0 means the detour (plus workload
+and stability) costs more than serving the job earns, and the plan is cheaper without it.
+So every method commits an insertion only when its cost is < 0, exactly as the exact
+solver is free to leave a money-losing job out.
 """
 
 from __future__ import annotations

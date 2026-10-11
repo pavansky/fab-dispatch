@@ -47,6 +47,23 @@ def test_unassigned_reason_names_capacity_only_when_it_is_the_cause():
     assert "none can fit it in: 1 already at max jobs" in res.unassigned[0].reason
 
 
+@pytest.mark.parametrize("algorithm", ["greedy", "hungarian", "regret", "alns", "pyvrp"])
+def test_a_job_that_costs_more_than_it_earns_is_left_out(algorithm):
+    """Far: a PM (reward 60) 1.95 km past the other job, so the walk alone costs 78 points.
+    Serving it makes the plan worse, so no method commits it, and the reason says why."""
+    sc = Scenario(
+        engineers=[Engineer(id="E1", name="a", x=0, y=0, skills={"etch": 2})],
+        jobs=[
+            Job(id="Near", x=50, y=0, skill="etch", priority=2, earliest=0, latest=100, duration=30),
+            Job(id="Far", x=2000, y=0, skill="etch", priority=1, kind="pm", earliest=0, latest=400, duration=30),
+        ],
+    )
+    res = allocate(sc, Weights(), algorithm)
+    assert [a.job_id for a in res.assignments] == ["Near"]
+    assert [u.job_id for u in res.unassigned] == ["Far"]
+    assert "leaving it out is cheaper" in res.unassigned[0].reason
+
+
 def test_uncertified_family_is_reported_not_assigned():
     sc = Scenario(
         engineers=[Engineer(id="E1", name="a", x=0, y=0, skills={"etch": 3})],
