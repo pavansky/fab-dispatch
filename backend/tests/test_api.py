@@ -128,6 +128,24 @@ def test_sse_stream_replays_events_after_cursor(scenario):
     assert "event: shift_started" in text and "event: replanned" in text
 
 
+def test_strategy_lists_are_bounded_and_deduplicated(scenario):
+    r = client.post("/api/allocate", json={"scenario": scenario, "algorithms": ["greedy"] * 2000})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid"
+    res = client.post("/api/allocate", json={"scenario": scenario, "algorithms": ["regret", "greedy", "regret"]})
+    assert [p["algorithm"] for p in res.json()] == ["regret", "greedy"]
+    assert client.post("/api/allocate", json={"scenario": scenario, "algorithms": ["x" * 10_000]}).status_code == 422
+    body = {"preset": "normal", "seeds": 1, "n_jobs": 5, "algorithms": ["greedy"] * 6}
+    assert client.post("/api/benchmark", json=body).status_code == 422
+
+
+def test_benchmark_work_is_capped_to_fit_the_serverless_time_limit():
+    from app.routes.planning import BENCHMARK_MAX_JOB_RUNS
+
+    r = client.post("/api/benchmark", json={"seeds": 30, "n_engineers": 60, "n_jobs": 120})
+    assert r.status_code == 422 and "seeds x n_jobs" in r.json()["error"]["message"]
+    assert 30 * 120 > BENCHMARK_MAX_JOB_RUNS >= 20 * 45  # the UI's largest default (20 seeds of 45 jobs) fits
+
+
 def test_router_404_and_405_use_the_error_envelope():
     r = anonymous.get("/api/no-such-endpoint")
     assert r.status_code == 404 and r.json()["error"]["code"] == "not_found" and "detail" not in r.json()
