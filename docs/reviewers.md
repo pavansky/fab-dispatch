@@ -36,7 +36,7 @@ Open the [live app](https://fab-dispatch.vercel.app) and click **Try it as a gue
 ## By the numbers
 
 - **5** strategies plus an exact optimum, on **2** fabs with different floors, shifts and bottlenecks
-- **765** automated tests across pytest, Vitest and Playwright (desktop and phone, with WCAG checks);
+- **766** automated tests across pytest, Vitest and Playwright (desktop and phone, with WCAG checks);
   the count is checked by `backend/tests/test_release.py`, so it is as current as the commit
 - **Every** assistant evaluation question must cite the right article and every off-topic one must be
   refused (`backend/tests/test_assistant.py`); each CI run publishes the scorecard in its job summary

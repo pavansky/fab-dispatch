@@ -17,7 +17,7 @@ greedy to a state-of-the-art vehicle-routing solver, compared live, with every d
 [![Docs](https://github.com/pavansky/fab-dispatch/actions/workflows/docs.yml/badge.svg?branch=main)](https://pavansky.github.io/fab-dispatch/)
 [![Uptime](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml)
 [![Release](https://img.shields.io/github/v/release/pavansky/fab-dispatch?color=020202)](CHANGELOG.md)
-[![Tests](https://img.shields.io/badge/tests-765-ef6f2e)](#testing)
+[![Tests](https://img.shields.io/badge/tests-766-ef6f2e)](#testing)
 [![License: MIT](https://img.shields.io/badge/license-MIT-020202)](LICENSE)
 
 [**Quick start**](#quick-start) · [**Review in 10 minutes**](https://pavansky.github.io/fab-dispatch/reviewers/) · [Requirements map](#requirements-map) · [Results](#results) ·
@@ -251,7 +251,7 @@ to zero, and the app would feel slower without it.
   and the rewrite is checked against the draft so it can't add facts.
 - **Works on a phone.** The controls become a drawer, the tabs scroll, the floor plan works by touch,
   and the light theme is the default.
-- **Tested at every layer.** 517 backend tests, 219 frontend component tests rendered against real API
+- **Tested at every layer.** 518 backend tests, 219 frontend component tests rendered against real API
   responses, and 29 Playwright end-to-end tests that drive the real app on desktop and on a phone,
   including WCAG 2.1 AA accessibility checks on every screen. The study scripts behind the numbers
   in [ANALYSIS.md](docs/ANALYSIS.md) are smoke-tested and coverage-counted too, and these counts
@@ -318,7 +318,7 @@ Three layers, all run in CI on every pull request (the counts below are checked 
 
 | Layer | Tool | Count | What it proves |
 |---|---|---|---|
-| Backend | pytest | **517** (the Postgres-only ones skip without `FAB_TEST_PG_URL`; 5 are slow and run on pushes to `main`) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency, the study scripts behind ANALYSIS.md |
+| Backend | pytest | **518** (the Postgres-only ones skip without `FAB_TEST_PG_URL`; 5 are slow and run on pushes to `main`) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency, the study scripts behind ANALYSIS.md |
 | Frontend components | Vitest + Testing Library | **219** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, account deletion, the crash screen, against **real API responses** |
 | End-to-end | Playwright | **29** (24 desktop, 5 phone) | The real API and UI together in Chromium: two browsers on one live shift, and axe-core WCAG 2.1 AA checks on every screen and panel |
 
@@ -496,7 +496,7 @@ backend/
   scripts/benchmark.py     reproduces every table in docs/ANALYSIS.md
   scripts/                 scale, certified-bound, duration, predictive and learned-policy studies (all smoke-tested)
   scripts/export_ui_fixtures.py   real API responses for the UI tests
-  tests/                   517 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval, the scripts)
+  tests/                   518 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval, the scripts)
 frontend/src/
   App.jsx auth.jsx api.js  workspace, sign-in, API client
   lib/                     fab context, recommendation logic, statistics, progressive planning

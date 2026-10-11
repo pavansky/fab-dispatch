@@ -61,8 +61,9 @@ def test_priority_3_means_a_tool_down_on_the_constraint_family():
 
 
 def test_overstaffed_preset_really_adds_certified_engineers():
-    """Overstaffed must mean more bottleneck-certified engineers and broader cross-training than a
-    normal shift at the same headcount, not only wider response windows."""
+    """Overstaffed must mean more bottleneck-certified engineers than a normal shift at the same
+    headcount (and never fewer skills), not only wider response windows. It is kept to one extra
+    certified engineer because every one multiplies the routes the exact proof enumerates."""
     for p in all_profiles().values():
         c = p.constraint_family
         for seed in range(3):
@@ -70,7 +71,7 @@ def test_overstaffed_preset_really_adds_certified_engineers():
             over = generate(seed, 14, 45, "overstaffed", p.id).engineers
             certified = lambda engs: sum(1 for e in engs if e.skills.get(c, 0) >= 2)
             assert certified(over) >= certified(normal) + 1 and certified(over) >= 4, (p.id, seed)
-            assert sum(len(e.skills) for e in over) > sum(len(e.skills) for e in normal), (p.id, seed)
+            assert sum(len(e.skills) for e in over) >= sum(len(e.skills) for e in normal), (p.id, seed)
 
 
 def test_profile_rejects_impossible_cross_training(fab1):
