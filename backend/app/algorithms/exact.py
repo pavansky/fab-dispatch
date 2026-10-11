@@ -30,6 +30,10 @@ from .alns import explain_final
 MAX_ROUTES = 2_000_000  # per engineer; a full-size shift needs a few thousand
 
 
+class ExactTimeout(RuntimeError):
+    """The MILP hit its time limit before proving optimality: no proof, so no plan is returned."""
+
+
 class TooLarge(ValueError):
     pass
 
@@ -89,7 +93,9 @@ def enumerate_routes(p: Planner, tech_id: str) -> dict[frozenset, tuple[float, t
     return best
 
 
-def run_exact(p: Planner) -> dict:
+def run_exact(p: Planner, time_limit_s: float | None = None) -> dict:
+    """Prove the optimum. ``time_limit_s`` caps the integer search (HiGHS cannot be interrupted
+    from Python): on the limit ``ExactTimeout`` is raised, never a non-optimal plan."""
     jobs = p.unplaced()
     j_index = {j: i for i, j in enumerate(jobs)}
     techs = list(p.techs)
@@ -115,9 +121,11 @@ def run_exact(p: Planner) -> dict:
         constraints=LinearConstraint(a, -np.inf, 1),
         integrality=np.ones(n),
         bounds=Bounds(0, 1),
-        options={"disp": False, "mip_rel_gap": 0.0},
+        options={"disp": False, "mip_rel_gap": 0.0} | ({"time_limit": float(time_limit_s)} if time_limit_s else {}),
     )
-    if res.status != 0:  # 0 = proven optimal; anything else (time limit, ...) is not a proof
+    if res.status == 1:  # time limit: the incumbent, if any, is not a proof
+        raise ExactTimeout(f"MILP hit the {time_limit_s} s time limit: {res.message}")
+    if res.status != 0:  # 0 = proven optimal; anything else is not a proof
         raise RuntimeError(f"MILP failed: {res.message}")
     for col in np.flatnonzero(res.x > 0.5):
         tid, seq = columns[col]
