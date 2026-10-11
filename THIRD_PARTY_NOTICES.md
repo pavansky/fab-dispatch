@@ -16,6 +16,7 @@ covered by the MIT license too.
 | [numpy](https://github.com/numpy/numpy) | Numerics | BSD-3-Clause (bundled parts: 0BSD, MIT, Zlib, CC0-1.0) |
 | [scipy](https://github.com/scipy/scipy) | Hungarian assignment, exact MILP (HiGHS, MIT) | BSD-3-Clause |
 | [pyvrp](https://github.com/PyVRP/PyVRP) | Vehicle-routing solver strategy | MIT |
+| [highspy](https://github.com/ERGO-Code/HiGHS) | Certified lower bounds by column generation (`scripts/certified_bound.py`) | MIT |
 | [qdrant-client](https://github.com/qdrant/qdrant-client) | Vector search for the assistant and repair history | Apache-2.0 |
 | [pyjwt](https://github.com/jpadilla/pyjwt) with [cryptography](https://github.com/pyca/cryptography) | Verifying sign-in tokens | MIT; cryptography: Apache-2.0 or BSD-3-Clause |
 | [psycopg](https://github.com/psycopg/psycopg) | Postgres driver (production) | LGPL-3.0-only, see below |
