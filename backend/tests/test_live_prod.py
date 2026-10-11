@@ -225,6 +225,73 @@ def test_retention_endpoint_requires_the_cron_secret(monkeypatch):
     assert alice.post("/api/internal/prune", headers={"Authorization": "Bearer wrong"}).status_code == 401
     r = alice.post("/api/internal/prune", headers={"Authorization": "Bearer s3cret-value"})
     assert r.status_code == 200 and "plan_cache" in r.json()["deleted"]
+    assert r.json()["deleted"]["guest_accounts"] == 0  # SQLite holds no accounts: a no-op
+
+
+def test_guest_accounts_are_pruned_only_where_an_auth_schema_exists(monkeypatch):
+    """The DELETE on auth.users is issued only on Supabase (to_regclass finds the table), never on
+    a plain Postgres such as a fab's own Neon database, and spares guests active in any fab."""
+    from contextlib import contextmanager
+
+    from app.store import PostgresStore, SQLiteStore
+
+    sqlite = SQLiteStore(":memory:")
+    sqlite.migrate()
+    assert sqlite.prune_guest_accounts(30, keep={"guest-abc123"}) == 0
+
+    class Cursor:
+        def __init__(self, has_auth):
+            self.has_auth, self.executed = has_auth, []
+
+        def execute(self, sql, args=()):
+            self.executed.append((" ".join(sql.split()), args))
+
+        def fetchone(self):
+            return {"ok": self.has_auth}
+
+        rowcount = 3
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def fake_store(has_auth):
+        store = PostgresStore.__new__(PostgresStore)
+        cursor = Cursor(has_auth)
+
+        class Conn:
+            def cursor(self):
+                return cursor
+
+        @contextmanager
+        def conn(autocommit=True):
+            yield Conn()
+
+        store._conn = conn
+        return store, cursor
+
+    plain, cur = fake_store(has_auth=False)
+    assert plain.prune_guest_accounts(30, keep={"guest-abc123"}) == 0
+    assert len(cur.executed) == 1 and "to_regclass('auth.users')" in cur.executed[0][0]
+    supabase, cur = fake_store(has_auth=True)
+    assert supabase.prune_guest_accounts(30, keep={"guest-abc123", "guest-def456"}) == 3
+    sql, args = cur.executed[1]
+    assert sql.startswith("DELETE FROM auth.users WHERE is_anonymous") and "make_interval(days => %s)" in sql
+    assert "'guest-' || left(id::text, 6) <> ALL(%s::text[])" in sql
+    assert args == (30, ["guest-abc123", "guest-def456"])
+
+
+def test_recent_actors_lists_who_started_or_watched_a_shift_lately():
+    from app.deps import get_store
+
+    sid = _shift()
+    store = get_store("fab1-300mm-logic")
+    store.touch_presence(sid, "w-1", "guest-w1w1w1")
+    actors = store.recent_actors(30)
+    assert {"dispatcher@demo.local", "guest-w1w1w1"} <= actors
+    assert store.recent_actors(0) <= actors
 
 
 def test_migrations_upgrade_a_pre_versioning_database(tmp_path):

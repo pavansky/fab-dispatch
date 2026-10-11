@@ -24,6 +24,7 @@ from ..version import APP_VERSION, COMMIT
 router = APIRouter(prefix="/api", tags=["system"])
 log = logging.getLogger("fab")
 HEALTH_CACHE_S = 10.0  # one check per instance per 10 s, however often /health is called
+GUEST_IDLE_DAYS = 30  # anonymous accounts with no sign-in and no shift activity for this long are deleted
 _health: dict = {}
 _health_lock = threading.Lock()
 
@@ -133,9 +134,15 @@ def prune(authorization: str | None = Header(None)) -> dict:
     if not secret or not hmac.compare_digest(authorization or "", f"Bearer {secret}"):
         raise HTTPException(401, "unauthorised")
     deleted: dict[str, int] = {}
-    for store in all_stores():
+    stores = all_stores()
+    for store in stores:
         for table, n in store.prune().items():
             deleted[table] = deleted.get(table, 0) + n
+    # Guest accounts live with the default database (Supabase); a guest active in any fab's
+    # database is kept. A no-op on SQLite and on a Postgres without an auth schema (Neon).
+    active = set().union(*(store.recent_actors(GUEST_IDLE_DAYS) for store in stores))
+    deleted["guest_accounts"] = stores[0].prune_guest_accounts(GUEST_IDLE_DAYS, keep=active)
+    log.info("prune: %s", ", ".join(f"{k}={v}" for k, v in sorted(deleted.items())))
     return {"deleted": deleted}
 
 

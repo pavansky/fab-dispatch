@@ -325,6 +325,17 @@ class Store(ABC):
         """Remove the sign-in account itself, where the store also holds accounts (Supabase)."""
         return False
 
+    @abstractmethod
+    def recent_actors(self, days: int = 30) -> set[str]:
+        """Labels (emails) of users with shift activity in this database within ``days``: a shift
+        they started that has changed since, or presence on one. Pooled across every fab's database
+        before guest accounts are pruned, so a guest busy in one fab is kept."""
+
+    def prune_guest_accounts(self, days: int = 30, keep: Collection[str] = ()) -> int:
+        """Delete anonymous (guest) sign-in accounts idle for ``days`` whose label is not in
+        ``keep``, where the store also holds accounts (Supabase). 0 elsewhere."""
+        return 0
+
     def close(self) -> None:
         """Release held connections (SQLite's one, Postgres's idle ones)."""
         return None
@@ -590,6 +601,15 @@ class SQLiteStore(Store):
             (shift_id, _ago(PRESENCE_WINDOW_S)),
         )
         return [r["email"] for r in rows]
+
+    def recent_actors(self, days: int = 30) -> set[str]:
+        since = _ago(days * 86400)
+        rows = self._q(
+            "SELECT created_by AS who FROM shifts WHERE updated_at > ? "
+            "UNION SELECT email FROM shift_presence WHERE last_seen > ?",
+            (since, since),
+        )
+        return {r["who"] for r in rows if r["who"]}
 
     def prune(self, plan_days: int = 7, shift_days: int = 30, idempotency_hours: int = 24) -> dict[str, int]:
         with self._lock:
@@ -955,6 +975,33 @@ class PostgresStore(Store):
                 return False
             cur.execute("DELETE FROM auth.users WHERE id = %s::uuid", (user_id,))
             return cur.rowcount == 1
+
+    def recent_actors(self, days: int = 30) -> set[str]:
+        rows = self._q(
+            "SELECT created_by AS who FROM shifts WHERE updated_at > now() - make_interval(days => %s) "
+            "UNION SELECT email FROM shift_presence WHERE last_seen > now() - make_interval(days => %s)",
+            (days, days),
+        )
+        return {r["who"] for r in rows if r["who"]}
+
+    def prune_guest_accounts(self, days: int = 30, keep: Collection[str] = ()) -> int:
+        """On Supabase only (``auth.users`` exists; this role may delete from it): remove anonymous
+        accounts that have not signed in, refreshed or been created within ``days`` and whose label
+        (``guest-<first 6 of the id>``, what shifts and events record) is not in ``keep``. A deleted
+        account's shifts, if any remain, keep their label, exactly as after a user's own deletion."""
+        with self._conn() as c, c.cursor() as cur:
+            cur.execute("SELECT to_regclass('auth.users') IS NOT NULL AS ok")
+            if not cur.fetchone()["ok"]:
+                return 0
+            cur.execute(
+                """DELETE FROM auth.users
+                   WHERE is_anonymous
+                     AND GREATEST(created_at, coalesce(last_sign_in_at, created_at), coalesce(updated_at, created_at))
+                         < now() - make_interval(days => %s)
+                     AND 'guest-' || left(id::text, 6) <> ALL(%s::text[])""",
+                (days, sorted(keep)),
+            )
+            return cur.rowcount
 
     def list_shifts(self, fab_id: str, limit: int = 20) -> list[dict]:
         rows = self._q(

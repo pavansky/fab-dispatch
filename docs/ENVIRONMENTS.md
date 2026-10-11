@@ -115,5 +115,13 @@ a Postgres advisory lock, so concurrent serverless cold starts can't race. `/api
 ## Data retention
 
 Vercel Cron calls `POST /api/internal/prune` daily at 03:00 UTC with `CRON_SECRET`. It removes plan
-cache entries older than 7 days, idempotency keys older than 24 hours, and shifts (with their events
-and presence) not updated for 30 days.
+cache entries older than 7 days, idempotency keys older than 24 hours, shifts (with their events
+and presence) not updated for 30 days, and guest (anonymous) accounts in Supabase Auth that have
+had no sign-in, session refresh or live-shift activity in any fab's database for 30 days (a no-op
+on SQLite and on a Postgres without an `auth` schema, such as a fab's Neon database). The count is
+logged and returned as `guest_accounts`.
+
+Vercel runs crons on the production deployment only, so **the UAT schema is never pruned by the
+platform**. To prune UAT, call its endpoint from elsewhere (for example a scheduled GitHub Actions
+job, or by hand): `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<uat-url>/api/internal/prune`
+(with `x-vercel-protection-bypass` when the preview is protected).
