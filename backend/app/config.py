@@ -97,6 +97,22 @@ class Settings(BaseSettings):
     )
     cron_secret: str | None = Field(None, validation_alias=AliasChoices("FAB_CRON_SECRET", "CRON_SECRET"))
 
+    # ---- client address (per-IP rate limits) --------------------------------------
+    client_ip_header: str | None = Field(
+        None,
+        description="header the hosting platform sets to the caller's IP and clients cannot set "
+        "(x-vercel-forwarded-for on Vercel, set automatically there; cf-connecting-ip behind "
+        "Cloudflare); unset = no such header is trusted",
+    )
+    trusted_proxy_hops: int = Field(
+        0,
+        ge=0,
+        le=10,
+        description="reverse proxies in front of the API that append to X-Forwarded-For; the "
+        "client is the entry this many places from the right. 0 = X-Forwarded-For is ignored, "
+        "since clients can write it",
+    )
+
     # ---- assistant -----------------------------------------------------------------
     assistant_llm: Literal["none", "anthropic", "ollama"] = Field(
         "none", description="optional model that rewrites grounded answers; none = fully local, no key"
@@ -146,12 +162,18 @@ class Settings(BaseSettings):
     def _serverless_defaults(self) -> Settings:
         """On Vercel only /tmp is writable. Without FAB_DATABASE_URL the app still boots
         (ephemeral SQLite per instance, fine for a demo); with it, state is durable and
-        shared. Logs go out as JSON for the platform's log drain."""
+        shared. Logs go out as JSON for the platform's log drain. Vercel's edge sets
+        ``x-vercel-forwarded-for`` (and overwrites X-Forwarded-For) with the real client IP,
+        so per-IP rate limits trust those there and nowhere else by default."""
         if os.environ.get("VERCEL"):
             if "database_url" not in self.model_fields_set:
                 self.database_url = "sqlite:////tmp/fab.db"
             if "log_json" not in self.model_fields_set:
                 self.log_json = True
+            if "client_ip_header" not in self.model_fields_set:
+                self.client_ip_header = "x-vercel-forwarded-for"
+            if "trusted_proxy_hops" not in self.model_fields_set:
+                self.trusted_proxy_hops = 1
             if self.env == "local":
                 self.env = "production"
         return self

@@ -80,17 +80,18 @@ log = logging.getLogger("fab")
 
 
 def rate_limit(name: str, per_min: float, burst: int):
-    """Two layers. A token bucket in this instance absorbs bursts with no I/O; a per-minute
-    counter in the database holds the quota across every instance (serverless runs many).
-    If the database can't be reached the request is allowed: rate limiting must not take
-    the service down with it."""
+    """Two layers. A token bucket in this instance turns away bursts before any I/O; every
+    request it lets through then costs one database upsert, a per-minute counter that holds
+    the quota across every instance (serverless runs many). If the database can't be reached
+    the request is allowed: rate limiting must not take the service down with it."""
 
     def dep(request: Request) -> None:
-        if get_settings().env == "test":
+        s = get_settings()
+        if s.env == "test":
             return
         # Per signed-in user where known (fair across shared NAT/proxies), else per client IP.
         user = getattr(request.state, "user", None)
-        who = f"user:{user.id}" if user else client_id(request)
+        who = f"user:{user.id}" if user else client_id(request, s.client_ip_header, s.trusted_proxy_hops)
         if not _limiter.allow(who, name, per_min, burst):
             raise HTTPException(429, f"Too many {name} requests; slow down.", headers={"Retry-After": "5"})
         try:
