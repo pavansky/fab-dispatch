@@ -95,7 +95,7 @@
    "latest": 426,
    "duration": 105,
    "tool": "DEP-03D",
-   "symptom": "film thickness non-uniformity on chamber B"
+   "symptom": "film thickness non-uniformity on chamber B; tech recommends: recalibrate heater zones"
   },
   {
    "id": "J002",
@@ -109,7 +109,7 @@
    "latest": 569,
    "duration": 120,
    "tool": "DEP-04C",
-   "symptom": "base pressure too high after PM"
+   "symptom": "base pressure too high after PM; suspect turbo pump bearing worn"
   },
   {
    "id": "J003",
@@ -123,7 +123,7 @@
    "latest": 628,
    "duration": 90,
    "tool": "MET-01C",
-   "symptom": "image focus failing on CD-SEM"
+   "symptom": "image focus failing on CD-SEM; suspect electron gun tip aging"
   },
   {
    "id": "J004",
@@ -137,7 +137,7 @@
    "latest": 475,
    "duration": 60,
    "tool": "ETC-03D",
-   "symptom": "plasma will not strike after PM"
+   "symptom": "plasma will not strike after PM; tech recommends: replace tuning capacitor"
   },
   {
    "id": "J005",
@@ -179,7 +179,7 @@
    "latest": 132,
    "duration": 120,
    "tool": "DEP-01B",
-   "symptom": "pump down too slow on chamber B"
+   "symptom": "pump down too slow on chamber B; suspect gate valve seal leaking"
   },
   {
    "id": "J008",
@@ -242,7 +242,7 @@
    "x": 164.2,
    "y": 109.0,
    "skill": "litho",
-   "min_level": 2,
+   "min_level": 1,
    "priority": 1,
    "kind": "pm",
    "earliest": 82,
@@ -291,7 +291,7 @@
    "latest": 397,
    "duration": 120,
    "tool": "ETC-01C",
-   "symptom": "backside helium flow alarm after PM"
+   "symptom": "backside helium flow alarm after PM; suspect o-ring degraded"
   },
   {
    "id": "J016",
@@ -305,14 +305,14 @@
    "latest": 46,
    "duration": 75,
    "tool": "LIT-03B",
-   "symptom": "best focus shifted after PM"
+   "symptom": "best focus shifted after PM; tech recommends: clean chuck and run flatness check"
   },
   {
    "id": "J017",
    "x": 214.5,
    "y": 148.7,
    "skill": "litho",
-   "min_level": 2,
+   "min_level": 1,
    "priority": 1,
    "kind": "pm",
    "earliest": 222,

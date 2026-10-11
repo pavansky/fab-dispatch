@@ -1,0 +1,17 @@
+{
+ "note": "Fixtures exported from the in-process API with reduced search budgets so regeneration is quick. Costs can be slightly worse than the live app's, and every runtime_ms is the wall clock measured on the export machine (below), not a representative latency.",
+ "export_budgets": {
+  "alns_iterations": 60,
+  "pyvrp_iterations": 300
+ },
+ "shipped_budgets": {
+  "alns_iterations": 300,
+  "pyvrp_iterations": 1000
+ },
+ "exported_at": "2026-10-11T15:04:55+00:00",
+ "machine": {
+  "python": "3.13.16",
+  "platform": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39",
+  "machine": "x86_64"
+ }
+}
