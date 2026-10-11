@@ -1,8 +1,8 @@
 {
  "version": 1,
  "state": {
-  "id": "fab1-300mm-logic.e48868db30ec",
-  "created_at": "2026-10-11T15:28:20.825706+00:00",
+  "id": "fab1-300mm-logic.c4f15ad08b37",
+  "created_at": "2026-10-11T15:45:52.801618+00:00",
   "scenario": {
    "fab_id": "fab1-300mm-logic",
    "engineers": [
@@ -210,15 +210,15 @@
      "start": 147.0,
      "end": 237.0,
      "travel_m": 21.2,
-     "cost": -44.23,
+     "cost": -46.16,
      "cost_breakdown": {
       "travel": 0.0,
-      "waiting": -2.23,
+      "waiting": -4.16,
       "overqualification": 8.0,
       "workload": 10.0,
       "priority": -60.0
      },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 17 of 60. Re-inserting it alone would cost E03 at cost -44.2; no other feasible engineer. Rejected: 5 lacks the skill.",
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E03 at cost -46.2; no other feasible engineer. Rejected: 5 lacks the skill.",
      "alternatives": [],
      "rejections": {
       "skill_missing": 5
@@ -240,7 +240,7 @@
       "workload": 10.0,
       "priority": -60.0
      },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 17 of 60. Re-inserting it alone would cost E03 at cost -81.6; no other feasible engineer. Rejected: 5 lacks the skill.",
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E03 at cost -81.6; no other feasible engineer. Rejected: 5 lacks the skill.",
      "alternatives": [],
      "rejections": {
       "skill_missing": 5
@@ -262,66 +262,66 @@
       "workload": 10.0,
       "priority": -60.0
      },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 17 of 60. Re-inserting it alone would cost E03 at cost -41.5; no other feasible engineer. Rejected: 5 lacks the skill.",
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E03 at cost -41.5; no other feasible engineer. Rejected: 5 lacks the skill.",
      "alternatives": [],
      "rejections": {
       "skill_missing": 5
      }
     },
     {
-     "job_id": "J015",
+     "job_id": "J014",
      "tech_id": "E04",
      "sequence": 1,
-     "arrival": 4.9,
-     "start": 46.0,
-     "end": 226.0,
-     "travel_m": 293.8,
-     "cost": -53.28,
+     "arrival": 3.0,
+     "start": 82.0,
+     "end": 172.0,
+     "travel_m": 177.4,
+     "cost": -52.9,
      "cost_breakdown": {
-      "travel": 9.31,
-      "waiting": -7.59,
+      "travel": 7.1,
+      "waiting": 0.0,
       "overqualification": 0.0,
-      "workload": 5.0,
+      "workload": 0.0,
       "priority": -60.0
      },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 17 of 60. Re-inserting it alone would cost E04 at cost -53.3; next best E06 at -50.6. Rejected: 2 lacks the skill, 1 certification too low, 1 cannot arrive inside the time window.",
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E04 at cost -52.9; next best E01 at -43.4. Rejected: 4 lacks the skill.",
      "alternatives": [
       {
-       "tech_id": "E06",
-       "cost": -50.61
+       "tech_id": "E01",
+       "cost": -43.35
+      }
+     ],
+     "rejections": {
+      "skill_missing": 4
+     }
+    },
+    {
+     "job_id": "J015",
+     "tech_id": "E06",
+     "sequence": 1,
+     "arrival": 0.1,
+     "start": 46.0,
+     "end": 226.0,
+     "travel_m": 5.2,
+     "cost": -59.79,
+     "cost_breakdown": {
+      "travel": 0.21,
+      "waiting": 0.0,
+      "overqualification": 0.0,
+      "workload": 0.0,
+      "priority": -60.0
+     },
+     "explanation": "ALNS kept this assignment: best plan found at iteration 0 of 60. Re-inserting it alone would cost E06 at cost -59.8; next best E04 at -50.3. Rejected: 2 lacks the skill, 1 certification too low, 1 cannot arrive inside the time window.",
+     "alternatives": [
+      {
+       "tech_id": "E04",
+       "cost": -50.34
       }
      ],
      "rejections": {
       "skill_missing": 2,
       "level_too_low": 1,
       "window_missed": 1
-     }
-    },
-    {
-     "job_id": "J014",
-     "tech_id": "E04",
-     "sequence": 2,
-     "arrival": 227.9,
-     "start": 227.9,
-     "end": 317.9,
-     "travel_m": 116.4,
-     "cost": -50.34,
-     "cost_breakdown": {
-      "travel": 4.66,
-      "waiting": 0.0,
-      "overqualification": 0.0,
-      "workload": 5.0,
-      "priority": -60.0
-     },
-     "explanation": "ALNS kept this assignment: best plan found at iteration 17 of 60. Re-inserting it alone would cost E04 at cost -50.3; next best E01 at -27.0. Rejected: 4 lacks the skill.",
-     "alternatives": [
-      {
-       "tech_id": "E01",
-       "cost": -27.01
-      }
-     ],
-     "rejections": {
-      "skill_missing": 4
      }
     }
    ],
@@ -380,22 +380,15 @@
      "tech_id": "E04",
      "stops": [
       {
-       "job_id": "J015",
-       "arrival": 4.9,
-       "start": 46.0,
-       "end": 226.0,
-       "locked": false
-      },
-      {
        "job_id": "J014",
-       "arrival": 227.9,
-       "start": 227.9,
-       "end": 317.9,
+       "arrival": 3.0,
+       "start": 82.0,
+       "end": 172.0,
        "locked": false
       }
      ],
-     "metres": 410.2,
-     "end_time": 317.9
+     "metres": 177.4,
+     "end_time": 172.0
     },
     {
      "tech_id": "E05",
@@ -405,9 +398,17 @@
     },
     {
      "tech_id": "E06",
-     "stops": [],
-     "metres": 0.0,
-     "end_time": 0.0
+     "stops": [
+      {
+       "job_id": "J015",
+       "arrival": 0.1,
+       "start": 46.0,
+       "end": 226.0,
+       "locked": false
+      }
+     ],
+     "metres": 5.2,
+     "end_time": 226.0
     }
    ],
    "metrics": {
@@ -420,31 +421,33 @@
     "mean_response_min": 0.0,
     "response_p95_min": 0.0,
     "unserved_downs": 0.0,
-    "walk_m_total": 482.0,
-    "walk_m_per_job": 96.4,
-    "wait_min_total": 188.0,
+    "walk_m_total": 254.0,
+    "walk_m_per_job": 50.9,
+    "wait_min_total": 0.0,
     "overqualification_levels": 2.0,
     "utilization_pct": 19.4,
-    "engineers_used": 2.0,
-    "workload_std": 1.21,
-    "workload_minutes_std": 216.1,
-    "objective": 152.8,
-    "operating_cost": 132.8,
-    "workload_cost": 20.0,
+    "engineers_used": 3.0,
+    "workload_std": 1.07,
+    "workload_minutes_std": 203.2,
+    "objective": 101.2,
+    "operating_cost": 86.2,
+    "workload_cost": 15.0,
     "reassignment_cost": 0.0,
-    "runtime_ms": 12.86
+    "runtime_ms": 20.49
    },
    "solver": {
     "iterations": 60,
-    "best_iteration": 17,
+    "best_iteration": 0,
     "hit_time_cap": false,
+    "warm_start_s": 0.0009,
+    "search_s": 0.0191,
     "operator_weights": {
-     "random": 1.36,
-     "worst": 1.29,
-     "related": 1.38,
-     "route": 1.56,
-     "greedy": 1.48,
-     "regret": 1.29
+     "random": 1.08,
+     "worst": 1.14,
+     "related": 1.2,
+     "route": 1.2,
+     "greedy": 1.1,
+     "regret": 1.2
     }
    }
   },
@@ -479,7 +482,7 @@
    "message": "dispatcher@demo.local started the shift with 6 known jobs and 6 engineers.",
    "data": {},
    "actor": "dispatcher@demo.local",
-   "at": "2026-10-11T15:28:20.825787+00:00"
+   "at": "2026-10-11T15:45:52.801778+00:00"
   },
   {
    "kind": "replanned",
@@ -495,17 +498,17 @@
      "J015"
     ],
     "dropped": [],
-    "runtime_ms": 12.86,
+    "runtime_ms": 20.49,
     "assignments": {
      "J002": "E03",
      "J004": "E03",
      "J010": "E03",
      "J014": "E04",
-     "J015": "E04"
+     "J015": "E06"
     }
    },
    "actor": "dispatcher@demo.local",
-   "at": "2026-10-11T15:28:20.839148+00:00"
+   "at": "2026-10-11T15:45:52.823061+00:00"
   }
  ]
 }

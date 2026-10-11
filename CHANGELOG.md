@@ -5,6 +5,57 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 ## [Unreleased]
 
 ### Fixed
+- **The static benchmark no longer assumes foresight of tool-downs.** Engineers leave the home bay
+  just in time for their first job, so the slack before it is no longer charged as idle wait (every
+  strategy and the exact solver share the change), and `python -m scripts.benchmark --mode revealed`
+  replays each shift with tool-downs revealed at `reported_at`. Under revealed information 19 of 20
+  cost differences against PyVRP include zero.
+- **Benchmark accounting.** "Lowest cost" and the gap tables use the same objective (the total cost the
+  solvers minimise); ALNS's search budget starts after its warm start, as PyVRP's does, and its
+  annealing cools to near-greedy by the last iteration of any budget; every quality table carries a
+  paired bootstrap 95% confidence interval; solve times are the median of five runs with the platform
+  named; the gap report adds a column on the changeable cost; the scale study records time caps,
+  iterations and cost per area and describes planning 222 areas, not re-planning; the certified bound
+  runs several seeds and presets; `highspy` ships at runtime so the documented commands work.
+- **Priority 3 means a tool-down on the constraint family**, nothing else; `critical_coverage_pct` is
+  null when a shift has no such job instead of 100; new metrics `critical_jobs`,
+  `workload_minutes_std` (the UI shows workload spread in minutes), `response_p95_min` and
+  `unserved_downs`; the *Overstaffed* preset now adds certified engineers and cross-training (fab 2
+  gains the preset too).
+- **Docs and citations.** The pinned PyVRP runs iterated local search (the DIMACS and EURO-NeurIPS wins
+  belong to its hybrid genetic search); ReEvo, EoH and the EURO-NeurIPS competition point at the right
+  papers; the technician-routing literature is cited and the "state of the art for this problem class"
+  claim is scoped to the VRPTW core; ANALYSIS.md states what the model does not capture; the glossary
+  and help articles fix fab terminology, the weight-tuning mechanisms and the hard-coded response
+  window; DESIGN_REVIEW and DECISIONS no longer state generator constants as fab facts.
+- **Assistant.** The optional LLM rewrite is checked against the grounded draft (ids, numbers and
+  strategy names must come from it) and falls back with a reason; the recommendation is recomputed on
+  the server instead of echoing the browser's text; "job 6", "E3" and "how long will J006 take" route
+  correctly; glossary questions return the term asked; empty shifts get a plain answer, not a 500; the
+  evaluation runs end to end over a harder set (paraphrases and off-topic questions that use app
+  vocabulary) with before/after scores in `docs/ai.md`; feedback validates its intent, de-duplicates per
+  user and question, and exports to new evaluation cases (`scripts/feedback_to_eval.py`).
+- **Repair history.** No prediction below a similarity floor (weak matches are shown as such, and the
+  planner keeps its standard estimate); the docs say what the retrieval is (lexical, hashed n-grams,
+  Qdrant optional) and what leaves the server when the LLM is on.
+- **Platform.** The UI image sends its security headers from every nginx location and runs nginx
+  unprivileged on port 8080; the API sends a Content-Security-Policy and HSTS, with a dedicated policy
+  for the API docs; live-shift streams use a 90-second ticket instead of the access token in the URL
+  (the old form still works and logs a deprecation); guests may only change the live shifts they
+  started; idle guest accounts are deleted after 30 days; stream opens are rate-limited and capped per
+  user; anonymous calls no longer write rate-limit rows and expensive endpoints fail closed when the
+  quota store is down; tokens must carry `exp` and bootstrap dispatchers a verified email.
+- **Release pipeline.** A tag must be on `main` before images are built, and production is promoted
+  only after a successful UAT deployment and smoke run of that commit; every workflow job has a
+  timeout; every action is pinned to a commit; Dependabot watches Docker images; the uptime workflow
+  creates its `incident` label before using it.
+- **Frontend.** Benchmark verdicts use paired t intervals, Holm-adjusted across every comparison in the
+  run, with a warning below ten seeds; weight sliders commit on release and identical solves share one
+  request, with one retry after `Retry-After`; writes send `If-Match` and explain a 409; a 401 renews
+  the session before signing out; absent metrics render as "n/a" rather than NaN; crash reports keep
+  shift ids and e-mail addresses out of the issue body; contrast, reduced motion, live regions, tooltips
+  and SVG labels meet WCAG AA, and the accessibility audit covers moderate issues, the phone layout and
+  the dark theme; the heavy views load on demand.
 - **The evidence base is tested.** Every study script behind `docs/ANALYSIS.md` (`benchmark`,
   `scale_study`, `certified_bound`, `duration_study`, `predictive_study`, `learned_policy_study`) and
   the UI-fixture export now have smoke tests that run their real entry points at a tiny size and check
@@ -28,6 +79,11 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
   matches package names as tokens, not substrings, and covers `requirements-dev.txt` too.
 
 ### Changed
+- SECURITY.md, the README and the deployment docs now say what row-level security, the CSP, the token
+  storage, the rate limits and the "signed" images actually do; `.env.example` shows the `env:`
+  indirection for tenant databases first; the privacy page covers guest deletion.
+- `docs/ai.md` is rewritten around what the assistant and the repair index actually are, with the
+  evaluation method and numbers; DECISIONS D24 and D30 and the design review follow.
 - UI fixtures record the measured `runtime_ms` instead of hand-pinned values, with
   `frontend/src/test/fixtures/_export_meta.json` noting that the export runs at reduced solver
   budgets on the export machine; the fixture contract test also compares enum-like fields and whether
