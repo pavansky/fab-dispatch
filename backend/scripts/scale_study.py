@@ -72,6 +72,12 @@ def big(args):
     }
 
 
+def save(report: dict) -> None:
+    """Written after every section, so a run killed in a later one keeps the earlier results."""
+    with open(OUT + ".json", "w") as f:
+        json.dump(report, f, indent=1)
+
+
 def main() -> None:
     global OUT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -157,6 +163,8 @@ def main() -> None:
         f"{c['downs_per_second']:.3f} tool-downs per second over a {shift_s // 60}-minute shift"
     )
 
+    save(report)
+
     # 2. live events: tool-downs reported into one live 30 x 100 shift through the real live
     #    code, spread over the whole shift so the open-job count varies as it would in practice.
     from app import live
@@ -208,20 +216,22 @@ def main() -> None:
         f"rate above is {c['downs_per_second']:.3f} tool-downs per second"
     )
 
-    # 3. no decomposition: single large problems
+    save(report)
+
+    # 3. no decomposition: single large problems (300 x 1000 needs several GB for PyVRP's matrices)
     report["single_large"] = []
     for size in args.sizes.split(","):
         e, j = (int(x) for x in size.split("x"))
         for algo in ("regret", "alns", "pyvrp"):
             r = big((e, j, algo))
             report["single_large"].append(r)
+            save(report)
             log(
                 f"single {e}x{j} {algo}: {r['seconds']:.1f}s, cost {r['objective']:.0f}, coverage {r['coverage_pct']:.1f}%, "
                 f"iterations {r['iterations']}, hit cap {r['hit_time_cap']}, warm start {r['warm_start_s']}s, "
                 f"search {r['search_s']}s"
             )
-    with open(OUT + ".json", "w") as f:
-        json.dump(report, f, indent=1)
+    save(report)
     log("done")
 
 
