@@ -4,8 +4,10 @@
    skill, level, time windows, shift end and max jobs). For each *set* of jobs keep only
    the cheapest feasible order.
 2. Choose at most one route per engineer, with every job used at most once, minimising
-   route cost (walking + waiting + over-qualification + workload term) minus the
-   priority reward of the jobs served. This is a 0/1 MILP, solved with HiGHS through
+   route cost (walking + waiting + over-qualification + workload term + live-mode
+   stability, net of any frozen work) minus the priority reward of the jobs served. That
+   is ``Planner.total_cost`` up to a constant, so the optimum is comparable with every
+   heuristic's plan. This is a 0/1 MILP, solved with HiGHS through
    ``scipy.optimize.milp``, so there's no extra dependency.
 
 Enumeration is exponential in route length, but routes here are short (an engineer does at
@@ -33,7 +35,11 @@ class TooLarge(ValueError):
 
 
 def enumerate_routes(p: Planner, tech_id: str) -> dict[frozenset, tuple[float, tuple[str, ...]]]:
-    """Cheapest feasible order for every feasible set of open jobs this engineer could do."""
+    """Cheapest feasible order for every feasible set of open jobs this engineer could do.
+
+    A route's cost is what adding those jobs to the engineer's frozen work changes
+    ``Planner.total_cost`` by: soft costs, workload term and stability, minus the reward
+    for the jobs it serves."""
     tech = p.techs[tech_id]
     base = list(p.frozen[tech_id].route)
     cap = tech.max_jobs - len(base)
@@ -41,15 +47,24 @@ def enumerate_routes(p: Planner, tech_id: str) -> dict[frozenset, tuple[float, t
     best: dict[frozenset, tuple[float, tuple[str, ...]]] = {frozenset(): (0.0, ())}
     count = 0
 
-    def cost_of(seq: list[str]) -> float | None:
+    def route_cost(seq: list[str]) -> float | None:
         sim, _ = p._simulate(tech_id, base + seq)
         if sim is None:
             return None
         k = len(base) + len(seq)
         soft = sum(p._soft(sim).values())
-        return (
-            soft + p.w.workload_balance * k * (k - 1) / 2 - sum(p.w.priority_reward * p.jobs[j].priority for j in seq)
-        )
+        return soft + p.w.workload_balance * k * (k - 1) / 2 + sum(p._moved(tech_id, j) for j in base + seq)
+
+    # Frozen work is in every plan, so its cost is a constant: take it off every column.
+    # The empty route then costs 0, the same as choosing no column for this engineer.
+    fixed = route_cost([])
+    assert fixed is not None  # the Planner already rejected infeasible frozen routes
+
+    def cost_of(seq: list[str]) -> float | None:
+        c = route_cost(seq)
+        if c is None:
+            return None
+        return c - fixed - sum(p.w.priority_reward * p.jobs[j].priority for j in seq)
 
     def dfs(seq: list[str]) -> None:
         nonlocal count
@@ -71,7 +86,6 @@ def enumerate_routes(p: Planner, tech_id: str) -> dict[frozenset, tuple[float, t
             dfs(nxt)
 
     dfs([])
-    # Constant for frozen work, so empty routes of engineers with history compare fairly.
     return best
 
 

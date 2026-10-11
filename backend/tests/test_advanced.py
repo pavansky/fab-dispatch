@@ -63,6 +63,39 @@ def test_frozen_work_is_kept_in_place_by_every_method():
                     assert s.start >= 90.0 - 1e-6, f"{algo} scheduled open work in the past"
 
 
+def _live_instance(seed: int, clock: float = 180.0):
+    """A re-plan at ``clock``: started stops frozen at their real times, previous owners known."""
+    sc = generate(seed, 6, 18, "normal")
+    base = allocate(sc, Weights(), "regret")
+    frozen = {}
+    for r in base.routes:
+        started = [s for s in r.stops if s.start <= clock]
+        frozen[r.tech_id] = Frozen(
+            route=[s.job_id for s in started],
+            not_before=clock,
+            starts=[s.start for s in started],
+            arrivals=[s.arrival for s in started],
+        )
+    return sc, frozen, {a.job_id: a.tech_id for a in base.assignments}
+
+
+@pytest.mark.parametrize("seed", [0, 2, 3])
+def test_exact_is_a_lower_bound_in_live_mode(seed):
+    """Frozen work and the stability term are priced the same way as in total_cost, so
+    the proven optimum is never beaten by a heuristic on a live re-plan either."""
+    from app.algorithms import ALGORITHMS
+
+    sc, frozen, owner = _live_instance(seed)
+    p = Planner(sc, Weights(), frozen=frozen, previous_owner=owner)
+    run_exact(p)
+    opt = p.total_cost()
+    assert any(frozen[t].route for t in frozen) and any(p.routes[t][len(frozen[t].route) :] for t in frozen)
+    for name, (_, fn) in ALGORITHMS.items():
+        q = Planner(sc, Weights(), frozen=frozen, previous_owner=owner)
+        fn(q)
+        assert q.total_cost() >= opt - 1e-6, f"{name} beat the proven optimum on a live re-plan"
+
+
 def test_live_replan_does_not_rewrite_started_work():
     """A job started after an earlier re-plan keeps the times it really ran at (that
     re-plan's "not before now" delay included), so later re-plans can't move it earlier
