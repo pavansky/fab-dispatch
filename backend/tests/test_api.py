@@ -44,6 +44,46 @@ def test_meta_is_cacheable_with_etag():
     assert again.status_code == 304
 
 
+def test_meta_reports_the_repair_index_actually_in_use():
+    from app.deps import get_repairs
+
+    assert anonymous.get("/api/meta").json()["vector_index"] == get_repairs().mode == "exact"
+
+
+def test_health_checks_the_databases_at_most_once_per_interval(monkeypatch):
+    from app.routes import system
+
+    checks = []
+    monkeypatch.setattr(system, "_health", {})
+    monkeypatch.setattr(system, "_check_databases", lambda: checks.append(1) or (True, True, 1))
+    for _ in range(5):
+        assert anonymous.get("/api/health").json()["status"] == "ok"
+    assert len(checks) == 1
+    monkeypatch.setattr(system, "HEALTH_CACHE_S", 0.0)
+    anonymous.get("/api/health")
+    assert len(checks) == 2
+
+
+def test_health_reports_a_database_that_is_down(monkeypatch):
+    from app.routes import system
+
+    class Down:
+        kind = "postgres"
+
+        def schema_version(self):
+            raise ConnectionError("refused")
+
+    monkeypatch.setattr(system, "_health", {})
+    monkeypatch.setattr(system, "all_stores", lambda: [Down()])
+    body = anonymous.get("/api/health").json()
+    assert body["status"] == "degraded" and body["db_ok"] is False and body["databases"] == 1
+
+
+def test_cache_stats_need_a_signed_in_user():
+    assert anonymous.get("/api/cache/stats").status_code == 401
+    assert set(client.get("/api/cache/stats").json()) == {"size", "hits", "misses"}
+
+
 def test_responses_carry_request_id_and_security_headers():
     r = client.get("/api/health", headers={"X-Request-ID": "abc123"})
     assert r.headers["x-request-id"] == "abc123"
@@ -126,3 +166,53 @@ def test_sse_stream_replays_events_after_cursor(scenario):
         assert r.headers["content-type"].startswith("text/event-stream")
         text = "".join(r.iter_text())
     assert "event: shift_started" in text and "event: replanned" in text
+
+
+def test_strategy_lists_are_bounded_and_deduplicated(scenario):
+    r = client.post("/api/allocate", json={"scenario": scenario, "algorithms": ["greedy"] * 2000})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid"
+    res = client.post("/api/allocate", json={"scenario": scenario, "algorithms": ["regret", "greedy", "regret"]})
+    assert [p["algorithm"] for p in res.json()] == ["regret", "greedy"]
+    assert client.post("/api/allocate", json={"scenario": scenario, "algorithms": ["x" * 10_000]}).status_code == 422
+    body = {"preset": "normal", "seeds": 1, "n_jobs": 5, "algorithms": ["greedy"] * 6}
+    assert client.post("/api/benchmark", json=body).status_code == 422
+
+
+def test_benchmark_work_is_capped_to_fit_the_serverless_time_limit():
+    from app.routes.planning import BENCHMARK_MAX_JOB_RUNS
+
+    r = client.post("/api/benchmark", json={"seeds": 30, "n_engineers": 60, "n_jobs": 120})
+    assert r.status_code == 422 and "seeds x n_jobs" in r.json()["error"]["message"]
+    assert 30 * 120 > BENCHMARK_MAX_JOB_RUNS >= 20 * 45  # the UI's largest default (20 seeds of 45 jobs) fits
+
+
+def test_router_404_and_405_use_the_error_envelope():
+    r = anonymous.get("/api/no-such-endpoint")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found" and "detail" not in r.json()
+    r = anonymous.delete("/api/meta")
+    assert r.status_code == 405 and r.json()["error"]["code"] == "method_not_allowed"
+    assert "GET" in r.headers["allow"]
+
+
+def test_sse_cursor_is_validated_not_a_500(scenario):
+    sid = client.post("/api/shifts", json={"scenario": scenario, "algorithm": "greedy"}).json()["state"]["id"]
+    r = client.get(f"/api/shifts/{sid}/stream", params={"after": "abc"})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid"
+    assert client.get(f"/api/shifts/{sid}/stream", params={"after": -1}).status_code == 422
+    # A malformed Last-Event-ID (here a superscript digit) falls back to ?after instead of failing.
+    with client.stream("GET", f"/api/shifts/{sid}/stream", headers={"Last-Event-ID": b"\xb2"}) as r:
+        assert r.status_code == 200
+        assert "event: shift_started" in "".join(r.iter_text())
+
+
+def test_unhandled_errors_still_carry_cors_headers(monkeypatch):
+    from app.routes import fabs
+
+    def boom():
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(fabs, "all_profiles", boom)
+    r = client.get("/api/fabs", headers={"Origin": "http://localhost:5173"})
+    assert r.status_code == 500 and r.json()["error"]["code"] == "internal"
+    assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert r.headers["x-request-id"]

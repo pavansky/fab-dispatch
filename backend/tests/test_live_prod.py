@@ -37,6 +37,153 @@ def test_idempotency_key_applies_a_retried_request_once():
     assert alice.get(f"/api/shifts/{sid}").json()["state"]["clock"] == 60
 
 
+def test_concurrent_requests_with_one_idempotency_key_apply_once(monkeypatch):
+    """Both requests pass the replay check before either writes: the key, claimed in the write's
+    transaction, still lets only one of them apply."""
+    import threading
+
+    from app import live
+
+    sid = _shift()
+    both_read = threading.Barrier(2, timeout=10)
+    real_advance = live.advance
+    attempts = []
+
+    def advance_after_both_read(state, minutes, actor="system"):
+        attempts.append(minutes)
+        if len(attempts) <= 2:  # the first attempt of each request: both have read version 1
+            both_read.wait()
+        return real_advance(state, minutes, actor)
+
+    monkeypatch.setattr(live, "advance", advance_after_both_read)
+    results = []
+
+    def call():
+        r = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 60}, headers={"Idempotency-Key": "race"})
+        results.append(r)
+
+    threads = [threading.Thread(target=call) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(20)
+    assert [r.status_code for r in results] == [200, 200]
+    bodies = [r.json() for r in results]
+    assert sorted(b.get("idempotent_replay", False) for b in bodies) == [False, True]
+    assert {b["version"] for b in bodies} == {2} and {b["state"]["clock"] for b in bodies} == {60}
+    got = alice.get(f"/api/shifts/{sid}").json()
+    assert got["version"] == 2 and got["state"]["clock"] == 60  # applied once: not version 3, not 120 min
+    assert sum(e["kind"] == "clock" for e in alice.get(f"/api/shifts/{sid}/events").json()) == 1
+
+
+def test_a_write_that_fails_part_way_is_applied_once_on_retry(monkeypatch):
+    """Events are written in the same transaction as the shift: if appending them fails, the
+    version bump and the idempotency key roll back too, so the client's retry applies once."""
+    from app.deps import store_for_shift
+
+    sid = _shift()
+    store = store_for_shift(sid)
+    real_insert = store._insert_events
+    calls = {"n": 0}
+
+    def fail_once(*args):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("connection lost while appending events")
+        return real_insert(*args)
+
+    monkeypatch.setattr(store, "_insert_events", fail_once)
+    headers = {"Idempotency-Key": "flaky"}
+    assert alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 60}, headers=headers).status_code == 500
+    assert alice.get(f"/api/shifts/{sid}").json()["version"] == 1  # nothing half-written
+    retry = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 60}, headers=headers).json()
+    assert retry["version"] == 2 and retry["state"]["clock"] == 60 and "idempotent_replay" not in retry
+    again = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 60}, headers=headers).json()
+    assert again["idempotent_replay"] is True and again["state"]["clock"] == 60
+
+
+def test_the_etag_of_a_shift_works_as_its_if_match():
+    sid = _shift()
+    got = alice.get(f"/api/shifts/{sid}")
+    tag = got.headers["etag"]
+    assert tag.startswith(f'"{got.json()["version"]}-')
+    ok = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 10}, headers={"If-Match": tag})
+    assert ok.status_code == 200 and ok.json()["version"] == 2
+    stale = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 10}, headers={"If-Match": tag})
+    assert stale.status_code == 409  # the shift moved on since that read
+    off = alice.post(f"/api/shifts/{sid}/engineers/E01/off", headers={"If-Match": '"2"'})  # a quoted version
+    assert off.status_code == 200 and off.json()["version"] == 3
+    for pinned in ("3", 'W/"3-abc"', '"1-x", "3-y"', "*"):  # repeats are no-ops: still version 3
+        assert alice.post(f"/api/shifts/{sid}/engineers/E01/off", headers={"If-Match": pinned}).status_code == 200
+    assert alice.post(f"/api/shifts/{sid}/engineers/E01/off", headers={"If-Match": '"2"'}).status_code == 409
+    fresh = alice.get(f"/api/shifts/{sid}")
+    assert alice.get(f"/api/shifts/{sid}", headers={"If-None-Match": fresh.headers["etag"]}).status_code == 304
+
+
+def test_a_conditional_get_still_sees_presence_change_without_a_new_version():
+    sid = _shift()
+    before = alice.get(f"/api/shifts/{sid}")
+    viewer = TestClient(app, headers=auth_headers("viewer"))
+    token = issue_demo_token("viewer", get_settings())
+    with viewer.stream("GET", f"/api/shifts/{sid}/stream?access_token={token}") as r:
+        "".join(r.iter_text())
+    after = alice.get(f"/api/shifts/{sid}", headers={"If-None-Match": before.headers["etag"]})
+    assert after.status_code == 200 and "viewer@demo.local" in after.json()["viewers"]
+    assert after.json()["version"] == before.json()["version"]
+
+
+def test_unreported_tool_downs_stay_on_the_server():
+    sid = _shift()
+    view = alice.get(f"/api/shifts/{sid}").json()
+    shown = {j["id"] for j in view["state"]["scenario"]["jobs"]}
+    assert shown == set(view["state"]["released"])
+    assert view["progress"]["total"] > len(shown)  # future tool-downs are counted, not shown
+    later = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 600}).json()
+    assert {j["id"] for j in later["state"]["scenario"]["jobs"]} == set(later["state"]["released"])
+    assert len(later["state"]["released"]) > len(shown)
+
+
+def test_ended_shifts_refuse_every_write():
+    sid = _shift()
+    end = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 24 * 60}).json()
+    assert end["state"]["ended"] is True
+    job = {"id": "LATE1", "x": 30, "y": 40, "skill": "etch", "earliest": 0, "latest": 60}
+    for path, body in (
+        ("advance", {"minutes": 10}),
+        ("jobs", {"job": job}),
+        ("engineers/E01/off", None),
+        ("release", None),
+    ):
+        r = alice.post(f"/api/shifts/{sid}/{path}", json=body)
+        assert r.status_code == 409 and "ended" in r.json()["error"]["message"], path
+    assert alice.get(f"/api/shifts/{sid}").json()["version"] == end["version"]
+
+
+def test_actions_that_change_nothing_keep_the_version():
+    sid = _shift()
+    v1 = alice.get(f"/api/shifts/{sid}").json()["version"]
+    released = alice.post(f"/api/shifts/{sid}/release").json()  # alice doesn't hold the clock
+    assert released["version"] == v1 and released["events"] == []
+    off = alice.post(f"/api/shifts/{sid}/engineers/E01/off").json()
+    assert off["version"] == v1 + 1
+    again = alice.post(f"/api/shifts/{sid}/engineers/E01/off").json()
+    assert again["version"] == v1 + 1 and again["events"] == []
+    assert alice.get(f"/api/shifts/{sid}").json()["version"] == v1 + 1
+
+
+def test_reported_jobs_are_checked_against_the_fab_and_the_size_cap():
+    sid = _shift()
+    job = {"id": "JX9", "x": 30, "y": 40, "skill": "no_such_family", "earliest": 0, "latest": 60}
+    r = alice.post(f"/api/shifts/{sid}/jobs", json={"job": job})
+    assert r.status_code == 422 and "no_such_family" in r.json()["error"]["message"]
+
+    sc = alice.post("/api/scenario", json={"seed": 2, "n_engineers": 4, "n_jobs": 200}).json()
+    full = alice.post("/api/shifts", json={"scenario": sc, "algorithm": "greedy"}).json()["state"]["id"]
+    r = alice.post(f"/api/shifts/{full}/jobs", json={"job": {**job, "skill": "etch"}})
+    assert r.status_code == 413
+    assert alice.get(f"/api/shifts/{full}").json()["version"] == 1
+
+
 def test_only_one_dispatcher_drives_the_clock():
     sid = _shift()
     bob = _other_dispatcher()

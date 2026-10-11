@@ -92,10 +92,22 @@ def test_users_only_see_their_fabs():
 
 
 def test_demo_mode_is_refused_in_production():
-    with pytest.raises(ValueError, match="refused in production"):
+    with pytest.raises(ValueError, match="refused outside local/test"):
         Settings(env="production", auth_mode="demo")
     with pytest.raises(ValueError, match="FAB_AUTH_SECRET"):
         Settings(env="production", auth_mode="demo", allow_demo_auth_in_production=True)
+
+
+@pytest.mark.parametrize("env", ["staging", "uat", "prod", "Production"])
+def test_demo_mode_is_refused_in_every_environment_but_local_and_test(env):
+    with pytest.raises(ValueError, match="refused outside local/test"):
+        Settings(env=env, auth_mode="demo")
+    with pytest.raises(ValueError, match="default demo secret is refused"):
+        Settings(env=env, auth_mode="demo", allow_demo_auth_in_production=True)
+    opted_in = Settings(env=env, auth_mode="demo", allow_demo_auth_in_production=True, auth_secret="x" * 40)
+    assert opted_in.auth_mode == "demo"  # a public demo, deliberately, with its own secret
+    assert Settings(env="local", auth_mode="demo").auth_mode == "demo"
+    assert Settings(env="test", auth_mode="demo").auth_mode == "demo"
 
 
 def test_supabase_tokens_map_roles_and_fabs():
@@ -124,6 +136,12 @@ def test_supabase_tokens_map_roles_and_fabs():
     assert _verify_supabase(token("op@fab.com"), s).role == "viewer"  # least privilege by default
     u = _verify_supabase(token("op@fab.com", {"role": "dispatcher", "fabs": ["fab2-200mm-analog"]}), s)
     assert u.role == "dispatcher" and u.fabs == ["fab2-200mm-analog"]  # admin-set metadata wins
+    # An explicit empty list revokes every fab; it must not fall back to the default ["*"].
+    revoked = _verify_supabase(token("gone@fab.com", {"fabs": []}), s)
+    assert revoked.fabs == [] and not revoked.can_access("fab1-300mm-logic")
+    assert _verify_supabase(token("new@fab.com"), s).fabs == s.default_fabs  # no key: the default
+    with pytest.raises(ValueError, match="list of fab ids"):
+        _verify_supabase(token("odd@fab.com", {"fabs": "fab1-300mm-logic"}), s)
     bad = jwt.encode(
         {"sub": "x", "aud": "authenticated", "iss": "https://evil.example/auth/v1", "exp": time.time() + 60},
         s.supabase_jwt_secret,

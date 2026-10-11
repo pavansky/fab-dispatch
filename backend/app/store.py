@@ -16,7 +16,9 @@ What is stored:
                       tails it by id, so reconnects and multiple instances just work.
 * ``plan_cache``      content-addressed solver results, shared across instances.
 * ``idempotency_keys`` responses to mutating requests, so a retried request (flaky
-                      network, double click) is answered once, not applied twice.
+                      network, double click) is answered once, not applied twice. A live
+                      write claims its key in the same transaction as the shift update and
+                      its events, so two concurrent requests with one key apply once.
 * ``shift_presence``  who has a live shift open right now.
 * ``assignments``     read model: one row per known job of each live shift (engineer, times,
                       status), projected from the shift state in the same transaction as each
@@ -32,9 +34,11 @@ import json
 import re
 import sqlite3
 import threading
+import time
 import zlib
 from abc import ABC, abstractmethod
-from collections.abc import Collection
+from collections.abc import Collection, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -223,6 +227,10 @@ class NotFound(Exception):
     pass
 
 
+class DuplicateRequest(Exception):
+    """The idempotency key was already claimed, by an earlier or a concurrent request."""
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -242,8 +250,16 @@ class Store(ABC):
     def ping(self) -> bool: ...
     @abstractmethod
     def create_shift(
-        self, shift_id: str, state: dict, fab_id: str, created_by: str, assignments: list[dict] | None = None
-    ) -> None: ...
+        self,
+        shift_id: str,
+        state: dict,
+        fab_id: str,
+        created_by: str,
+        assignments: list[dict] | None = None,
+        events: list[dict] | None = None,
+    ) -> None:
+        """Insert a shift at version 1, with its read-model rows and first events, atomically."""
+
     @abstractmethod
     def get_shift(self, shift_id: str, fabs: Collection[str] | None = None) -> tuple[dict, int]:
         """The shift's state and version. ``fabs`` scopes the read in SQL to the caller's fabs
@@ -251,10 +267,19 @@ class Store(ABC):
 
     @abstractmethod
     def save_shift(
-        self, shift_id: str, state: dict, expected_version: int, assignments: list[dict] | None = None
+        self,
+        shift_id: str,
+        state: dict,
+        expected_version: int,
+        assignments: list[dict] | None = None,
+        events: list[dict] | None = None,
+        idempotency: tuple[str, Any] | None = None,
     ) -> int:
-        """Version-checked write. ``assignments`` replaces the shift's read-model rows in the
-        same transaction, so the read model never disagrees with the document."""
+        """Version-checked write; returns the new version. One transaction also replaces the
+        shift's read-model rows (``assignments``), appends ``events`` to its log and, with
+        ``idempotency=(key, response)``, claims the request's idempotency key. Either all of it
+        is written or none: a stale version raises VersionConflict, a key that is already
+        claimed raises DuplicateRequest, and a failure part-way leaves nothing to double-apply."""
 
     @abstractmethod
     def shift_assignments(self, shift_id: str) -> list[dict]: ...
@@ -301,7 +326,7 @@ class Store(ABC):
         return False
 
     def close(self) -> None:
-        """Release held connections (Postgres opens one per call, so holds none)."""
+        """Release held connections (SQLite's one, Postgres's idle ones)."""
         return None
 
     def init_schema(self) -> None:
@@ -372,8 +397,25 @@ class SQLiteStore(Store):
             [(shift_id, fab_id, now, *(r[c] for c in ASSIGNMENT_COLUMNS)) for r in rows],
         )
 
+    def _insert_events(self, shift_id: str, events: list[dict]) -> list[int]:
+        """Append to the event log. Caller holds the lock."""
+        ids = []
+        for e in events:
+            cur = self._conn.execute(
+                "INSERT INTO shift_events (shift_id, created_at, kind, payload) VALUES (?, ?, ?, ?)",
+                (shift_id, _now(), e["kind"], json.dumps(e)),
+            )
+            ids.append(cur.lastrowid)
+        return ids
+
     def create_shift(
-        self, shift_id: str, state: dict, fab_id: str, created_by: str, assignments: list[dict] | None = None
+        self,
+        shift_id: str,
+        state: dict,
+        fab_id: str,
+        created_by: str,
+        assignments: list[dict] | None = None,
+        events: list[dict] | None = None,
     ) -> None:
         now = _now()
         with self._lock:
@@ -386,6 +428,8 @@ class SQLiteStore(Store):
                 )
                 if assignments is not None:
                     self._project(shift_id, fab_id, assignments)
+                if events:
+                    self._insert_events(shift_id, events)
                 self._conn.execute("COMMIT")
             except Exception:
                 self._conn.execute("ROLLBACK")
@@ -402,21 +446,37 @@ class SQLiteStore(Store):
         return json.loads(rows[0]["state"]), rows[0]["version"]
 
     def save_shift(
-        self, shift_id: str, state: dict, expected_version: int, assignments: list[dict] | None = None
+        self,
+        shift_id: str,
+        state: dict,
+        expected_version: int,
+        assignments: list[dict] | None = None,
+        events: list[dict] | None = None,
+        idempotency: tuple[str, Any] | None = None,
     ) -> int:
         with self._lock:
             self._conn.execute("BEGIN")
             try:
-                cur = self._conn.execute(
+                if idempotency is not None:
+                    key, response = idempotency
+                    claimed = self._conn.execute(
+                        "INSERT INTO idempotency_keys (key, created_at, response) VALUES (?, ?, ?) "
+                        "ON CONFLICT (key) DO NOTHING RETURNING key",
+                        (key, _now(), json.dumps(response)),
+                    ).fetchall()
+                    if not claimed:
+                        raise DuplicateRequest(key)
+                rows = self._conn.execute(
                     "UPDATE shifts SET state = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ? "
                     "RETURNING fab_id",
                     (json.dumps(state), _now(), shift_id, expected_version),
-                )
-                row = cur.fetchone()
-                if row is None:
+                ).fetchall()
+                if not rows:
                     raise VersionConflict(shift_id)
                 if assignments is not None:
-                    self._project(shift_id, row["fab_id"], assignments)
+                    self._project(shift_id, rows[0]["fab_id"], assignments)
+                if events:
+                    self._insert_events(shift_id, events)
                 self._conn.execute("COMMIT")
             except Exception:
                 self._conn.execute("ROLLBACK")
@@ -487,15 +547,8 @@ class SQLiteStore(Store):
         return [{**dict(r), "ended": bool(r["ended"])} for r in rows]
 
     def append_events(self, shift_id: str, events: list[dict]) -> list[int]:
-        ids = []
         with self._lock:
-            for e in events:
-                cur = self._conn.execute(
-                    "INSERT INTO shift_events (shift_id, created_at, kind, payload) VALUES (?, ?, ?, ?)",
-                    (shift_id, _now(), e["kind"], json.dumps(e)),
-                )
-                ids.append(cur.lastrowid)
-        return ids
+            return self._insert_events(shift_id, events)
 
     def events_after(self, shift_id: str, after_id: int, limit: int = 200) -> list[dict]:
         rows = self._q(
@@ -601,8 +654,15 @@ _TABLES = re.compile(r"\b(" + "|".join(APP_TABLES) + r")\b")
 
 
 class PostgresStore(Store):
-    """psycopg 3, one short connection per call. That suits serverless functions sitting
-    behind Supabase's transaction pooler, where prepared statements must be off.
+    """psycopg 3, with prepared statements off, which suits serverless functions sitting
+    behind Supabase's transaction pooler.
+
+    Connections are reused: each call borrows an idle one (or opens one) and hands it back,
+    so a request no longer pays a TCP + TLS + auth handshake per query. A connection is only
+    reused if it was handed back healthy, outside a transaction, less than ``POOL_IDLE_S``
+    ago; a broken one is closed and the next call reconnects. At most ``POOL_IDLE_MAX`` idle
+    connections are kept, and a single statement that fails because the server dropped an
+    idle connection is retried once on a new one.
 
     Every table is qualified with ``schema`` (``FAB_DB_SCHEMA``), so environments can share
     one database without seeing each other's data (e.g. UAT in schema ``uat``). Qualifying
@@ -611,6 +671,8 @@ class PostgresStore(Store):
 
     kind = "postgres"
     MIGRATION_LOCK = 724_311  # base advisory-lock id; offset per schema
+    POOL_IDLE_MAX = 4  # idle connections kept per store
+    POOL_IDLE_S = 30.0  # an idle connection older than this is closed, not reused
 
     def __init__(self, url: str, schema: str = "public"):
         import psycopg  # imported lazily: local SQLite runs never need the driver
@@ -621,19 +683,94 @@ class PostgresStore(Store):
         self._psycopg, self._dict_row, self._url = psycopg, dict_row, url
         self.schema = schema
         self._lock_id = self.MIGRATION_LOCK + zlib.crc32(schema.encode()) % 1_000_000
+        self._idle: list[tuple[Any, float]] = []  # (connection, when it was handed back)
+        self._pool_lock = threading.Lock()
+        self._closed = False
 
     def _sql(self, sql: str) -> str:
         return _TABLES.sub(lambda m: f'"{self.schema}".{m.group(1)}', sql)
 
-    def _conn(self, autocommit: bool = True):
-        return self._psycopg.connect(
-            self._url, autocommit=autocommit, prepare_threshold=None, row_factory=self._dict_row, connect_timeout=5
+    # ---- connection reuse ----------------------------------------------------------
+    def _checkout(self, fresh: bool = False) -> tuple[Any, bool]:
+        """(connection, reused): the most recently returned idle connection, else a new one."""
+        stale, conn = [], None
+        with self._pool_lock:
+            now = time.monotonic()
+            while self._idle and not fresh:
+                candidate, since = self._idle.pop()
+                if candidate.closed or candidate.broken or now - since >= self.POOL_IDLE_S:
+                    stale.append(candidate)
+                    continue
+                conn = candidate
+                break
+        for old in stale:
+            old.close()
+        if conn is not None:
+            return conn, True
+        new = self._psycopg.connect(
+            self._url, autocommit=True, prepare_threshold=None, row_factory=self._dict_row, connect_timeout=5
         )
+        return new, False
+
+    def _checkin(self, conn) -> None:
+        """Pool a connection that is healthy and idle; close anything else."""
+        idle = self._psycopg.pq.TransactionStatus.IDLE
+        if conn.closed or conn.broken or conn.info.transaction_status != idle:
+            conn.close()
+            return
+        with self._pool_lock:
+            if not self._closed and len(self._idle) < self.POOL_IDLE_MAX:
+                self._idle.append((conn, time.monotonic()))
+                return
+        conn.close()
+
+    @contextmanager
+    def _lease(self, conn, autocommit: bool = True) -> Iterator[Any]:
+        """Use a checked-out connection, then hand it back. Like psycopg's own ``with``:
+        commit on success, roll back on error."""
+        try:
+            conn.autocommit = autocommit  # allowed: a pooled connection is never mid-transaction
+            yield conn
+            if not conn.autocommit and not conn.closed:
+                conn.commit()
+        except BaseException:
+            if not conn.closed and not conn.broken:
+                try:
+                    conn.rollback()
+                except Exception:
+                    conn.close()
+            raise
+        finally:
+            self._checkin(conn)
+
+    @contextmanager
+    def _conn(self, autocommit: bool = True) -> Iterator[Any]:
+        conn, _ = self._checkout()
+        with self._lease(conn, autocommit) as c:
+            yield c
+
+    def close(self) -> None:
+        with self._pool_lock:
+            self._closed = True
+            idle, self._idle = self._idle, []
+        for conn, _ in idle:
+            conn.close()
 
     def _q(self, sql: str, args: tuple = ()) -> list[dict]:
-        with self._conn() as c, c.cursor() as cur:
-            cur.execute(self._sql(sql), args)
-            return cur.fetchall() if cur.description else []
+        def run(conn) -> list[dict]:
+            with self._lease(conn), conn.cursor() as cur:
+                cur.execute(self._sql(sql), args)
+                return cur.fetchall() if cur.description else []
+
+        conn, reused = self._checkout()
+        try:
+            return run(conn)
+        except self._psycopg.OperationalError:
+            if not (reused and conn.broken):
+                raise
+        # The server closed this pooled connection while it sat idle (restart, pooler timeout):
+        # the statement never ran, so run it once more on a new connection.
+        return run(self._checkout(fresh=True)[0])
 
     def migrate(self) -> list[int]:
         applied = []
@@ -674,8 +811,25 @@ class PostgresStore(Store):
                 [(shift_id, fab_id, *(r[c] for c in ASSIGNMENT_COLUMNS)) for r in rows],
             )
 
+    def _insert_events(self, cur, shift_id: str, events: list[dict]) -> list[int]:
+        """Append to the event log on the caller's transaction."""
+        ids = []
+        for e in events:
+            cur.execute(
+                self._sql("INSERT INTO shift_events (shift_id, kind, payload) VALUES (%s, %s, %s) RETURNING id"),
+                (shift_id, e["kind"], json.dumps(e)),
+            )
+            ids.append(cur.fetchone()["id"])
+        return ids
+
     def create_shift(
-        self, shift_id: str, state: dict, fab_id: str, created_by: str, assignments: list[dict] | None = None
+        self,
+        shift_id: str,
+        state: dict,
+        fab_id: str,
+        created_by: str,
+        assignments: list[dict] | None = None,
+        events: list[dict] | None = None,
     ) -> None:
         with self._conn(autocommit=False) as c, c.cursor() as cur:
             cur.execute(
@@ -684,6 +838,8 @@ class PostgresStore(Store):
             )
             if assignments is not None:
                 self._project(cur, shift_id, fab_id, assignments)
+            if events:
+                self._insert_events(cur, shift_id, events)
             c.commit()
 
     def get_shift(self, shift_id: str, fabs: Collection[str] | None = None) -> tuple[dict, int]:
@@ -698,9 +854,28 @@ class PostgresStore(Store):
         return rows[0]["state"], rows[0]["version"]
 
     def save_shift(
-        self, shift_id: str, state: dict, expected_version: int, assignments: list[dict] | None = None
+        self,
+        shift_id: str,
+        state: dict,
+        expected_version: int,
+        assignments: list[dict] | None = None,
+        events: list[dict] | None = None,
+        idempotency: tuple[str, Any] | None = None,
     ) -> int:
         with self._conn(autocommit=False) as c, c.cursor() as cur:
+            if idempotency is not None:
+                # Claimed first: a concurrent request with the same key waits here for this
+                # transaction, then finds the key taken (or free again, if this one rolled back).
+                key, response = idempotency
+                cur.execute(
+                    self._sql(
+                        "INSERT INTO idempotency_keys (key, response) VALUES (%s, %s) "
+                        "ON CONFLICT (key) DO NOTHING RETURNING key"
+                    ),
+                    (key, json.dumps(response)),
+                )
+                if cur.fetchone() is None:
+                    raise DuplicateRequest(key)
             cur.execute(
                 self._sql(
                     "UPDATE shifts SET state = %s, version = version + 1, updated_at = now() "
@@ -713,6 +888,8 @@ class PostgresStore(Store):
                 raise VersionConflict(shift_id)
             if assignments is not None:
                 self._project(cur, shift_id, row["fab_id"], assignments)
+            if events:
+                self._insert_events(cur, shift_id, events)
             c.commit()
         return row["version"]
 
@@ -791,15 +968,8 @@ class PostgresStore(Store):
         ]
 
     def append_events(self, shift_id: str, events: list[dict]) -> list[int]:
-        ids = []
         with self._conn() as c, c.cursor() as cur:
-            for e in events:
-                cur.execute(
-                    self._sql("INSERT INTO shift_events (shift_id, kind, payload) VALUES (%s, %s, %s) RETURNING id"),
-                    (shift_id, e["kind"], json.dumps(e)),
-                )
-                ids.append(cur.fetchone()["id"])
-        return ids
+            return self._insert_events(cur, shift_id, events)
 
     def events_after(self, shift_id: str, after_id: int, limit: int = 200) -> list[dict]:
         rows = self._q(

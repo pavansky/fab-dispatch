@@ -4,9 +4,13 @@ Production behaviours on every mutating call:
 
 * **Roles**: viewers can watch; only dispatchers change a shift.
 * **Fab scoping**: a shift is visible only to users with access to its fab.
-* **Optimistic concurrency**: writes are version-checked; ``If-Match`` pins a version.
+* **Optimistic concurrency**: writes are version-checked; ``If-Match`` pins a version
+  (send back the ``ETag`` from ``GET /shifts/{id}``, or a quoted version).
+* **Ended shifts are final**: every write to an ended shift is refused with 409, and an
+  action that changes nothing (releasing a clock you don't hold) doesn't bump the version.
 * **Idempotency**: an ``Idempotency-Key`` header makes a retried request return the
-  first response instead of applying the change twice.
+  first response instead of applying the change twice. The key is claimed in the same
+  transaction as the write, so even two concurrent requests with one key apply once.
 * **Clock lease**: only one dispatcher drives the clock at a time.
 * **Audit**: every event records the acting user.
 """
@@ -28,9 +32,9 @@ from ..algorithms import ALGORITHMS
 from ..auth import User, require
 from ..config import get_settings
 from ..deps import get_store, rate_limit, store_for_shift
-from ..http import etag_json
+from ..http import etag_json, if_match_version
 from ..models import Job, Scenario, Weights
-from ..store import NotFound, VersionConflict
+from ..store import DuplicateRequest, NotFound, VersionConflict
 from ..validation import check_scenario, fab_for
 
 router = APIRouter(prefix="/api/shifts", tags=["live"])
@@ -52,9 +56,15 @@ class ReportJob(BaseModel):
 
 
 def _view(state: live.LiveState, version: int, viewers: list[str] | None = None) -> dict:
+    """What clients see. Only jobs known so far are listed: a tool-down that hasn't been
+    reported yet (its tool, symptom and future failure time) stays on the server, exactly as
+    the planner never peeks at it. ``progress.total`` still counts every job."""
+    shown = state.model_dump(mode="json")
+    known = set(state.released)
+    shown["scenario"]["jobs"] = [j for j in shown["scenario"]["jobs"] if j["id"] in known]
     return {
         "version": version,
-        "state": state.model_dump(mode="json"),
+        "state": shown,
         "status": live.job_status(state),
         "progress": live.progress(state),
         "viewers": viewers or [],
@@ -83,35 +93,64 @@ def _mutate(
     idem_key: str | None,
 ) -> dict:
     """Read, apply, write with an optimistic version check. Retry on a lost race unless the
-    caller pinned a version with If-Match (then report 409). Idempotency-Key replays."""
+    caller pinned a version with If-Match (then report 409).
+
+    Idempotency-Key: the key is checked before every attempt (a concurrent request with the same
+    key may have won the race we just lost) and claimed inside the write's transaction together
+    with the shift, its read model and its events. Two concurrent requests with one key therefore
+    apply once, and a write that fails part-way leaves no trace, so a retry applies it once."""
     store = store_for_shift(shift_id)
     scoped_key = f"{user.id}:{shift_id}:{idem_key}" if idem_key else None
-    if scoped_key and (previous := store.get_idempotent(scoped_key)) is not None:
-        return {**previous, "idempotent_replay": True}
+
+    def replay() -> dict | None:
+        previous = store.get_idempotent(scoped_key) if scoped_key else None
+        return None if previous is None else {**previous, "idempotent_replay": True}
+
     for _ in range(3):
+        if (previous := replay()) is not None:
+            return previous
         state, version = _load(shift_id, user)
-        if if_match is not None and if_match.strip('"') != str(version):
+        if if_match is not None and not if_match_version(if_match, version):
             raise HTTPException(409, f"shift changed (now version {version}); reload and retry")
+        if state.ended:
+            raise HTTPException(409, f"shift {shift_id} has ended; it can't be changed")
+        before = state.model_dump(mode="json")
         try:
             events = action(state)
         except live.ClockBusy as e:
             raise HTTPException(409, f"{e} is driving the clock right now") from None
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
+        after = state.model_dump(mode="json")
+        if not events and after == before:
+            # Nothing changed (e.g. releasing a clock this user doesn't hold): no write, so the
+            # version, and every other client's If-Match, stays valid.
+            out = {**_view(state, version, store.presence(shift_id)), "events": []}
+            if scoped_key:
+                store.put_idempotent(scoped_key, out)
+            return out
+        # The response is stored with the key in the same transaction, so it is built first; the
+        # version-checked write makes ``version + 1`` the version it commits, or it fails.
+        new_version = version + 1
+        out = {**_view(state, new_version, store.presence(shift_id)), "events": events}
         try:
-            new_version = store.save_shift(
-                shift_id, state.model_dump(mode="json"), version, assignments=live.assignment_rows(state)
+            store.save_shift(
+                shift_id,
+                after,
+                version,
+                assignments=live.assignment_rows(state),
+                events=[{**e, "version": new_version} for e in events],
+                idempotency=(scoped_key, out) if scoped_key else None,
             )
+        except DuplicateRequest:
+            continue  # a concurrent request with this key committed first: replay its response
         except VersionConflict:
             if if_match is not None:
                 raise HTTPException(409, "shift changed concurrently; reload and retry") from None
             continue
-        if events:
-            store.append_events(shift_id, [{**e, "version": new_version} for e in events])
-        out = {**_view(state, new_version, store.presence(shift_id)), "events": events}
-        if scoped_key:
-            store.put_idempotent(scoped_key, out)
         return out
+    if (previous := replay()) is not None:
+        return previous
     raise HTTPException(409, "shift is busy; retry")
 
 
@@ -123,11 +162,14 @@ def create_shift(
         raise HTTPException(422, f"unknown algorithm {req.algorithm!r}")
     check_scenario(user, req.scenario)
     state, events = live.start(req.scenario, req.weights, req.algorithm, user.email)
-    store = get_store(state.fab_id)
-    store.create_shift(
-        state.id, state.model_dump(mode="json"), state.fab_id, user.email, assignments=live.assignment_rows(state)
+    get_store(state.fab_id).create_shift(
+        state.id,
+        state.model_dump(mode="json"),
+        state.fab_id,
+        user.email,
+        assignments=live.assignment_rows(state),
+        events=[{**e, "version": 1} for e in events],
     )
-    store.append_events(state.id, [{**e, "version": 1} for e in events])
     return {**_view(state, 1), "events": events}
 
 
@@ -141,8 +183,11 @@ def list_shifts(
 
 @router.get("/{shift_id}")
 def get_shift(shift_id: str, request: Request, user: User = Depends(require("viewer"))):
+    """The shift as clients see it. The ETag starts with the shift's version, so it works as an
+    If-Match for the write endpoints; the rest of it changes with presence and the clock lease,
+    so a conditional GET still picks those up without a version bump."""
     state, version = _load(shift_id, user)
-    return etag_json(request, _view(state, version, store_for_shift(shift_id).presence(shift_id)))
+    return etag_json(request, _view(state, version, store_for_shift(shift_id).presence(shift_id)), version=version)
 
 
 @router.post("/{shift_id}/advance")
@@ -172,7 +217,18 @@ def report_job(
     idempotency_key: str | None = Header(None),
     _rl: None = Depends(rate_limit("live", 240, 30)),
 ) -> dict:
-    return _mutate(shift_id, user, lambda s: live.report_job(s, req.job, user.email), if_match, idempotency_key)
+    return _mutate(shift_id, user, reporting(user, req.job), if_match, idempotency_key)
+
+
+def reporting(user: User, job: Job) -> Callable[[live.LiveState], list[dict]]:
+    """The action that reports ``job`` on a shift, checked as strictly as a new shift is: the
+    job's tool family must exist in the shift's fab, and the shift stays within the size cap."""
+
+    def act(state: live.LiveState) -> list[dict]:
+        check_scenario(user, state.scenario.model_copy(update={"jobs": [*state.scenario.jobs, job]}))
+        return live.report_job(state, job, user.email)
+
+    return act
 
 
 @router.post("/{shift_id}/engineers/{engineer_id}/off")
@@ -207,7 +263,11 @@ def events(
 
 @router.get("/{shift_id}/stream")
 async def stream(
-    shift_id: str, request: Request, last_event_id: str | None = Header(None), user: User = Depends(require("viewer"))
+    shift_id: str,
+    request: Request,
+    after: int = Query(0, ge=0, description="resume after this event id (Last-Event-ID wins when sent)"),
+    last_event_id: str | None = Header(None),
+    user: User = Depends(require("viewer")),
 ):
     """Server-Sent Events. The stream tails the shift's event log by id, so it works with
     many server instances and resumes on reconnect (EventSource sends Last-Event-ID).
@@ -215,9 +275,9 @@ async def stream(
     the browser reconnects on its own. Open streams double as presence heartbeats."""
     await to_thread.run_sync(_load, shift_id, user)
     store, settings = store_for_shift(shift_id), get_settings()
-    cursor = (
-        int(last_event_id) if last_event_id and last_event_id.isdigit() else int(request.query_params.get("after", 0))
-    )
+    # isascii: "²".isdigit() is True but int("²") raises, which would be a 500.
+    valid_header = last_event_id and last_event_id.isascii() and last_event_id.isdigit()
+    cursor = int(last_event_id) if valid_header else after
 
     async def gen():
         nonlocal cursor

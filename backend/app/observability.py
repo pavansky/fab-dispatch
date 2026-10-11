@@ -8,6 +8,8 @@ import sys
 import threading
 import time
 import uuid
+from collections import OrderedDict
+from collections.abc import Callable
 from contextvars import ContextVar
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -87,24 +89,52 @@ class RequestContext(BaseHTTPMiddleware):
 
 class RateLimiter:
     """Token bucket per (client, bucket name). In-memory, so on serverless each instance
-    limits on its own: a guard against runaway clients, not a quota system."""
+    limits on its own: a guard against runaway clients, not a quota system.
 
-    def __init__(self):
-        self._buckets: dict[tuple[str, str], tuple[float, float]] = {}
+    Buckets are kept least recently used first and evicted once idle for ``idle_s`` (by then
+    every limit in this app has refilled to its burst, so forgetting the bucket changes
+    nothing) or when there are more than ``max_buckets`` (memory stays bounded however many
+    distinct clients turn up)."""
+
+    def __init__(self, max_buckets: int = 10_000, idle_s: float = 600.0, clock: Callable[[], float] = time.monotonic):
+        self._buckets: OrderedDict[tuple[str, str], tuple[float, float]] = OrderedDict()
+        self._max, self._idle_s, self._clock = max_buckets, idle_s, clock
         self._lock = threading.Lock()
 
+    def __len__(self) -> int:
+        return len(self._buckets)
+
     def allow(self, client: str, name: str, rate_per_min: float, burst: int) -> bool:
-        now = time.monotonic()
+        now = self._clock()
+        key = (client, name)
         with self._lock:
-            tokens, last = self._buckets.get((client, name), (float(burst), now))
+            tokens, last = self._buckets.pop(key, (float(burst), now))
             tokens = min(burst, tokens + (now - last) * rate_per_min / 60)
-            if tokens < 1:
-                self._buckets[(client, name)] = (tokens, now)
-                return False
-            self._buckets[(client, name)] = (tokens - 1, now)
-            return True
+            allowed = tokens >= 1
+            self._buckets[key] = (tokens - 1 if allowed else tokens, now)  # now the most recent
+            while self._buckets:
+                _, (_, oldest) = next(iter(self._buckets.items()))
+                if len(self._buckets) <= self._max and now - oldest < self._idle_s:
+                    break
+                self._buckets.popitem(last=False)
+            return allowed
 
 
-def client_id(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for")
-    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
+def client_id(request: Request, ip_header: str | None = None, proxy_hops: int = 0) -> str:
+    """The caller's address, for per-client rate limits. Forwarding headers are trusted only as
+    configured, because a client can send any X-Forwarded-For it likes (and so get a fresh
+    bucket per request if its leftmost entry were believed):
+
+    * ``ip_header``: a header the platform itself sets to the client IP, which clients can't
+      supply (Vercel: ``x-vercel-forwarded-for``; Cloudflare: ``cf-connecting-ip``);
+    * ``proxy_hops``: how many of our own proxies append to X-Forwarded-For; the client is the
+      entry that many places from the right (what the outermost proxy saw). Entries further
+      left were written by the client;
+    * otherwise the socket peer."""
+    if ip_header and (value := request.headers.get(ip_header, "").split(",")[-1].strip()):
+        return value
+    if proxy_hops:
+        hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+        if len(hops) >= proxy_hops:
+            return hops[-proxy_hops]
+    return request.client.host if request.client else "unknown"

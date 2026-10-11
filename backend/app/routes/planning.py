@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import statistics
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, model_validator
 
 from ..algorithms import ALGORITHMS
 from ..auth import User, require
@@ -16,6 +17,25 @@ from ..planner import Planner
 from ..validation import check_scenario, fab_for
 
 router = APIRouter(prefix="/api", tags=["planning"])
+
+# Benchmark work is bounded by seeds x jobs. The slowest admitted request (8 seeds of 120 jobs,
+# 60 engineers, all five strategies) takes ~25 s on a laptop with the production solver budgets,
+# well inside the 60 s serverless limit (vercel.json maxDuration); the unbounded worst case
+# (30 x 120) took ~95 s.
+BENCHMARK_MAX_JOB_RUNS = 1000
+
+
+def _unique(names: list[str]) -> list[str]:
+    return list(dict.fromkeys(names))  # keeps the caller's order
+
+
+# At most one entry per strategy (duplicates dropped), each a short name: an unbounded list made
+# one rate-limited request plan the same shift thousands of times.
+AlgorithmNames = Annotated[
+    list[Annotated[str, StringConstraints(max_length=40)]],
+    Field(min_length=1, max_length=len(ALGORITHMS)),
+    AfterValidator(_unique),
+]
 
 
 class GenerateRequest(BaseModel):
@@ -35,7 +55,7 @@ class PlanRequest(BaseModel):
 class AllocateRequest(BaseModel):
     scenario: Scenario
     weights: Weights = Weights()
-    algorithms: list[str] = Field(default_factory=lambda: list(ALGORITHMS))
+    algorithms: AlgorithmNames = Field(default_factory=lambda: list(ALGORITHMS))
 
 
 class BenchmarkRequest(BaseModel):
@@ -45,7 +65,16 @@ class BenchmarkRequest(BaseModel):
     n_engineers: int = Field(14, ge=1, le=60)
     n_jobs: int = Field(45, ge=1, le=120)
     weights: Weights = Weights()
-    algorithms: list[str] = Field(default_factory=lambda: list(ALGORITHMS))
+    algorithms: AlgorithmNames = Field(default_factory=lambda: list(ALGORITHMS))
+
+    @model_validator(mode="after")
+    def _bounded(self) -> BenchmarkRequest:
+        if self.seeds * self.n_jobs > BENCHMARK_MAX_JOB_RUNS:
+            raise ValueError(
+                f"benchmark too large: seeds x n_jobs must be at most {BENCHMARK_MAX_JOB_RUNS} "
+                f"(got {self.seeds} x {self.n_jobs}); use fewer seeds or split it into several requests"
+            )
+        return self
 
 
 class GapRequest(BaseModel):
@@ -110,8 +139,9 @@ def benchmark(
     user: User = Depends(require("dispatcher")),
     _rl: None = Depends(rate_limit("benchmark", 20, 6)),
 ) -> dict:
-    """All strategies over many seeded shifts of one preset. The client calls it once per
-    preset, so each request stays well inside serverless time limits."""
+    """All strategies over many seeded shifts of one preset. Each request is capped at
+    ``seeds x n_jobs <= 1000`` (BENCHMARK_MAX_JOB_RUNS), which keeps the slowest admitted case
+    to roughly 25 s against a 60 s serverless limit; the client calls it once per preset."""
     profile = _profile_and_preset(user, req.fab_id, req.preset)
     _check_algos(req.algorithms)
     svc = get_planning()
