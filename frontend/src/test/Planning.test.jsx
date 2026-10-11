@@ -58,7 +58,7 @@ describe('requests', () => {
     const { api, user } = await signInAs('dispatcher')
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Engineers' }), { target: { value: '30' } })
     await user.click(screen.getByRole('tab', { name: /Benchmark/ }))
-    expect(screen.getByText(/\(14 engineers, 45 jobs, current weights\)/)).toBeInTheDocument()
+    expect(await screen.findByText(/\(14 engineers, 45 jobs, current weights\)/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Run benchmark' }))
     await waitFor(() => expect(api.find('POST', '/benchmark').length).toBeGreaterThan(0))
     expect(api.find('POST', '/benchmark')[0].body.n_engineers).toBe(14)

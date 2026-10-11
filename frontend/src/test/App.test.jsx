@@ -134,7 +134,7 @@ describe('planning workspace', () => {
     const { user } = await signInAs('dispatcher')
     await user.click(screen.getByRole('tab', { name: /Floor plan/ }))
     await user.click(await screen.findByRole('button', { name: /^J006,/ }))
-    const inspector = screen.getByRole('complementary', { name: 'Inspector' })
+    const inspector = await screen.findByRole('complementary', { name: 'Inspector' })
     expect(within(inspector).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
     expect(within(inspector).getByText('Unassigned')).toBeInTheDocument() // Greedy leaves it
     expect(new URL(location.href).searchParams.get('job')).toBe('J006')
@@ -166,7 +166,7 @@ describe('roles', () => {
   it('lets a viewer explore but not run benchmarks', async () => {
     const { user } = await signInAs('viewer')
     await user.click(screen.getByRole('tab', { name: /Benchmark/ }))
-    expect(screen.getByRole('button', { name: 'Run benchmark' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Run benchmark' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Measure gaps' })).toBeDisabled()
     expect(screen.getByText(/need the dispatcher role/)).toBeInTheDocument()
   })
@@ -174,7 +174,7 @@ describe('roles', () => {
   it('lets a dispatcher run the benchmark for every preset of the fab', async () => {
     const { api, user } = await signInAs('dispatcher')
     await user.click(screen.getByRole('tab', { name: /Benchmark/ }))
-    await user.click(screen.getByRole('button', { name: 'Run benchmark' }))
+    await user.click(await screen.findByRole('button', { name: 'Run benchmark' }))
     await screen.findByRole('button', { name: 'Re-run benchmark' }, { timeout: 4000 })
     const presets = Object.keys(fixtures.fab1.presets)
     expect(api.find('POST', '/benchmark').map((c) => c.body.preset)).toEqual(presets)
@@ -214,7 +214,7 @@ describe('views', () => {
     const row = (await screen.findAllByText('J006')).map((el) => el.closest('tr')).find(Boolean)
     await user.click(row)
     expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
-    expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
+    expect(within(await screen.findByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
   })
 
   it('opens a disagreement or an unserved job from the keyboard', async () => {
@@ -223,27 +223,27 @@ describe('views', () => {
     screen.getByRole('button', { name: 'Inspect J006 on the floor plan' }).focus()
     await user.keyboard('{Enter}')
     expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
-    expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
+    expect(within(await screen.findByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
     await user.click(screen.getByRole('tab', { name: /Workforce/ }))
     const first = fixtures.plans.pyvrp.unassigned[0].job_id
-    screen.getByRole('button', { name: `Inspect ${first} on the floor plan` }).focus()
+    ;(await screen.findByRole('button', { name: `Inspect ${first} on the floor plan` })).focus()
     await user.keyboard(' ')
     expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
-    expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent(first)
+    expect(within(await screen.findByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent(first)
   })
 
   it("jumps from a strategy's scorecard to its floor plan", async () => {
     const { user } = await signInAs('dispatcher')
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'View on floor plan' })).toHaveLength(5))
     await user.click(screen.getAllByRole('button', { name: 'View on floor plan' })[1]) // Hungarian
-    expect(screen.getByRole('group', { name: `Fab floor plan, ${fixtures.plans.hungarian.label}` })).toBeInTheDocument()
+    expect(await screen.findByRole('group', { name: `Fab floor plan, ${fixtures.plans.hungarian.label}` })).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Strategy' })).getByRole('button', { name: /Hungarian/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('shows every engineer on the schedule with their jobs in time order', async () => {
     const { user } = await signInAs('dispatcher')
     await user.click(screen.getByRole('tab', { name: /Schedule/ }))
-    const table = screen.getByRole('table', { name: `Shift schedule, ${fixtures.plans.pyvrp.label}` })
+    const table = await screen.findByRole('table', { name: `Shift schedule, ${fixtures.plans.pyvrp.label}` })
     expect(within(table).getAllByRole('row')).toHaveLength(fixtures.scenario.engineers.length + 1)
     const route = fixtures.plans.pyvrp.routes.find((r) => r.stops.length)
     for (const s of route.stops) expect(within(table).getByLabelText(new RegExp(`^${s.job_id} `))).toBeInTheDocument()
