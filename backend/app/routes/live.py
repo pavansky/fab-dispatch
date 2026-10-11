@@ -121,7 +121,8 @@ def _mutate(
             raise HTTPException(409, f"{e} is driving the clock right now") from None
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
-        if not events and state.model_dump(mode="json") == before:
+        after = state.model_dump(mode="json")
+        if not events and after == before:
             # Nothing changed (e.g. releasing a clock this user doesn't hold): no write, so the
             # version, and every other client's If-Match, stays valid.
             out = {**_view(state, version, store.presence(shift_id)), "events": []}
@@ -135,7 +136,7 @@ def _mutate(
         try:
             store.save_shift(
                 shift_id,
-                state.model_dump(mode="json"),
+                after,
                 version,
                 assignments=live.assignment_rows(state),
                 events=[{**e, "version": new_version} for e in events],
