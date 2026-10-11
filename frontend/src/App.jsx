@@ -181,10 +181,10 @@ function Workspace({ theme, setTheme }) {
     ...scenario, engineers: scenario.engineers.filter((e) => !offShift.has(e.id)),
   }), [scenario, offShift])
 
-  const { results, pending, errors: planErrors, cacheInfo, done } = usePlans(effective, weights)
+  const { results, pending, errors: planErrors, cacheInfo, done, stale } = usePlans(effective, weights)
   const busy = pending.size > 0
-  // Until every strategy has answered, the pick is provisional (and says so).
-  const reco = results.length ? recommend(results, goal, { complete: done, waiting: ALGO_ORDER.filter((a) => pending.has(a)) }) : null
+  // Until every strategy has answered for the inputs on screen, the pick is provisional (and says so).
+  const reco = results.length ? recommend(results, goal, { complete: done, stale, waiting: ALGO_ORDER.filter((a) => pending.has(a)) }) : null
 
   // First visit: walk through the workspace once the first plans are on screen.
   useEffect(() => {
