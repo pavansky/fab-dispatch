@@ -1,12 +1,13 @@
 """Every algorithm must respect every hard constraint on every generated scenario."""
 
 import pytest
+from pydantic import ValidationError
 
 from app.algorithms import ALGORITHMS
 from app.engine import allocate
 from app.fabs import all_profiles
 from app.generator import generate
-from app.models import Weights
+from app.models import Engineer, Job, Scenario, Weights
 
 # Every preset of every fab profile: hard constraints are a property of the engine, not of one fab.
 CASES = [(fab.id, preset, seed) for fab in all_profiles().values() for preset in fab.presets for seed in range(3)]
@@ -50,6 +51,15 @@ def test_every_decision_is_explained(algorithm):
         assert a.cost_breakdown and set(a.cost_breakdown) >= {"travel", "priority"}
     for u in res.unassigned:
         assert u.reason
+
+
+def test_engineer_and_job_ids_share_one_namespace():
+    """The planner resolves a route location by id (home bay or job), so a clash is rejected."""
+    with pytest.raises(ValidationError, match="both an engineer and a job: X1"):
+        Scenario(
+            engineers=[Engineer(id="X1", name="a", x=0, y=0, skills={"etch": 2})],
+            jobs=[Job(id="X1", x=100, y=0, skill="etch", earliest=0, latest=100)],
+        )
 
 
 @pytest.mark.parametrize("algorithm", list(ALGORITHMS))

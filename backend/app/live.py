@@ -153,6 +153,8 @@ def report_job(state: LiveState, job: Job, actor: str = "system") -> list[dict]:
     """An operator reports a tool-down right now."""
     if any(j.id == job.id for j in state.scenario.jobs):
         raise ValueError(f"job id {job.id} already exists")
+    if any(e.id == job.id for e in state.scenario.engineers):
+        raise ValueError(f"job id {job.id} is already an engineer id")
     window = job.latest - job.earliest
     job = job.model_copy(update={"earliest": int(state.clock), "latest": int(state.clock) + window})
     state.scenario = state.scenario.model_copy(update={"jobs": [*state.scenario.jobs, job]})

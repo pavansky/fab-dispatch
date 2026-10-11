@@ -92,6 +92,11 @@ class Scenario(BaseModel):
             ids = [i.id for i in items]
             if len(ids) != len(set(ids)):
                 raise ValueError(f"duplicate {kind} ids")
+        # Engineers and jobs share one id space: the planner resolves a route location
+        # (a home bay or a job) by id, so an engineer and a job can't share a name.
+        clash = sorted({e.id for e in self.engineers} & {j.id for j in self.jobs})
+        if clash:
+            raise ValueError(f"ids used by both an engineer and a job: {', '.join(clash)}")
         return self
 
 
