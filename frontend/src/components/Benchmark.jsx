@@ -179,7 +179,7 @@ export default function Benchmark({ profile, weights, size, canDispatch }) {
               </div>
               <div className="table-wrap" tabIndex={0} style={{ marginTop: 14 }}>
                 <table className="data bench-table">
-                  <thead><tr><th>Mean of {seedsRun.length}</th>{COLS.map((k) => <th key={k} className="r" title={METRICS[k].label}>{METRICS[k].label.split(' ')[0]} <span className="muted">{METRICS[k].unit}</span></th>)}<th className="r">Δ cost vs cheapest · paired 95% CI</th><th>Verdict</th></tr></thead>
+                  <thead><tr><th>Mean of {seedsRun.length}</th>{COLS.map((k) => <th key={k} className="r" title={METRICS[k].label}>{METRICS[k].short ?? METRICS[k].label.split(' ')[0]} <span className="muted">{METRICS[k].unit}</span></th>)}<th className="r">Δ cost vs cheapest · paired 95% CI</th><th>Verdict</th></tr></thead>
                   <tbody>
                     {algos.map((a) => {
                       const ci = vsBest[a]
