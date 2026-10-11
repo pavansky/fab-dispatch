@@ -315,7 +315,7 @@ points to the real fix, cross-training or staffing.
 | Dispatch must happen the instant a fault arrives | Greedy or regret insertion into the current plan | Milliseconds, explainable in one sentence |
 | Many jobs competing for few qualified engineers | Regret-2 at minimum, search ideally | One-at-a-time commitment strands jobs |
 | KPI is response time or fairness | Hungarian in rounds | Spreads first jobs across everyone |
-| KPI is cost or throughput, about 1 s acceptable | PyVRP | Lowest cost in 78/80, 2.7% from optimal |
+| KPI is cost or throughput for a shift planned ahead, about 1 s acceptable | PyVRP or ALNS | Lowest static cost in 44/80 and 36/80; 2.7% / 5.7% from optimal (old code) |
 | Objective has terms a library can't express | ALNS | Optimises the exact objective |
 | Planning ahead (next shift), minutes acceptable | Exact | Proven optimal, 2.7% cheaper than PyVRP on average |
 | Certification shortage | Fix staffing | Every strategy hits the same ceiling |

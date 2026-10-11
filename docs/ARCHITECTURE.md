@@ -231,10 +231,11 @@ into near-independent skill groups, and dispatch happens per shift and area. Tho
 across hundreds of fabs is therefore hundreds of small problems, not one large one. Measured on one
 laptop (ANALYSIS, "Scale: 20,000 engineers, measured"):
 
-- the whole of a 20,000-engineer company (6,660 on shift, 222 areas) re-plans in **47 s** with 16 workers;
-- a live tool-down re-plans in **217 ms** (p95 270 ms);
-- solving the same work as one undecomposed problem is slower and costlier, and ALNS degrades to
-  its regret-2 start from 150 × 500 up.
+- the 222 areas of a 20,000-engineer company (6,660 on shift) are each planned as independent
+  problems in parallel in **211 s** on a 4-core container with 2 workers, none hitting the solver's cap;
+- a live tool-down re-plans in **247 ms** median (p95 542 ms) on the same container;
+- solving the same work as one undecomposed problem is slower and costlier: at 150 × 500 a 3 s
+  search gives ALNS or PyVRP only a handful of iterations past the regret-2 warm start.
 
 Each fab can already have its own database (section 2), so data scales out by fab too. What has to
 change at that scale is the platform around the solver, in the table below: solves move to a queue

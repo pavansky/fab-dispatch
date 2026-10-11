@@ -271,10 +271,11 @@ and area (about 15–60 engineers each), solved independently and in parallel. D
 for 20,000 engineers.
 **Why.** Engineers don't cross fabs, certifications split a fab into near-independent groups, and
 dispatch is per shift and area, so the split loses little. It was measured, not assumed: a
-20,000-engineer company (6,660 on shift, 222 areas) re-plans in 47 s on one laptop, and a live
-tool-down re-plans in 217 ms. Solving the same work undecomposed is slower and further from optimal:
-PyVRP's gap grows from 2.7% at 14 × 45 to about 8% at 30 × 100, and ALNS stops improving on its
-start from 150 × 500 (ANALYSIS, "Scale").
+20,000-engineer company's 222 areas (6,660 on shift) are each planned as independent problems in
+parallel in 211 s on a 4-core container with no area hitting the solver's cap, and a live tool-down
+re-plans in 247 ms median. Solving the same work undecomposed is slower and further from optimal:
+PyVRP's certified gap grows from 2–4% at 14 × 45 to about 10% at 20 × 65, and at 150 × 500 a 3 s
+search gives either search method only a handful of iterations (ANALYSIS, "Scale").
 **Trade-off.** Work that genuinely crosses a boundary (a shared expert, a cross-bay job) needs a
 coordination step between areas; at the measured sizes that hasn't been needed.
 
