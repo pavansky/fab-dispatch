@@ -41,6 +41,11 @@ engineer when re-planning, so people aren't reshuffled for tiny gains.
 
 ## Tuning tips
 
-- Raise **Walking** on a large floor or when engineers wear heavy cleanroom garb.
-- Raise **Over-qualification** to keep senior engineers free for hard faults.
+- Raise **Walking** when a metre of walking really costs more, for example on a floor where aisles
+  force long detours. Heavier cleanroom garb makes people *slower*, which is the fab profile's
+  walking speed (`walk_m_per_min`), not the cost per metre.
+- **Over-qualification** charges for sending a level-3 engineer to a level-1 job, so a higher
+  weight steers routine work to junior engineers *when a cheaper qualified option exists*. It does
+  not hold anyone back: a plan still uses a senior engineer when they are the only one free. Keeping
+  capacity in reserve for a fault that hasn't happened yet is not something the planner does.
 - Raise **Priority reward** when unserved work is unacceptable, even at higher cost.

@@ -424,8 +424,8 @@
               "sd_min": 25
             },
             {
-              "cause": "lamp at end of life",
-              "fix": "replace light source lamp",
+              "cause": "stage drift, calibration out",
+              "fix": "recalibrate stage and requalify on the reference wafer",
               "mean_min": 40,
               "sd_min": 8
             }
