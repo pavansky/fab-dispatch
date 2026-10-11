@@ -119,12 +119,9 @@ def explain_final(p: Planner, prefix: str) -> dict[str, Decision]:
             scratch = p.clone()
             scratch.remove(jid)
             feasible, rejected = scratch.scan(jid)
-            here = next((i for i in feasible if i.tech_id == tid), None)
-            if here is None:  # its slot only works in its current sequence
-                here = feasible[0] if feasible else None
-            if here is None:
-                out[jid] = Decision(tid, 0.0, {}, prefix)
-                continue
+            # Its own slot is always feasible again (it restores the current route), so its
+            # engineer is always among the options.
+            here = next(i for i in feasible if i.tech_id == tid)
             d = decision(here, feasible, rejected, prefix + " Re-inserting it alone would cost")
             d.tech_id = tid
             out[jid] = d
@@ -142,21 +139,24 @@ def _random(p: Planner, rng: random.Random, q: int) -> None:
         p.remove(j)
 
 
+def _removal_gain(p: Planner, job_id: str) -> float:
+    """How much ``total_cost`` drops if this open job comes off its route."""
+    tid = next(t for t, r in p.routes.items() if job_id in r)
+    k = len(p.routes[tid])
+    before = p.route_soft_cost(tid) + p.w.workload_balance * k * (k - 1) / 2
+    scratch = p.clone()
+    scratch.remove(job_id)
+    after = scratch.route_soft_cost(tid) + p.w.workload_balance * (k - 1) * (k - 2) / 2
+    # Removing it also refunds any live-mode stability cost, and forgoes its reward.
+    return before - after + p._moved(tid, job_id) - p.w.priority_reward * p.jobs[job_id].priority
+
+
 def _worst(p: Planner, rng: random.Random, q: int) -> None:
     for _ in range(q):
         movable = _movable(p)
         if not movable:
             return
-        gains = []
-        for j in movable:
-            tid = next(t for t, r in p.routes.items() if j in r)
-            k = len(p.routes[tid])
-            before = p.route_soft_cost(tid) + p.w.workload_balance * k * (k - 1) / 2
-            scratch = p.clone()
-            scratch.remove(j)
-            after = scratch.route_soft_cost(tid) + p.w.workload_balance * (k - 1) * (k - 2) / 2
-            gains.append((before - after - p.w.priority_reward * p.jobs[j].priority, j))
-        gains.sort(reverse=True)
+        gains = sorted(((_removal_gain(p, j), j) for j in movable), reverse=True)
         # Randomised pick biased to the top (y^p rule from Ropke & Pisinger).
         p.remove(gains[int(len(gains) * rng.random() ** 4)][1])
 

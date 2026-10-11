@@ -130,6 +130,24 @@ def test_exact_is_a_lower_bound_in_live_mode(seed):
         assert q.total_cost() >= opt - 1e-6, f"{name} beat the proven optimum on a live re-plan"
 
 
+def test_alns_worst_removal_ranks_by_the_real_cost_drop():
+    """The 'worst' destroy operator's gain is exactly what total_cost drops by, including
+    the stability cost refunded when a moved job comes off its new engineer."""
+    from app.algorithms.alns import _movable, _removal_gain
+    from app.algorithms.regret import run_regret
+
+    sc, frozen, owner = _live_instance(0)
+    techs = [e.id for e in sc.engineers]
+    elsewhere = {j: techs[(techs.index(t) + 1) % len(techs)] for j, t in owner.items()}
+    p = Planner(sc, Weights(), frozen=frozen, previous_owner=elsewhere)
+    run_regret(p)
+    assert p.cost_parts()["reassignment"] > 0
+    for j in _movable(p):
+        scratch = p.clone()
+        scratch.remove(j)
+        assert _removal_gain(p, j) == pytest.approx(p.total_cost() - scratch.total_cost(), abs=1e-9)
+
+
 def test_live_replan_does_not_rewrite_started_work():
     """A job started after an earlier re-plan keeps the times it really ran at (that
     re-plan's "not before now" delay included), so later re-plans can't move it earlier
