@@ -29,6 +29,9 @@ export function responseTargets(profile, preset, scenario) {
   return Object.fromEntries([3, 2, 1].map((k) => [k, fromProfile[k] ?? fromShift[k] ?? DEFAULT_TARGETS[k]]))
 }
 
+/** The start window each priority has in this shift: { 3: 45, ... } (only priorities present). */
+export const shiftWindows = (scenario) => windowsOf(scenario?.jobs ?? [])
+
 /** { jobId: duration } for every job in the scenario. */
 export function durationsById(scenario) {
   return Object.fromEntries(scenario.jobs.map((j) => [j.id, j.duration]))
