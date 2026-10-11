@@ -1,8 +1,9 @@
 """Repair-history retrieval: "what happened the last times this kind of fault occurred?"
 
 A tool-down arrives with a free-text symptom. Each fab's fault catalogue lives in its
-profile (app/fabs/profiles), and each fab gets its own history and its own index. We embed it and search a vector index of
-past repairs (Qdrant) for the nearest neighbours on the same tool family. That gives:
+profile (app/fabs/profiles), and each fab gets its own history and its own index. We embed
+the symptom and search a vector index of past repairs for the nearest neighbours on the same
+tool family. That gives:
 
 * a **duration prediction**: similarity-weighted mean of the neighbours' actual repair
   times, with a p10-p90 range. This is k-nearest-neighbour regression, i.e. the brief's
@@ -15,9 +16,19 @@ dependency-free hashed n-gram embedding. At 1,800 repairs per fab that is one ~1
 product, so a vector database would only add a dependency and cold-start time. Real repair
 history grows into the millions; set ``FAB_QDRANT_URL`` (and ``FAB_QDRANT_API_KEY``) and the
 same interface runs on a Qdrant server with approximate (HNSW) search. ``FAB_QDRANT_PATH``
-keeps an embedded on-disk Qdrant for local experiments. The history is
-synthetic but structured: each fault code has root causes with their own duration
-distributions, so retrieval has real signal to find.
+keeps an embedded on-disk Qdrant for local experiments.
+
+**What signal the synthetic history carries.** Each fault code in the catalogue has root
+causes (two per code in the shipped profiles), drawn with equal probability, each with its
+own duration distribution. A report always has one of the code's generic symptoms plus a
+context suffix ("after PM", "on chamber B"); neither depends on the cause. In
+``OBSERVATION_RATE`` (60%) of reports the engineer also adds an observation that points to the
+true cause, built from the catalogue text: ``"suspect <cause>"`` or ``"tech recommends:
+<fix>"`` (:func:`cause_observations`). The other 40% say nothing about the cause. So the text
+identifies the cause in at most about 60% + 40%/(causes per code) of reports (80% with two
+causes), and a duration estimate can beat the fault code's mean only through those
+observations. Live tool-downs (:func:`fault_symptom`, used by the shift generator) are drawn
+the same way, so a live job's symptom carries the same partial signal.
 """
 
 from __future__ import annotations
@@ -35,25 +46,60 @@ from dataclasses import dataclass
 import numpy as np
 
 from .config import Settings
-from .fabs import FabProfile
+from .fabs import FabProfile, FaultCause
 
 log = logging.getLogger("fab")
 
 HISTORY_SIZE = 1800
 HISTORY_SEED = 2026
 DIM = 512
+OBSERVATION_RATE = 0.6  # share of reports with an observation that points to the root cause
 
 
-def fault_symptom(rng: random.Random, profile: FabProfile, family: str) -> tuple[str, str, int]:
-    """A fresh tool-down: (fault code, symptom text, planner's standard estimate in min)."""
+def cause_observations(cause: FaultCause) -> tuple[str, str]:
+    """What an engineer may add to a report when this root cause is behind the fault: the
+    suspected cause, or the fix they expect to need. Built from the catalogue text, so a new
+    fab profile gets them with no extra data."""
+    return f"suspect {cause.cause}", f"tech recommends: {cause.fix}"
+
+
+def _report(rng: random.Random, generic: str, context: str, cause: FaultCause) -> str:
+    """Symptom text: a generic symptom of the fault code, then sometimes a cause observation."""
+    text = generic + context
+    if rng.random() < OBSERVATION_RATE:
+        text += "; " + rng.choice(cause_observations(cause))
+    return text
+
+
+def standard_estimate(profile: FabProfile, family: str, code: str) -> int:
+    """The planner's standard estimate for a fault code: the catalogue mean over its root
+    causes (the generator's true mean, as causes are equally likely), rounded to 15 min."""
+    causes = profile.family(family).faults[code].causes
+    return int(round(statistics.fmean(c.mean_min for c in causes) / 15) * 15)
+
+
+def draw_fault(rng: random.Random, profile: FabProfile, family: str) -> tuple[str, FaultCause, str, int]:
+    """A fresh tool-down: (fault code, latent root cause, symptom text, standard estimate).
+
+    ``rng`` is advanced exactly as it was before symptoms carried a cause (code, generic
+    symptom, context), so every other field of a generated shift is unchanged. The latent
+    cause and the observation come from a generator seeded by ``rng``'s current state, which
+    is deterministic and does not advance it."""
     faults = profile.family(family).faults
     code = rng.choice(list(faults))
     fault = faults[code]
-    text = rng.choice(fault.symptoms) + rng.choice(
-        ["", " on chamber B", " after PM", " during production lot", " intermittently"]
-    )
-    standard = round(statistics.fmean(c.mean_min for c in fault.causes) / 15) * 15
-    return code, text, int(standard)
+    generic = rng.choice(fault.symptoms)
+    context = rng.choice(["", " on chamber B", " after PM", " during production lot", " intermittently"])
+    sub = random.Random(hashlib.blake2b(repr(rng.getstate()).encode(), digest_size=16).digest())
+    cause = sub.choice(fault.causes)
+    return code, cause, _report(sub, generic, context, cause), standard_estimate(profile, family, code)
+
+
+def fault_symptom(rng: random.Random, profile: FabProfile, family: str) -> tuple[str, str, int]:
+    """A fresh tool-down: (fault code, symptom text, planner's standard estimate in min).
+    The text carries the same partial root-cause signal as the history (see the module doc)."""
+    code, _, text, standard = draw_fault(rng, profile, family)
+    return code, text, standard
 
 
 @dataclass(frozen=True)
@@ -69,7 +115,11 @@ class Repair:
 
 
 def synthetic_history(profile: FabProfile, n: int = HISTORY_SIZE, seed: int = HISTORY_SEED) -> list[Repair]:
-    """A fab's past repairs, generated from its own fault catalogue (deterministic)."""
+    """A fab's past repairs, generated from its own fault catalogue (deterministic).
+
+    Per repair: a family and fault code, a root cause (equally likely), a symptom that is a
+    generic symptom of the code plus, in ``OBSERVATION_RATE`` of repairs, an observation
+    pointing to the cause (module doc), and a duration drawn from that cause's distribution."""
     rng = random.Random(seed)
     engineers = [f"E{i:02d}" for i in range(1, 31)]
     families = profile.family_ids
@@ -80,14 +130,14 @@ def synthetic_history(profile: FabProfile, n: int = HISTORY_SIZE, seed: int = HI
         code = rng.choice(list(faults))
         fault = faults[code]
         c = rng.choice(fault.causes)
-        cause, fix, mean, sd = c.cause, c.fix, c.mean_min, c.sd_min
-        symptom = rng.choice(fault.symptoms) + rng.choice(
-            ["", " on chamber A", " on chamber B", " after PM", " during production lot"]
-        )
+        generic = rng.choice(fault.symptoms)
+        context = rng.choice(["", " on chamber A", " on chamber B", " after PM", " during production lot"])
+        symptom = _report(rng, generic, context, c)
         # Some engineers are their family's go-to people: bias who fixed what.
         home = families.index(family) * 5  # stable across processes, unlike hash()
         eng = engineers[(home + rng.choice([0, 0, 1, 2, rng.randrange(30)])) % 30]
-        out.append(Repair(i + 1, family, code, symptom, cause, fix, max(15, int(rng.gauss(mean, sd))), eng))
+        minutes = max(15, int(rng.gauss(c.mean_min, c.sd_min)))
+        out.append(Repair(i + 1, family, code, symptom, c.cause, c.fix, minutes, eng))
     return out
 
 
