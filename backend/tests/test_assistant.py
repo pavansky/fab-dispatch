@@ -167,7 +167,7 @@ def test_job_answer_matches_the_plans_exactly(shift):
     assert pyvrp and f"**PyVRP:** {pyvrp['tech_id']}" in a["answer"]
     assert {"label": "Open J011 on the floor plan", "kind": "job", "target": "J011"} in a["actions"]
     assert a["citations"][0]["slug"] == "floor-plan"
-    assert ask("why is job 6 assigned this way?", scenario=sc)["answer"] == a["answer"]
+    assert ask("why is job 11 assigned this way?", scenario=sc)["answer"] == a["answer"]
 
 
 def test_job_answer_can_focus_on_one_strategy(shift):

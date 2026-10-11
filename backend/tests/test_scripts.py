@@ -161,7 +161,7 @@ def test_eval_report_prints_the_assistant_scorecard(capsys):
     eval_report.main()
     out = capsys.readouterr().out
     assert out.startswith("## Assistant evaluation")
-    for row in ("Right article cited", "Off-topic questions declined", "Refusal threshold"):
+    for row in ("Right article cited (keyword phrasings)", "Off-topic questions declined", "Refusal threshold"):
         assert f"| {row} |" in out
 
 

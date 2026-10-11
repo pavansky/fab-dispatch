@@ -109,10 +109,10 @@ jobs:
     timeout-minutes: 15
     defaults: { run: { working-directory: frontend } }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # package.json says engines.node >=20.19 (and so do the README and run.py); this is the only
       # place that version is actually exercised.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: "20.19", cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
       - run: npm test
