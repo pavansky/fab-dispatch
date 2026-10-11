@@ -132,6 +132,17 @@ def test_a_conditional_get_still_sees_presence_change_without_a_new_version():
     assert after.json()["version"] == before.json()["version"]
 
 
+def test_unreported_tool_downs_stay_on_the_server():
+    sid = _shift()
+    view = alice.get(f"/api/shifts/{sid}").json()
+    shown = {j["id"] for j in view["state"]["scenario"]["jobs"]}
+    assert shown == set(view["state"]["released"])
+    assert view["progress"]["total"] > len(shown)  # future tool-downs are counted, not shown
+    later = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 600}).json()
+    assert {j["id"] for j in later["state"]["scenario"]["jobs"]} == set(later["state"]["released"])
+    assert len(later["state"]["released"]) > len(shown)
+
+
 def test_ended_shifts_refuse_every_write():
     sid = _shift()
     end = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 24 * 60}).json()

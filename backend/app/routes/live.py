@@ -56,9 +56,15 @@ class ReportJob(BaseModel):
 
 
 def _view(state: live.LiveState, version: int, viewers: list[str] | None = None) -> dict:
+    """What clients see. Only jobs known so far are listed: a tool-down that hasn't been
+    reported yet (its tool, symptom and future failure time) stays on the server, exactly as
+    the planner never peeks at it. ``progress.total`` still counts every job."""
+    shown = state.model_dump(mode="json")
+    known = set(state.released)
+    shown["scenario"]["jobs"] = [j for j in shown["scenario"]["jobs"] if j["id"] in known]
     return {
         "version": version,
-        "state": state.model_dump(mode="json"),
+        "state": shown,
         "status": live.job_status(state),
         "progress": live.progress(state),
         "viewers": viewers or [],
