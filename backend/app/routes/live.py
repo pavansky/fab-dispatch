@@ -3,6 +3,9 @@
 Production behaviours on every mutating call:
 
 * **Roles**: viewers can watch; only dispatchers change a shift.
+* **Guests own their shifts**: an anonymous (guest) dispatcher may only advance, report on,
+  call engineers off or release the shifts they started; named dispatchers share every shift
+  in their fabs. Guests still see every shift.
 * **Fab scoping**: a shift is visible only to users with access to its fab.
 * **Optimistic concurrency**: writes are version-checked; ``If-Match`` pins a version
   (send back the ``ETag`` from ``GET /shifts/{id}``, or a quoted version).
@@ -85,6 +88,14 @@ def _load(shift_id: str, user: User) -> tuple[live.LiveState, int]:
     return state, version
 
 
+def _check_may_change(state: live.LiveState, user: User) -> None:
+    """A guest (anonymous sign-in) changes only shifts it started: on a public demo every guest is
+    a dispatcher by configuration, and shifts are per fab, so without this any guest could drive,
+    report on or strip engineers from any other guest's shift. Named dispatchers share shifts."""
+    if user.provider == "guest" and state.created_by != user.email:
+        raise HTTPException(403, "Guests can only change live shifts they started; start your own shift")
+
+
 def _mutate(
     shift_id: str,
     user: User,
@@ -110,6 +121,7 @@ def _mutate(
         if (previous := replay()) is not None:
             return previous
         state, version = _load(shift_id, user)
+        _check_may_change(state, user)
         if if_match is not None and not if_match_version(if_match, version):
             raise HTTPException(409, f"shift changed (now version {version}); reload and retry")
         if state.ended:

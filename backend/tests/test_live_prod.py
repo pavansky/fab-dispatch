@@ -321,3 +321,46 @@ def test_the_ticket_key_falls_back_to_a_per_process_secret_with_a_warning(caplog
         again = auth.stream_ticket_secret(Settings(**base))
     assert key == again and len(key) == 32
     assert sum("per-process key" in r.message for r in caplog.records) == 1  # warned once, not per ticket
+
+
+# ------------------------------------------------------------------ guests own their shifts
+def _as(user_fields: dict) -> TestClient:
+    """A client signed in as this exact User (bypasses token verification; provider included)."""
+    from app.auth import User, current_user
+
+    user = User(**user_fields)
+    app.dependency_overrides[current_user] = lambda: user
+    return TestClient(app)
+
+
+def test_guests_can_only_change_the_shifts_they_started():
+    guest_a = {"id": "a-1", "email": "guest-a1a1a1", "role": "dispatcher", "fabs": ["*"], "provider": "guest"}
+    guest_b = {**guest_a, "id": "b-2", "email": "guest-b2b2b2"}
+    named = {**guest_a, "id": "lead", "email": "lead@fab.com", "provider": "supabase"}
+    try:
+        a = _as(guest_a)
+        sc = a.post("/api/scenario", json={"seed": 4, "n_engineers": 5, "n_jobs": 10}).json()
+        sid = a.post("/api/shifts", json={"scenario": sc, "algorithm": "greedy"}).json()["state"]["id"]
+        assert a.post(f"/api/shifts/{sid}/advance", json={"minutes": 5}).status_code == 200
+        b = _as(guest_b)
+        assert b.get(f"/api/shifts/{sid}").status_code == 200  # guests still see every shift
+        assert any(r["id"] == sid for r in b.get("/api/shifts", params={"fab_id": "fab1-300mm-logic"}).json())
+        eng = sc["engineers"][0]["id"]
+        job = {**sc["jobs"][0], "id": "J-NEW"}
+        for method, path, body in (
+            ("post", f"/api/shifts/{sid}/advance", {"minutes": 5}),
+            ("post", f"/api/shifts/{sid}/jobs", {"job": job}),
+            ("post", f"/api/shifts/{sid}/engineers/{eng}/off", None),
+            ("post", f"/api/shifts/{sid}/release", None),
+        ):
+            r = getattr(b, method)(path, json=body)
+            assert r.status_code == 403, path
+            assert r.json()["error"]["code"] == "forbidden" and "started" in r.json()["error"]["message"]
+        assert a.get(f"/api/shifts/{sid}").json()["version"] == 2  # nothing of b's applied
+        own = b.post("/api/shifts", json={"scenario": sc, "algorithm": "greedy"}).json()["state"]["id"]
+        assert b.post(f"/api/shifts/{own}/advance", json={"minutes": 5}).status_code == 200
+        lead = _as(named)  # a named dispatcher keeps team-wide access to every shift in the fab
+        assert lead.post(f"/api/shifts/{sid}/jobs", json={"job": job}).status_code == 200  # a's clock lease holds
+        assert lead.post(f"/api/shifts/{own}/engineers/{eng}/off").status_code == 200
+    finally:
+        app.dependency_overrides.clear()
