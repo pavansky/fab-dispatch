@@ -6,7 +6,15 @@ import uuid
 
 import pytest
 
-from app.store import APP_TABLES, SCHEMA_VERSION, NotFound, PostgresStore, SQLiteStore, VersionConflict
+from app.store import (
+    APP_TABLES,
+    SCHEMA_VERSION,
+    DuplicateRequest,
+    NotFound,
+    PostgresStore,
+    SQLiteStore,
+    VersionConflict,
+)
 
 PG_URL = os.environ.get("FAB_TEST_PG_URL")
 
@@ -166,6 +174,43 @@ def test_read_model_rows_are_written_with_the_document(store):
     with pytest.raises(VersionConflict):
         store.save_shift(sid, {"v": 3}, 1, assignments=[])
     assert len(store.shift_assignments(sid)) == 2
+
+
+def test_a_write_claims_its_idempotency_key_and_events_atomically(store):
+    sid = uuid.uuid4().hex[:12]
+    store.create_shift(sid, {"v": 1}, "fab1-300mm-logic", "a@b.c", events=[{"kind": "shift_started"}])
+    assert [e["kind"] for e in store.events_after(sid, 0)] == ["shift_started"]
+    key = f"u:{sid}:k1"
+    assert store.save_shift(sid, {"v": 2}, 1, events=[{"kind": "clock"}], idempotency=(key, {"version": 2})) == 2
+    assert store.get_idempotent(key) == {"version": 2}
+    # The same key again (a concurrent duplicate that read version 2): nothing is written.
+    with pytest.raises(DuplicateRequest):
+        store.save_shift(sid, {"v": 3}, 2, events=[{"kind": "clock"}], idempotency=(key, {"version": 3}))
+    assert store.get_shift(sid) == ({"v": 2}, 2) and store.get_idempotent(key) == {"version": 2}
+    # A lost race releases the key it tried to claim, and appends no events.
+    with pytest.raises(VersionConflict):
+        store.save_shift(sid, {"v": 9}, 1, events=[{"kind": "clock"}], idempotency=(f"{key}-2", {"version": 9}))
+    assert store.get_idempotent(f"{key}-2") is None
+    assert [e["kind"] for e in store.events_after(sid, 0)] == ["shift_started", "clock"]
+
+
+def test_concurrent_writers_with_one_key_commit_once(store):
+    from concurrent.futures import ThreadPoolExecutor
+
+    sid = uuid.uuid4().hex[:12]
+    store.create_shift(sid, {"v": 1}, "fab1-300mm-logic", "a@b.c")
+    key = f"u:{sid}:same"
+
+    def write(n):
+        try:
+            return store.save_shift(sid, {"v": n}, 1, events=[{"kind": "clock"}], idempotency=(key, {"n": n}))
+        except (DuplicateRequest, VersionConflict) as e:
+            return type(e).__name__
+
+    with ThreadPoolExecutor(4) as pool:
+        outcomes = list(pool.map(write, range(4)))
+    assert sorted(map(str, outcomes)) == ["2", "DuplicateRequest", "DuplicateRequest", "DuplicateRequest"]
+    assert store.get_shift(sid)[1] == 2 and len(store.events_after(sid, 0)) == 1
 
 
 def test_rate_counters_are_shared_per_window(store):

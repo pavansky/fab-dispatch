@@ -37,6 +37,71 @@ def test_idempotency_key_applies_a_retried_request_once():
     assert alice.get(f"/api/shifts/{sid}").json()["state"]["clock"] == 60
 
 
+def test_concurrent_requests_with_one_idempotency_key_apply_once(monkeypatch):
+    """Both requests pass the replay check before either writes: the key, claimed in the write's
+    transaction, still lets only one of them apply."""
+    import threading
+
+    from app import live
+
+    sid = _shift()
+    both_read = threading.Barrier(2, timeout=10)
+    real_advance = live.advance
+    attempts = []
+
+    def advance_after_both_read(state, minutes, actor="system"):
+        attempts.append(minutes)
+        if len(attempts) <= 2:  # the first attempt of each request: both have read version 1
+            both_read.wait()
+        return real_advance(state, minutes, actor)
+
+    monkeypatch.setattr(live, "advance", advance_after_both_read)
+    results = []
+
+    def call():
+        r = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 60}, headers={"Idempotency-Key": "race"})
+        results.append(r)
+
+    threads = [threading.Thread(target=call) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(20)
+    assert [r.status_code for r in results] == [200, 200]
+    bodies = [r.json() for r in results]
+    assert sorted(b.get("idempotent_replay", False) for b in bodies) == [False, True]
+    assert {b["version"] for b in bodies} == {2} and {b["state"]["clock"] for b in bodies} == {60}
+    got = alice.get(f"/api/shifts/{sid}").json()
+    assert got["version"] == 2 and got["state"]["clock"] == 60  # applied once: not version 3, not 120 min
+    assert sum(e["kind"] == "clock" for e in alice.get(f"/api/shifts/{sid}/events").json()) == 1
+
+
+def test_a_write_that_fails_part_way_is_applied_once_on_retry(monkeypatch):
+    """Events are written in the same transaction as the shift: if appending them fails, the
+    version bump and the idempotency key roll back too, so the client's retry applies once."""
+    from app.deps import store_for_shift
+
+    sid = _shift()
+    store = store_for_shift(sid)
+    real_insert = store._insert_events
+    calls = {"n": 0}
+
+    def fail_once(*args):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("connection lost while appending events")
+        return real_insert(*args)
+
+    monkeypatch.setattr(store, "_insert_events", fail_once)
+    headers = {"Idempotency-Key": "flaky"}
+    assert alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 60}, headers=headers).status_code == 500
+    assert alice.get(f"/api/shifts/{sid}").json()["version"] == 1  # nothing half-written
+    retry = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 60}, headers=headers).json()
+    assert retry["version"] == 2 and retry["state"]["clock"] == 60 and "idempotent_replay" not in retry
+    again = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 60}, headers=headers).json()
+    assert again["idempotent_replay"] is True and again["state"]["clock"] == 60
+
+
 def test_only_one_dispatcher_drives_the_clock():
     sid = _shift()
     bob = _other_dispatcher()
