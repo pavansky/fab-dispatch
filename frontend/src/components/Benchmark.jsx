@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { optimalityGap, runBenchmark } from '../api.js'
 import { mean } from '../lib/stats.js'
 import { ALGO_ORDER, ALGO_SHORT, METRICS } from '../lib/metrics.js'
-import { fmt } from '../lib/format.js'
+import { fmt, listOf, ms, plural } from '../lib/format.js'
+import { speedup } from '../lib/analysis.js'
 import { useTooltip, Tooltip } from './Tooltip.jsx'
 import FrontierChart from './FrontierChart.jsx'
 import InfoLink from './InfoLink.jsx'
@@ -137,12 +138,15 @@ export default function Benchmark({ profile, weights, size, canDispatch }) {
         const series = (a, k) => seedsRun.map((sd) => runs.find((r) => r.algorithm === a && r.seed === sd)?.metrics[k] ?? NaN)
         const meanCost = Object.fromEntries(algos.map((a) => [a, mean(series(a, 'objective'))]))
         const best = algos.reduce((x, y) => (meanCost[y] < meanCost[x] ? y : x))
-        // Paired over the same seeds: is this strategy really worse than the best, or just noise?
+        // Paired over the same seeds: is this strategy significantly costlier than the cheapest?
+        // A CI that includes 0 means "not shown to differ at this n", not "equivalent".
         const vsBest = Object.fromEntries(algos.map((a) => [a, a === best ? null : pairedBootstrapCI(series(a, 'objective'), series(best, 'objective'))]))
         const tied = (a) => a === best || vsBest[a].lo <= 0
         const latency = Object.fromEntries(algos.map((a) => [a, mean(series(a, 'runtime_ms'))]))
-        // Best value: fastest strategy statistically tied with the cheapest.
+        // Best value: the fastest strategy not significantly costlier than the cheapest.
         const value = algos.filter(tied).reduce((x, y) => (latency[y] < latency[x] ? y : x))
+        const notSig = algos.filter((a) => a !== best && tied(a))
+        const n = `n = ${plural(seedsRun.length, 'shift')}`
         const ciOf = Object.fromEntries(algos.map((a) => [a, bootstrapMeanCI(series(a, 'objective'))]))
         const pts = algos.map((a) => ({ key: a, cost: meanCost[a], latency: latency[a], costLo: ciOf[a].lo, costHi: ciOf[a].hi, reco: a === value }))
         const front = new Set(pts.filter((q) => !pts.some((o) => o !== q && o.cost <= q.cost && o.latency <= q.latency && (o.cost < q.cost || o.latency < q.latency))).map((q) => q.key))
@@ -153,12 +157,21 @@ export default function Benchmark({ profile, weights, size, canDispatch }) {
             <div className="card-b">
               <p className="help" style={{ marginTop: 0 }}>
                 <b className="sig">Best value: {ALGO_SHORT[value]}.</b>{' '}
-                {value === best
-                  ? `It has the lowest mean cost, and nothing else is statistically tied with it.`
-                  : `${ALGO_SHORT[best]} has the lowest mean cost, but ${ALGO_SHORT[value]}'s gap to it is inside the 95% interval, so it isn't a real difference. ${ALGO_SHORT[value]} gets there ${Math.max(1, Math.round(latency[best] / Math.max(latency[value], 0.1)))}× faster.`}
+                {value !== best ? (
+                  `${ALGO_SHORT[best]} has the lowest mean cost, but ${ALGO_SHORT[value]} is not significantly costlier at ${n} `
+                  + `(paired 95% CI of the difference, ${fmt(vsBest[value].lo)} to ${fmt(vsBest[value].hi)} pts, includes 0). `
+                  + `That is not proof they are equivalent, only that this many shifts can't tell them apart. `
+                  + `${ALGO_SHORT[value]} is ${speedup(latency[value], latency[best]) ?? 'about as fast'} (${ms(latency[value])} vs ${ms(latency[best])}).`
+                ) : notSig.length === 0 ? (
+                  `It has the lowest mean cost, and every other strategy is significantly costlier at ${n} (paired 95% CI excludes 0).`
+                ) : (
+                  `It has the lowest mean cost and is also the fastest of the strategies not significantly different from it at ${n} `
+                  + `(${listOf(notSig.map((a) => ALGO_SHORT[a]))}).`
+                )}
               </p>
               <div className="grid-2" style={{ alignItems: 'start' }}>
-                <FrontierChart points={pts} caption={`Mean over ${seedsRun.length} shifts. Whiskers: 95% bootstrap CI of mean cost. Ringed: best value.`} />
+                <FrontierChart points={pts} caption={`Mean over ${plural(seedsRun.length, 'shift')}. Whiskers: 95% bootstrap CI of each strategy's own mean cost (unpaired). `
+                  + 'The verdicts use paired differences over the same shifts, which are tighter, so overlapping whiskers do not by themselves mean a tie. Ringed: best value.'} />
                 <div>
                   <p className="eyebrow">{METRICS[metric].label} per shift · bar = mean · {METRICS[metric].better === 'max' ? 'higher' : 'lower'} is better</p>
                   <Strip runs={runs} metric={metric} min={Math.min(...vals)} max={Math.max(...vals)} />
@@ -166,7 +179,7 @@ export default function Benchmark({ profile, weights, size, canDispatch }) {
               </div>
               <div className="table-wrap" tabIndex={0} style={{ marginTop: 14 }}>
                 <table className="data bench-table">
-                  <thead><tr><th>Mean of {seedsRun.length}</th>{COLS.map((k) => <th key={k} className="r" title={METRICS[k].label}>{METRICS[k].label.split(' ')[0]} <span className="muted">{METRICS[k].unit}</span></th>)}<th className="r">Δ cost vs best · 95% CI</th><th>Verdict</th></tr></thead>
+                  <thead><tr><th>Mean of {seedsRun.length}</th>{COLS.map((k) => <th key={k} className="r" title={METRICS[k].label}>{METRICS[k].short ?? METRICS[k].label.split(' ')[0]} <span className="muted">{METRICS[k].unit}</span></th>)}<th className="r">Δ cost vs cheapest · paired 95% CI</th><th>Verdict</th></tr></thead>
                   <tbody>
                     {algos.map((a) => {
                       const ci = vsBest[a]
@@ -175,7 +188,7 @@ export default function Benchmark({ profile, weights, size, canDispatch }) {
                           <td><span className="cell-eng"><span className={`swatch ${a === value ? 'is-reco' : ''}`} />{ALGO_SHORT[a]}</span></td>
                           {COLS.map((k) => <td key={k} className="r num">{fmt(mean(series(a, k)))}</td>)}
                           <td className="r num">{ci ? `+${fmt(ci.mean)} [${fmt(ci.lo)}, ${fmt(ci.hi)}]` : '—'}</td>
-                          <td>{a === best ? <span className="sig">Lowest cost</span> : tied(a) ? <span className="tied">Tied (CI ∋ 0)</span> : <span className="tied" style={{ color: 'var(--ink-2)' }}>Worse</span>}</td>
+                          <td>{a === best ? <span className="sig">Lowest cost</span> : tied(a) ? <span className="tied">Not significantly different (CI ∋ 0)</span> : <span className="tied" style={{ color: 'var(--ink-2)' }}>Significantly costlier</span>}</td>
                         </tr>
                       )
                     })}

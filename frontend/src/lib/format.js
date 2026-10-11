@@ -13,6 +13,20 @@ export function fmt(v, digits = 1) {
   return v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
 
+/** "1 job", "3 jobs": a count with the noun agreeing. */
+export function plural(n, one, many = `${one}s`) {
+  return `${fmt(n)} ${n === 1 ? one : many}`
+}
+
+/** "A", "A and B", "A, B and C". */
+export function listOf(items) {
+  if (items.length <= 1) return items.join('')
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
+
+/** A solve time that stays readable below 10 ms. */
+export const ms = (v) => `${fmt(v, v < 10 ? 1 : 0)} ms`
+
 export const PRIORITY = {
   1: { label: 'PM', long: 'Preventive maintenance' },
   2: { label: 'Tool down', long: 'Tool down' },

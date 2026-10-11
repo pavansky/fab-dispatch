@@ -18,26 +18,40 @@ export function setTokenProvider(fn) { tokenProvider = fn }
 export const currentToken = () => tokenProvider()
 
 const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const RETRY_STATUS = new Set([502, 503, 504])
+export const RETRY_DELAYS_MS = [250, 750]
 
-async function request(path, { method = 'GET', body, signal, headers, idempotent = false } = {}) {
+/**
+ * `idempotencyKey` marks one logical action. If the connection drops or a gateway fails, the
+ * request is retried with the same key, so the server answers the retry from its record of
+ * the first attempt instead of applying the action twice. Requests without a key are never
+ * retried. (Double clicks are a UI concern: the live view disables its buttons in flight.)
+ */
+async function request(path, { method = 'GET', body, signal, headers, idempotencyKey } = {}) {
   const token = tokenProvider()
+  const delays = idempotencyKey ? RETRY_DELAYS_MS : []
   let res
-  try {
-    res = await fetch(`${BASE}${path}`, {
-      method,
-      signal,
-      headers: {
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        // Retrying this exact request (flaky network) is answered once, not applied twice.
-        ...(idempotent ? { 'Idempotency-Key': newKey() } : {}),
-        ...headers,
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    })
-  } catch (e) {
-    if (e.name === 'AbortError') throw e
-    throw new ApiError("Can't reach the API. Is the backend running?", { status: 0, code: 'network' })
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch(`${BASE}${path}`, {
+        method,
+        signal,
+        headers: {
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+          ...headers,
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      })
+    } catch (e) {
+      if (e.name === 'AbortError') throw e
+      if (attempt < delays.length) { await sleep(delays[attempt]); continue }
+      throw new ApiError("Can't reach the API. Is the backend running?", { status: 0, code: 'network' })
+    }
+    if (RETRY_STATUS.has(res.status) && attempt < delays.length) { await sleep(delays[attempt]); continue }
+    break
   }
   if (res.status === 304) return { notModified: true, etag: res.headers.get('etag') }
   const data = await res.json().catch(() => null)
@@ -62,7 +76,7 @@ function remember(key, value) {
 export function clearPlanCache() { planCache.clear() }
 
 export const getMeta = () => request('/meta').then((r) => r.data)
-export const generateScenario = (params) => request('/scenario', { method: 'POST', body: params }).then((r) => r.data)
+export const generateScenario = (params, signal) => request('/scenario', { method: 'POST', body: params, signal }).then((r) => r.data)
 
 // ------------------------------------------------------------------ auth and fabs
 export const authConfig = () => request('/auth/config').then((r) => r.data)
@@ -96,12 +110,12 @@ export const getShift = (id, etag) =>
   request(`/shifts/${id}`, { headers: etag ? { 'If-None-Match': etag } : undefined })
 export const listShifts = (fabId) => request(`/shifts?fab_id=${encodeURIComponent(fabId)}`).then((r) => r.data)
 export const advanceShift = (id, minutes) =>
-  request(`/shifts/${id}/advance`, { method: 'POST', body: { minutes }, idempotent: true }).then((r) => r.data)
+  request(`/shifts/${id}/advance`, { method: 'POST', body: { minutes }, idempotencyKey: newKey() }).then((r) => r.data)
 export const releaseClock = (id) => request(`/shifts/${id}/release`, { method: 'POST' }).then((r) => r.data)
 export const reportJob = (id, job) =>
-  request(`/shifts/${id}/jobs`, { method: 'POST', body: { job }, idempotent: true }).then((r) => r.data)
+  request(`/shifts/${id}/jobs`, { method: 'POST', body: { job }, idempotencyKey: newKey() }).then((r) => r.data)
 export const engineerOff = (id, engineerId) =>
-  request(`/shifts/${id}/engineers/${engineerId}/off`, { method: 'POST', idempotent: true }).then((r) => r.data)
+  request(`/shifts/${id}/engineers/${engineerId}/off`, { method: 'POST', idempotencyKey: newKey() }).then((r) => r.data)
 export const shiftEvents = (id, after = 0) => request(`/shifts/${id}/events?after=${after}`).then((r) => r.data)
 // EventSource can't send headers, so the stream (only) takes the token as a query parameter.
 export const streamUrl = (id) => `${BASE}/shifts/${id}/stream?access_token=${encodeURIComponent(tokenProvider() ?? '')}`

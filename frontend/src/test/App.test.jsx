@@ -154,6 +154,21 @@ describe('views', () => {
     expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent(recommend(results, 'cost').winner.label)
   })
 
+  it('describes the noise band only for the goal that draws it, as a one-sided margin', async () => {
+    const { user } = await signInAs('dispatcher')
+    const card = screen.getByRole('region', { name: 'Recommendation' })
+    await waitFor(() => expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent(recommend(results, 'value').winner.label))
+    const chart = screen.getByRole('heading', { name: /Cost × latency/ }).closest('section')
+    const { margin, pool } = recommend(results, 'value')
+    const cheapest = results.filter((r) => pool.includes(r.algorithm)).sort((a, b) => a.metrics.objective - b.metrics.objective)[0]
+    expect(chart).toHaveTextContent(`plans costing up to ${Math.round(margin)} pts more than ${ALGO_SHORT[cheapest.algorithm]}`)
+    expect(chart).not.toHaveTextContent('±')
+    expect(chart.querySelector('rect.band')).not.toBeNull()
+    await user.selectOptions(within(card).getByRole('combobox', { name: 'Planning goal' }), 'bottleneck')
+    expect(chart).not.toHaveTextContent(/shaded band/)
+    expect(chart.querySelector('rect.band')).toBeNull()
+  })
+
   it('opens a job the strategies disagree on in the floor plan', async () => {
     const { user } = await signInAs('dispatcher')
     await waitFor(() => expect(screen.getByRole('heading', { name: /Where the strategies disagree/ })).toBeInTheDocument())
@@ -161,6 +176,21 @@ describe('views', () => {
     await user.click(row)
     expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
     expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
+  })
+
+  it('opens a disagreement or an unserved job from the keyboard', async () => {
+    const { user } = await signInAs('dispatcher')
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Where the strategies disagree/ })).toBeInTheDocument())
+    screen.getByRole('button', { name: 'Inspect J006 on the floor plan' }).focus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
+    expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
+    await user.click(screen.getByRole('tab', { name: /Workforce/ }))
+    const first = fixtures.plans.pyvrp.unassigned[0].job_id
+    screen.getByRole('button', { name: `Inspect ${first} on the floor plan` }).focus()
+    await user.keyboard(' ')
+    expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
+    expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent(first)
   })
 
   it("jumps from a strategy's scorecard to its floor plan", async () => {
@@ -201,7 +231,7 @@ describe('views', () => {
     const replanned = api.find('POST', '/plan').at(-1).body.scenario.engineers.map((e) => e.id)
     expect(replanned).not.toContain('E01')
     expect(replanned).toHaveLength(fixtures.scenario.engineers.length - 1)
-    expect(screen.getByRole('button', { name: 'Restore all 1 engineers' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Restore 1 engineer' })).toBeInTheDocument()
   })
 })
 

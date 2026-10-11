@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useState } from 'react'
 
 const STEPS = [
   { target: 'reco', title: 'The recommendation', body: 'All five strategies solve your shift. This card names the plan to use and says why in one sentence.' },
-  { target: 'frontier', title: 'Cost against speed', body: 'Each point is a strategy. Lower-left is better. Differences inside the shaded band are noise, not wins.' },
+  { target: 'frontier', title: 'Cost against speed', body: 'Each point is a strategy. Lower-left is better. Under the Best value goal, differences inside the shaded band are noise, not wins.' },
   { target: 'tabs', title: 'Six views of one shift', body: 'Inspect jobs on the floor plan, timelines, staffing, run the shift live, or benchmark over many shifts.' },
   { target: 'weights', title: 'Tune what matters', body: 'Drag a cost weight and every strategy re-solves. Generate a new shift or try what-ifs here too.' },
   { target: 'ask', title: 'Ask anything', body: 'The assistant answers about this shift and the app, with sources. Press / any time.' },
