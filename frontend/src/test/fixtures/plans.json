@@ -576,7 +576,7 @@
    "operating_cost": 476.1,
    "workload_cost": 75.0,
    "reassignment_cost": 0.0,
-   "runtime_ms": 1.17
+   "runtime_ms": 1.07
   },
   "solver": {}
  },
@@ -1167,7 +1167,7 @@
    "operating_cost": 554.1,
    "workload_cost": 55.0,
    "reassignment_cost": 0.0,
-   "runtime_ms": 280.46
+   "runtime_ms": 263.92
   },
   "solver": {}
  },
@@ -1749,7 +1749,7 @@
    "operating_cost": 478.1,
    "workload_cost": 60.0,
    "reassignment_cost": 0.0,
-   "runtime_ms": 3.13
+   "runtime_ms": 2.64
   },
   "solver": {}
  },
@@ -2328,14 +2328,14 @@
    "operating_cost": 478.1,
    "workload_cost": 60.0,
    "reassignment_cost": 0.0,
-   "runtime_ms": 28.35
+   "runtime_ms": 30.09
   },
   "solver": {
    "iterations": 60,
    "best_iteration": 0,
    "hit_time_cap": false,
-   "warm_start_s": 0.0027,
-   "search_s": 0.0247,
+   "warm_start_s": 0.0035,
+   "search_s": 0.0255,
    "operator_weights": {
     "random": 1.16,
     "worst": 1.25,
@@ -2366,7 +2366,7 @@
      "workload": 0.0,
      "priority": -180.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E01's route, at marginal cost -175.8.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 1 of E01's route, at marginal cost -175.8.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2386,7 +2386,7 @@
      "workload": 5.0,
      "priority": -180.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 2 of E01's route, at marginal cost -162.5.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 2 of E01's route, at marginal cost -162.5.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2406,7 +2406,7 @@
      "workload": 10.0,
      "priority": -120.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 3 of E01's route, at marginal cost -102.1.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 3 of E01's route, at marginal cost -102.1.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2426,7 +2426,7 @@
      "workload": 0.0,
      "priority": -120.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E02's route, at marginal cost -113.3.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 1 of E02's route, at marginal cost -113.3.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2446,7 +2446,7 @@
      "workload": 0.0,
      "priority": -120.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E03's route, at marginal cost -111.8.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 1 of E03's route, at marginal cost -111.8.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2466,7 +2466,7 @@
      "workload": 5.0,
      "priority": -60.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 2 of E03's route, at marginal cost -52.8.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 2 of E03's route, at marginal cost -52.8.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2486,7 +2486,7 @@
      "workload": 10.0,
      "priority": -120.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 3 of E03's route, at marginal cost -92.2.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 3 of E03's route, at marginal cost -92.2.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2506,7 +2506,7 @@
      "workload": 15.0,
      "priority": -120.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 4 of E03's route, at marginal cost -94.8.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 4 of E03's route, at marginal cost -94.8.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2526,7 +2526,7 @@
      "workload": 0.0,
      "priority": -60.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E04's route, at marginal cost -52.9.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 1 of E04's route, at marginal cost -52.9.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2546,7 +2546,7 @@
      "workload": 0.0,
      "priority": -120.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E05's route, at marginal cost -103.5.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 1 of E05's route, at marginal cost -103.5.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2566,7 +2566,7 @@
      "workload": 5.0,
      "priority": -120.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 2 of E05's route, at marginal cost -112.4.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 2 of E05's route, at marginal cost -112.4.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2586,7 +2586,7 @@
      "workload": 0.0,
      "priority": -60.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 1 of E06's route, at marginal cost -59.8.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 1 of E06's route, at marginal cost -59.8.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2606,7 +2606,7 @@
      "workload": 5.0,
      "priority": -120.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 2 of E06's route, at marginal cost -109.3.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 2 of E06's route, at marginal cost -109.3.",
     "alternatives": [],
     "rejections": {}
    },
@@ -2626,7 +2626,7 @@
      "workload": 10.0,
      "priority": -120.0
     },
-    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations) as stop 3 of E06's route, at marginal cost -108.2.",
+    "explanation": "Placed by PyVRP iterated local search over the whole shift (300 iterations, cheapest of 5 plans by the planner's cost) as stop 3 of E06's route, at marginal cost -108.2.",
     "alternatives": [],
     "rejections": {}
    }
@@ -2830,14 +2830,15 @@
    "operating_cost": 463.5,
    "workload_cost": 65.0,
    "reassignment_cost": 0.0,
-   "runtime_ms": 70.42
+   "runtime_ms": 67.0
   },
   "solver": {
    "iterations": 300,
    "hit_time_cap": false,
-   "warm_start_s": 0.0028,
-   "search_s": 0.0447,
-   "runtime_ms": 49.8
+   "warm_start_s": 0.0025,
+   "search_s": 0.0451,
+   "plans_scored": 5,
+   "runtime_ms": 49.6
   }
  }
 }

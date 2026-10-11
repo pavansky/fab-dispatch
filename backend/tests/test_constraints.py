@@ -102,13 +102,13 @@ def time_guard(seconds: int):
 def test_the_exact_optimum_is_proven_at_full_shift_size_for_every_preset(preset):
     """test_algorithms proves the normal preset at 14 x 45; the other presets are proven here (one
     seed each, 6 to 20 s on a laptop) so no optimality claim rests on a size that was never run in
-    CI. Guarded at 90 s per proof: a slow runner skips rather than times the job out."""
+    CI. Guarded at 240 s per proof (the overstaffed shift takes 2-4 minutes on a CI runner): a slow runner skips rather than times the job out."""
     sc = generate(0, 14, 45, preset)
     p = Planner(sc, Weights())
     t0 = time.perf_counter()
-    with time_guard(90):  # the alarm covers route enumeration; HiGHS gets its own limit
+    with time_guard(240):  # the alarm covers route enumeration; HiGHS gets its own limit
         try:
-            run_exact(p, time_limit_s=90)
+            run_exact(p, time_limit_s=240)
         except ExactTimeout as e:
             pytest.skip(str(e))
     print(f"{preset}: proven in {time.perf_counter() - t0:.1f} s over {p.meta['solver']['columns']:,} routes")

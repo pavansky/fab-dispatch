@@ -1,6 +1,6 @@
 {
   "id": "fab1-300mm-logic",
-  "name": "Fab 1 \u00b7 300mm logic",
+  "name": "Fab 1 · 300mm logic",
   "description": "Illustrative 300mm logic fab: lithography in a central yellow-light bay, etch, deposition, CMP, implant and metrology around it.",
   "floor": {
     "width": 400,
@@ -485,7 +485,7 @@
     },
     "overstaffed": {
       "label": "Overstaffed",
-      "description": "More certified engineers than the work needs (a larger bottleneck-certified share, broad cross-training); the question is cost, not coverage.",
+      "description": "More certified engineers than the work needs (one more bottleneck-certified engineer on a 14-engineer shift, wider windows); the question is cost, not coverage.",
       "family_mix": {
         "litho": 0.15,
         "etch": 0.22,
@@ -494,14 +494,14 @@
         "implant": 0.1,
         "metrology": 0.18
       },
-      "constraint_engineer_share": 0.35,
+      "constraint_engineer_share": 0.25,
       "down_share": 0.5,
       "sla_critical": 60,
       "sla_down": 150,
       "cross_training": [
-        2,
-        2,
-        3
+        1,
+        1,
+        2
       ]
     }
   }

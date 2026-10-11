@@ -102,7 +102,7 @@
    },
    "overstaffed": {
     "label": "Overstaffed",
-    "description": "More certified engineers than the work needs (a larger bottleneck-certified share, broad cross-training); the question is cost, not coverage.",
+    "description": "More certified engineers than the work needs (one more bottleneck-certified engineer on a 14-engineer shift, wider windows); the question is cost, not coverage.",
     "sla_critical": 60,
     "sla_down": 150
    }
@@ -200,7 +200,7 @@
    },
    "overstaffed": {
     "label": "Overstaffed",
-    "description": "More certified engineers than the work needs (a larger photo-certified share, broad cross-training); the question is cost, not coverage.",
+    "description": "More certified engineers than the work needs (one more photo-certified engineer on a 14-engineer shift, wider windows); the question is cost, not coverage.",
     "sla_critical": 60,
     "sla_down": 150
    }

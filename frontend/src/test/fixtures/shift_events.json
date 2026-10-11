@@ -6,7 +6,7 @@
   "message": "dispatcher@demo.local started the shift with 6 known jobs and 6 engineers.",
   "data": {},
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-11T15:45:52.801778+00:00",
+  "at": "2026-10-11T16:35:00.347968+00:00",
   "version": 1
  },
  {
@@ -24,7 +24,7 @@
     "J015"
    ],
    "dropped": [],
-   "runtime_ms": 20.49,
+   "runtime_ms": 19.24,
    "assignments": {
     "J002": "E03",
     "J004": "E03",
@@ -34,7 +34,7 @@
    }
   },
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-11T15:45:52.823061+00:00",
+  "at": "2026-10-11T16:35:00.367801+00:00",
   "version": 1
  },
  {
@@ -51,7 +51,7 @@
    "total": 18
   },
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-11T15:45:52.833246+00:00",
+  "at": "2026-10-11T16:35:00.377488+00:00",
   "version": 2
  }
 ]

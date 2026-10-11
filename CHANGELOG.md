@@ -20,8 +20,8 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 - **Priority 3 means a tool-down on the constraint family**, nothing else; `critical_coverage_pct` is
   null when a shift has no such job instead of 100; new metrics `critical_jobs`,
   `workload_minutes_std` (the UI shows workload spread in minutes), `response_p95_min` and
-  `unserved_downs`; the *Overstaffed* preset now adds certified engineers and cross-training (fab 2
-  gains the preset too).
+  `unserved_downs`; the *Overstaffed* preset now adds a certified engineer (fab 2 gains the preset too; kept mild
+  because every extra certified engineer multiplies the routes the exact proof enumerates).
 - **Docs and citations.** The pinned PyVRP runs iterated local search (the DIMACS and EURO-NeurIPS wins
   belong to its hybrid genetic search); ReEvo, EoH and the EURO-NeurIPS competition point at the right
   papers; the technician-routing literature is cited and the "state of the art for this problem class"
