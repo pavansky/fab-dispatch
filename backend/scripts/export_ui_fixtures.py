@@ -11,9 +11,20 @@ from __future__ import annotations
 
 import json
 import os
+import platform
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parents[2] / "frontend" / "src" / "test" / "fixtures"
+# Written next to the fixtures (an underscore so the fixture contract test skips it): how they
+# were produced, so a reader knows the timings are not the shipped app's.
+META_NOTE = "_export_meta.json"
+
+# The search solvers run at a fraction of the shipped iteration budgets (app/config.py: 300 ALNS,
+# 1000 PyVRP) so regenerating is quick. Costs are therefore slightly worse than the live app's, and
+# every runtime_ms is the export machine's measured wall clock, not a representative latency.
+EXPORT_BUDGETS = {"FAB_ALNS_ITERATIONS": "60", "FAB_PYVRP_ITERATIONS": "300"}
 
 # A small, crowded shift: every strategy leaves some work unserved, so the fixtures cover
 # both explanations (assigned) and rejection reasons (unassigned).
@@ -24,8 +35,8 @@ BENCHMARK = {"fab_id": "fab1-300mm-logic", "preset": "normal", "seeds": 3, "n_en
 def _setup_env() -> None:
     os.environ.setdefault("FAB_AUTH_MODE", "demo")
     os.environ.setdefault("FAB_DATABASE_URL", "sqlite:///:memory:")
-    os.environ.setdefault("FAB_ALNS_ITERATIONS", "60")
-    os.environ.setdefault("FAB_PYVRP_ITERATIONS", "300")
+    for key, value in EXPORT_BUDGETS.items():
+        os.environ.setdefault(key, value)
 
 
 def export() -> dict[str, object]:
@@ -71,15 +82,8 @@ def export() -> dict[str, object]:
         "docs": ok(c.post("/api/assistant/ask", json={"question": "How do I report a tool-down during a live shift?"})),
         "unknown": ok(c.post("/api/assistant/ask", json={"question": "Tell me a joke"})),
     }
+    # runtime_ms stays as measured (it differs run to run); META_NOTE says where it was measured.
     benchmark = ok(c.post("/api/benchmark", json=BENCHMARK))
-    # Wall-clock times differ run to run; pin them so regenerating doesn't churn the diff.
-    pinned = {"greedy": 2, "hungarian": 3, "regret": 6, "alns": 180, "pyvrp": 390}
-    for p in plans.values():
-        p["metrics"]["runtime_ms"] = pinned[p["algorithm"]]
-        if "runtime_ms" in p["solver"]:
-            p["solver"]["runtime_ms"] = pinned[p["algorithm"]]
-    for run in benchmark["runs"]:
-        run["metrics"]["runtime_ms"] = pinned[run["algorithm"]]
     return {
         "auth_config": ok(c.get("/api/auth/config")),
         "health": ok(c.get("/api/health")),
@@ -109,11 +113,31 @@ def export() -> dict[str, object]:
     }
 
 
+def export_note() -> dict[str, object]:
+    """What the fixtures were produced with: reduced solver budgets, and timings from this machine."""
+    from app.config import Settings
+
+    shipped = {k: Settings.model_fields[k].default for k in ("alns_iterations", "pyvrp_iterations")}
+    return {
+        "note": (
+            "Fixtures exported from the in-process API with reduced search budgets so regeneration is quick. "
+            "Costs can be slightly worse than the live app's, and every runtime_ms is the wall clock measured "
+            "on the export machine (below), not a representative latency."
+        ),
+        "export_budgets": {k.removeprefix("FAB_").lower(): int(v) for k, v in EXPORT_BUDGETS.items()},
+        "shipped_budgets": shipped,
+        "exported_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
+        "machine": {"python": sys.version.split()[0], "platform": platform.platform(), "machine": platform.machine()},
+    }
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, body in export().items():
         (OUT / f"{name}.json").write_text(json.dumps(body, indent=1) + "\n")
         print(f"wrote {OUT / name}.json")
+    (OUT / META_NOTE).write_text(json.dumps(export_note(), indent=1) + "\n")
+    print(f"wrote {OUT / META_NOTE}")
 
 
 if __name__ == "__main__":
