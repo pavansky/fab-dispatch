@@ -54,7 +54,9 @@ listed share the default database, isolated by `fab_id`.
 
 ## 5. Ship it
 
-Open a pull request (template: *Onboard a new fab*), let CI pass, merge to `main`, verify in UAT
-with the fab's key users, then release. See [ENVIRONMENTS.md](ENVIRONMENTS.md).
+Open an issue from the *Onboard a new fab* template (it lists what a profile needs; there is no
+pull request template for it), then a pull request with the profile and its golden fingerprint, let
+CI pass, merge to `main`, verify in UAT with the fab's key users, then release. See
+[ENVIRONMENTS.md](ENVIRONMENTS.md).
 
 Profiles can also live outside the repo: point `FAB_PROFILES_DIR` at a directory of JSON files.
