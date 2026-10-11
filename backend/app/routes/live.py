@@ -5,6 +5,8 @@ Production behaviours on every mutating call:
 * **Roles**: viewers can watch; only dispatchers change a shift.
 * **Fab scoping**: a shift is visible only to users with access to its fab.
 * **Optimistic concurrency**: writes are version-checked; ``If-Match`` pins a version.
+* **Ended shifts are final**: every write to an ended shift is refused with 409, and an
+  action that changes nothing (releasing a clock you don't hold) doesn't bump the version.
 * **Idempotency**: an ``Idempotency-Key`` header makes a retried request return the
   first response instead of applying the change twice. The key is claimed in the same
   transaction as the write, so even two concurrent requests with one key apply once.
@@ -103,12 +105,22 @@ def _mutate(
         state, version = _load(shift_id, user)
         if if_match is not None and if_match.strip('"') != str(version):
             raise HTTPException(409, f"shift changed (now version {version}); reload and retry")
+        if state.ended:
+            raise HTTPException(409, f"shift {shift_id} has ended; it can't be changed")
+        before = state.model_dump(mode="json")
         try:
             events = action(state)
         except live.ClockBusy as e:
             raise HTTPException(409, f"{e} is driving the clock right now") from None
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
+        if not events and state.model_dump(mode="json") == before:
+            # Nothing changed (e.g. releasing a clock this user doesn't hold): no write, so the
+            # version, and every other client's If-Match, stays valid.
+            out = {**_view(state, version, store.presence(shift_id)), "events": []}
+            if scoped_key:
+                store.put_idempotent(scoped_key, out)
+            return out
         # The response is stored with the key in the same transaction, so it is built first; the
         # version-checked write makes ``version + 1`` the version it commits, or it fails.
         new_version = version + 1
@@ -194,7 +206,18 @@ def report_job(
     idempotency_key: str | None = Header(None),
     _rl: None = Depends(rate_limit("live", 240, 30)),
 ) -> dict:
-    return _mutate(shift_id, user, lambda s: live.report_job(s, req.job, user.email), if_match, idempotency_key)
+    return _mutate(shift_id, user, reporting(user, req.job), if_match, idempotency_key)
+
+
+def reporting(user: User, job: Job) -> Callable[[live.LiveState], list[dict]]:
+    """The action that reports ``job`` on a shift, checked as strictly as a new shift is: the
+    job's tool family must exist in the shift's fab, and the shift stays within the size cap."""
+
+    def act(state: live.LiveState) -> list[dict]:
+        check_scenario(user, state.scenario.model_copy(update={"jobs": [*state.scenario.jobs, job]}))
+        return live.report_job(state, job, user.email)
+
+    return act
 
 
 @router.post("/{shift_id}/engineers/{engineer_id}/off")

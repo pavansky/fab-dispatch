@@ -102,6 +102,47 @@ def test_a_write_that_fails_part_way_is_applied_once_on_retry(monkeypatch):
     assert again["idempotent_replay"] is True and again["state"]["clock"] == 60
 
 
+def test_ended_shifts_refuse_every_write():
+    sid = _shift()
+    end = alice.post(f"/api/shifts/{sid}/advance", json={"minutes": 24 * 60}).json()
+    assert end["state"]["ended"] is True
+    job = {"id": "LATE1", "x": 30, "y": 40, "skill": "etch", "earliest": 0, "latest": 60}
+    for path, body in (
+        ("advance", {"minutes": 10}),
+        ("jobs", {"job": job}),
+        ("engineers/E01/off", None),
+        ("release", None),
+    ):
+        r = alice.post(f"/api/shifts/{sid}/{path}", json=body)
+        assert r.status_code == 409 and "ended" in r.json()["error"]["message"], path
+    assert alice.get(f"/api/shifts/{sid}").json()["version"] == end["version"]
+
+
+def test_actions_that_change_nothing_keep_the_version():
+    sid = _shift()
+    v1 = alice.get(f"/api/shifts/{sid}").json()["version"]
+    released = alice.post(f"/api/shifts/{sid}/release").json()  # alice doesn't hold the clock
+    assert released["version"] == v1 and released["events"] == []
+    off = alice.post(f"/api/shifts/{sid}/engineers/E01/off").json()
+    assert off["version"] == v1 + 1
+    again = alice.post(f"/api/shifts/{sid}/engineers/E01/off").json()
+    assert again["version"] == v1 + 1 and again["events"] == []
+    assert alice.get(f"/api/shifts/{sid}").json()["version"] == v1 + 1
+
+
+def test_reported_jobs_are_checked_against_the_fab_and_the_size_cap():
+    sid = _shift()
+    job = {"id": "JX9", "x": 30, "y": 40, "skill": "no_such_family", "earliest": 0, "latest": 60}
+    r = alice.post(f"/api/shifts/{sid}/jobs", json={"job": job})
+    assert r.status_code == 422 and "no_such_family" in r.json()["error"]["message"]
+
+    sc = alice.post("/api/scenario", json={"seed": 2, "n_engineers": 4, "n_jobs": 200}).json()
+    full = alice.post("/api/shifts", json={"scenario": sc, "algorithm": "greedy"}).json()["state"]["id"]
+    r = alice.post(f"/api/shifts/{full}/jobs", json={"job": {**job, "skill": "etch"}})
+    assert r.status_code == 413
+    assert alice.get(f"/api/shifts/{full}").json()["version"] == 1
+
+
 def test_only_one_dispatcher_drives_the_clock():
     sid = _shift()
     bob = _other_dispatcher()
