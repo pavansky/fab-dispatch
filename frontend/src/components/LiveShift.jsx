@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { advanceShift, createShift, engineerOff, getShift, listShifts, releaseClock, reportJob, streamUrl } from '../api.js'
+import { advanceShift, createShift, engineerOff, getShift, listShifts, releaseClock, reportJob, streamUrlFor } from '../api.js'
 import { useAuth } from '../auth.jsx'
 import { ALGO_ORDER, ALGO_SHORT } from '../lib/metrics.js'
 import { PRIORITY, clock, fmt, plural } from '../lib/format.js'
 import { familyAt, familyPrefix, isConstraint, shiftLength } from '../lib/fab.js'
 import { liveJobId, responseTargets, shiftWindows } from '../lib/scenario.js'
+import { RECONNECT_MS } from '../lib/stream.js'
 import FloorPlan from './FloorPlan.jsx'
 import Schedule from './Schedule.jsx'
 import InfoLink from './InfoLink.jsx'
@@ -62,9 +63,14 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
   const [reportMode, setReportMode] = useState(false)
   const [toasts, setToasts] = useState([])
   const etag = useRef(null)
+  const lastEvent = useRef(0) // the newest event id seen, so a reconnect resumes where it left off
   const openId = useRef(shiftId) // the shift this view shows now; answers for any other are dropped
   openId.current = shiftId
   const inFlight = useRef(false)
+  // The shift version this view last saw, sent as If-Match on every write: a write that would
+  // land on a version someone else has since changed is refused (409) instead of applied blind.
+  const pin = useRef(null)
+  pin.current = view ? `"${view.version}"` : null
 
   const toast = useCallback((text, tone = '') => {
     const id = Math.random().toString(36).slice(2)
@@ -94,6 +100,7 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
     url.searchParams.set('shift', shiftId)
     history.replaceState(null, '', url)
     etag.current = null // a cached ETag would get a 304 here, with no view to keep
+    lastEvent.current = 0
     refresh(shiftId).catch((e) => { onError(e.message); setShiftId(null) })
     return () => {
       const out = new URL(location.href)
@@ -107,21 +114,50 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
   // Realtime: the SSE stream relays the shift's event log; each event triggers a cheap
   // conditional refetch (ETag, so unchanged state costs a 304). A slow poll keeps
   // presence and the clock driver fresh even when nothing happens.
+  //
+  // Every connection is opened with a fresh stream ticket (or a fresh token where the API has
+  // no tickets). EventSource's own reconnect would reuse the first URL for ever, and a ticket
+  // or a rotated token in it has expired by then, so the stream is closed on error and
+  // reopened here with a new ticket, backing off 1, 2, 4, 8 … s up to 30 s.
   useEffect(() => {
     if (!shiftId || !online) return
-    const es = new EventSource(streamUrl(shiftId))
+    let es = null
+    let timer = null
+    let closed = false
+    let delay = RECONNECT_MS.first
     const onEvent = (e) => {
       const ev = JSON.parse(e.data)
+      if (typeof ev.id === 'number') lastEvent.current = Math.max(lastEvent.current, ev.id)
       setFeed((prev) => (prev.some((x) => x.id === ev.id) ? prev : [ev, ...prev].slice(0, 200)))
       if (ev.kind === 'job_reported' && ev.data?.priority === 3) toast(`Bottleneck down: ${ev.message}`, 'alert')
       if (ev.kind === 'engineer_off') toast(ev.message, 'alert')
       refresh(shiftId).catch(() => {})
     }
-    EVENT_KINDS.forEach((k) => es.addEventListener(k, onEvent))
-    es.onopen = () => setConnected(true)
-    es.onerror = () => setConnected(false) // EventSource reconnects by itself (Last-Event-ID)
+    const later = () => {
+      timer = setTimeout(connect, delay)
+      delay = Math.min(delay * 2, RECONNECT_MS.max)
+    }
+    async function connect() {
+      let url
+      try {
+        url = await streamUrlFor(shiftId, lastEvent.current)
+      } catch {
+        if (!closed) later() // no ticket (API down, signed out …): try again later
+        return
+      }
+      if (closed) return
+      es = new EventSource(url)
+      EVENT_KINDS.forEach((k) => es.addEventListener(k, onEvent))
+      es.onopen = () => { delay = RECONNECT_MS.first; setConnected(true) }
+      es.onerror = () => {
+        setConnected(false)
+        es.close()
+        if (!closed) later()
+      }
+    }
+    connect()
     const poll = setInterval(() => refresh(shiftId).catch(() => {}), 15000)
-    return () => { es.close(); clearInterval(poll) }
+    return () => { closed = true; es?.close(); clearTimeout(timer); clearInterval(poll) }
   }, [shiftId, refresh, online, toast])
 
   // One action at a time: a double click (or a click during an autoplay tick) is dropped
@@ -131,17 +167,21 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
     inFlight.current = true
     setBusy(true)
     try {
-      const out = await fn()
+      const out = await fn({ etag: pin.current })
       if (out?.state && out.state.id === openId.current) { setView(out); etag.current = null }
     } catch (e) {
-      if (e.status === 409) toast(e.message)
-      else onError(e.message)
+      if (e.status === 409) {
+        // A conflict: show the shift as it is now and let the user decide again, never retry.
+        toast(/shift changed/i.test(e.message) ? 'Someone else changed this shift; showing the latest' : e.message)
+        etag.current = null
+        if (openId.current) refresh(openId.current).catch(() => {})
+      } else onError(e.message)
       setPlaying(false)
     } finally {
       inFlight.current = false
       setBusy(false)
     }
-  }, [onError, toast])
+  }, [onError, toast, refresh])
 
   const driver = view?.clock_driver
   const drivenByOther = Boolean(driver && driver !== user.email)
@@ -151,7 +191,7 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
   // Autoplay: one request per second while this dispatcher holds the clock.
   useEffect(() => {
     if (!playing || !shiftId || view?.state.ended || !online) return
-    const t = setInterval(() => { if (!busy) act(() => advanceShift(shiftId, speed)) }, 1000)
+    const t = setInterval(() => { if (!busy) act((opts) => advanceShift(shiftId, speed, opts)) }, 1000)
     return () => clearInterval(t)
   }, [playing, shiftId, speed, busy, view?.state.ended, online, act])
   useEffect(() => { if (view?.state.ended) setPlaying(false) }, [view?.state.ended])
@@ -160,7 +200,7 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
   // out the lease. (This cleanup runs before `driving` is updated for the same commit.)
   useEffect(() => {
     if (!playing || !shiftId) return
-    return () => { if (driving.current) releaseClock(shiftId).catch(() => {}) }
+    return () => { if (driving.current) releaseClock(shiftId, { etag: pin.current }).catch(() => {}) }
   }, [playing, shiftId])
 
   const pause = () => setPlaying(false)
@@ -251,11 +291,11 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
     if (!reportMode || !canDispatch || busy) return
     const fam = familyAt(pt)
     if (!fam) { onError('Tap inside a tool area to report a tool-down there.'); return }
-    act(() => reportJob(state.id, {
+    act((opts) => reportJob(state.id, {
       id: liveJobId(), x: pt.x, y: pt.y, skill: fam, min_level: isConstraint(fam) ? 2 : 1,
       priority: 3, kind: 'down', earliest: 0, latest: bottleneckTarget, duration: 60, tool: `${familyPrefix(fam)}-LIVE`,
       symptom: 'operator reported tool down',
-    }))
+    }, opts))
   }
 
   return (
@@ -282,7 +322,7 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
               <div className="seg" role="group" aria-label="Speed">
                 {SPEEDS.map(([v, l]) => <button key={v} aria-pressed={speed === v} onClick={() => setSpeed(v)}>{l}</button>)}
               </div>
-              <button className="btn" disabled={busy || state.ended || drivenByOther} onClick={() => act(() => advanceShift(state.id, 60))}>+1 h</button>
+              <button className="btn" disabled={busy || state.ended || drivenByOther} onClick={() => act((opts) => advanceShift(state.id, 60, opts))}>+1 h</button>
               <label className="toggle"><input type="checkbox" checked={reportMode} onChange={(e) => setReportMode(e.target.checked)} />Tap floor to report a bottleneck down</label>
             </>
           ) : <span className="badge">Viewing only</span>}
@@ -330,7 +370,7 @@ export default function LiveShift({ scenario, preset, weights, areas, profile, c
               <b>{selection.id}</b>
               {offShift.has(selection.id)
                 ? <span className="muted">left the shift at {clock(state.off_shift[selection.id])}</span>
-                : <button className="btn" disabled={busy || state.ended} onClick={() => act(() => engineerOff(state.id, selection.id))}>Take off shift now</button>}
+                : <button className="btn" disabled={busy || state.ended} onClick={() => act((opts) => engineerOff(state.id, selection.id, opts))}>Take off shift now</button>}
               <button className="btn ghost" onClick={() => setSelection(null)}>Clear</button>
             </div>
           )}

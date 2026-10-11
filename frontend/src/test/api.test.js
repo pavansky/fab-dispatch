@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError, advanceShift, getHealth, getMeta, plan, reportJob, retryAfterMs, setTokenProvider, streamUrl } from '../api.js'
+import { ApiError, advanceShift, engineerOff, getHealth, getMeta, plan, releaseClock, reportJob, retryAfterMs, setTokenProvider, setTokenRefresher, streamUrl, streamUrlFor } from '../api.js'
 import { errorBody, fixtures, json, mockApi } from './api.js'
 
 describe('API client', () => {
@@ -40,6 +40,37 @@ describe('API client', () => {
     await getMeta().catch(() => {})
     window.removeEventListener('auth:expired', expired)
     expect(expired).toHaveBeenCalledOnce()
+  })
+
+  it('renews the session once on a 401 and retries with the new token, signing out only if that fails', async () => {
+    let token = 'stale'
+    const api = mockApi({ 'GET /meta': ({ headers }) => (headers.Authorization === 'Bearer fresh' ? fixtures.meta : json(401, errorBody('unauthorized', 'Token expired'))) })
+    setTokenProvider(() => token)
+    const refresher = vi.fn(async () => { token = 'fresh'; return 'fresh' })
+    setTokenRefresher(refresher)
+    const expired = vi.fn()
+    window.addEventListener('auth:expired', expired)
+    try {
+      await expect(Promise.all([getMeta(), getMeta()])).resolves.toEqual([fixtures.meta, fixtures.meta])
+      expect(refresher).toHaveBeenCalledOnce() // one renewal serves both requests
+      expect(api.find('GET', '/meta').map((c) => c.headers.Authorization)).toEqual(['Bearer stale', 'Bearer stale', 'Bearer fresh', 'Bearer fresh'])
+      expect(expired).not.toHaveBeenCalled()
+
+      setTokenRefresher(async () => null) // the refresh token is gone too
+      token = 'stale'
+      await expect(getMeta()).rejects.toMatchObject({ status: 401 })
+      expect(expired).toHaveBeenCalledOnce()
+    } finally {
+      window.removeEventListener('auth:expired', expired)
+    }
+  })
+
+  it('sends the live-action pin as If-Match, and nothing when the caller has no version', async () => {
+    const api = mockApi({ 'POST /shifts/s1/advance': {}, 'POST /shifts/s1/release': {}, 'POST /shifts/s1/engineers/E1/off': {} })
+    await advanceShift('s1', 30, { etag: '"4-abcd"' })
+    await releaseClock('s1', { etag: '"4"' })
+    await engineerOff('s1', 'E1')
+    expect(api.calls.map((c) => c.headers['If-Match'])).toEqual(['"4-abcd"', '"4"', undefined])
   })
 
   it('makes live actions retry-safe with a fresh idempotency key per action', async () => {
@@ -138,8 +169,13 @@ describe('API client', () => {
     expect(retryAfterMs(new Response(null))).toBe(1000)
   })
 
-  it('puts the token in the stream URL, encoded (EventSource cannot send headers)', () => {
+  it('opens the stream with a ticket, or the token where the API has none (encoded: EventSource cannot send headers)', async () => {
     setTokenProvider(() => 'a b&c')
-    expect(streamUrl('s1')).toBe('/api/shifts/s1/stream?access_token=a%20b%26c')
+    expect(streamUrl('s1')).toBe('/api/shifts/s1/stream?access_token=a+b%26c')
+    expect(streamUrl('s1', { ticket: 't/1', after: 12 })).toBe('/api/shifts/s1/stream?ticket=t%2F1&after=12')
+    const api = mockApi({ 'POST /shifts/s1/stream-ticket': { ticket: 'tk', expires_in: 90 }, 'POST /shifts/s2/stream-ticket': json(404, errorBody('not_found', 'nope')) })
+    expect(await streamUrlFor('s1', 3)).toBe('/api/shifts/s1/stream?ticket=tk&after=3')
+    expect(await streamUrlFor('s2')).toBe('/api/shifts/s2/stream?access_token=a+b%26c')
+    expect(api.find('POST', '/shifts/s1/stream-ticket')[0].headers.Authorization).toBe('Bearer a b&c')
   })
 })

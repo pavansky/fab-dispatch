@@ -17,6 +17,17 @@ let tokenProvider = () => null
 export function setTokenProvider(fn) { tokenProvider = fn }
 export const currentToken = () => tokenProvider()
 
+// … and how to get a fresh one when the API says the current one has expired (401). The
+// refresher resolves to the new token, or null when the session can't be renewed. One refresh
+// serves every request that hits a 401 at the same time.
+let tokenRefresher = async () => null
+let refreshing = null
+export function setTokenRefresher(fn) { tokenRefresher = fn ?? (async () => null) }
+function refreshToken() {
+  refreshing ??= Promise.resolve().then(tokenRefresher).catch(() => null).finally(() => { refreshing = null })
+  return refreshing
+}
+
 const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
 const abortError = () => new DOMException('The request was aborted', 'AbortError')
 /** Wait, unless the signal aborts first. */
@@ -47,10 +58,11 @@ export function retryAfterMs(res) {
  * retried. (Double clicks are a UI concern: the live view disables its buttons in flight.)
  */
 async function request(path, { method = 'GET', body, signal, headers, idempotencyKey } = {}) {
-  const token = tokenProvider()
+  let token = tokenProvider()
   const delays = idempotencyKey ? RETRY_DELAYS_MS : []
   let res
   let rateLimited = false // a 429 is retried once, after the Retry-After the server asks for
+  let renewed = false // a 401 is retried once with a refreshed token
   for (let attempt = 0; ; attempt++) {
     try {
       res = await fetch(`${BASE}${path}`, {
@@ -73,6 +85,12 @@ async function request(path, { method = 'GET', body, signal, headers, idempotenc
     if (res.status === 429 && !rateLimited) {
       const wait = retryAfterMs(res)
       if (wait <= RETRY_AFTER_MAX_MS) { rateLimited = true; await sleep(wait, signal); continue }
+    }
+    if (res.status === 401 && token && !renewed) {
+      // An expired token: renew the session once and retry; only a failed renewal signs out.
+      renewed = true
+      const fresh = await refreshToken()
+      if (fresh && fresh !== token) { token = fresh; continue }
     }
     break
   }
@@ -148,16 +166,41 @@ export const createShift = (scenario, weights, algorithm) =>
 export const getShift = (id, etag) =>
   request(`/shifts/${id}`, { headers: etag ? { 'If-None-Match': etag } : undefined })
 export const listShifts = (fabId) => request(`/shifts?fab_id=${encodeURIComponent(fabId)}`).then((r) => r.data)
-export const advanceShift = (id, minutes) =>
-  request(`/shifts/${id}/advance`, { method: 'POST', body: { minutes }, idempotencyKey: newKey() }).then((r) => r.data)
-export const releaseClock = (id) => request(`/shifts/${id}/release`, { method: 'POST' }).then((r) => r.data)
-export const reportJob = (id, job) =>
-  request(`/shifts/${id}/jobs`, { method: 'POST', body: { job }, idempotencyKey: newKey() }).then((r) => r.data)
-export const engineerOff = (id, engineerId) =>
-  request(`/shifts/${id}/engineers/${engineerId}/off`, { method: 'POST', idempotencyKey: newKey() }).then((r) => r.data)
+// Writes carry the shift version the caller last saw (`etag`: the ETag of its GET, or a quoted
+// version) as If-Match; the server answers 409 instead of applying a write over a change the
+// caller hasn't seen.
+const pin = (etag) => (etag ? { 'If-Match': etag } : undefined)
+export const advanceShift = (id, minutes, { etag } = {}) =>
+  request(`/shifts/${id}/advance`, { method: 'POST', body: { minutes }, idempotencyKey: newKey(), headers: pin(etag) }).then((r) => r.data)
+export const releaseClock = (id, { etag } = {}) => request(`/shifts/${id}/release`, { method: 'POST', headers: pin(etag) }).then((r) => r.data)
+export const reportJob = (id, job, { etag } = {}) =>
+  request(`/shifts/${id}/jobs`, { method: 'POST', body: { job }, idempotencyKey: newKey(), headers: pin(etag) }).then((r) => r.data)
+export const engineerOff = (id, engineerId, { etag } = {}) =>
+  request(`/shifts/${id}/engineers/${engineerId}/off`, { method: 'POST', idempotencyKey: newKey(), headers: pin(etag) }).then((r) => r.data)
 export const shiftEvents = (id, after = 0) => request(`/shifts/${id}/events?after=${after}`).then((r) => r.data)
-// EventSource can't send headers, so the stream (only) takes the token as a query parameter.
-export const streamUrl = (id) => `${BASE}/shifts/${id}/stream?access_token=${encodeURIComponent(tokenProvider() ?? '')}`
+
+// EventSource can't send headers. The stream is opened with a short-lived, single-purpose
+// ticket (POST /shifts/{id}/stream-ticket, ~90 s), so the long-lived access token never
+// lands in a URL or a platform log. An API without tickets (404) takes the token in the
+// query as before, read fresh at connect time so a rotated token still reconnects.
+export const streamTicket = (id) => request(`/shifts/${id}/stream-ticket`, { method: 'POST' }).then((r) => r.data)
+export function streamUrl(id, { ticket, after = 0 } = {}) {
+  const q = new URLSearchParams()
+  if (ticket) q.set('ticket', ticket)
+  else q.set('access_token', tokenProvider() ?? '')
+  if (after > 0) q.set('after', String(after))
+  return `${BASE}/shifts/${id}/stream?${q}`
+}
+/** The URL to open the shift's stream with now: a fresh ticket, or the token where tickets don't exist. */
+export async function streamUrlFor(id, after = 0) {
+  try {
+    const { ticket } = await streamTicket(id)
+    return streamUrl(id, { ticket, after })
+  } catch (e) {
+    if (e.status === 404) return streamUrl(id, { after })
+    throw e
+  }
+}
 
 // ------------------------------------------------------------------ help and assistant
 export const helpIndex = () => request('/help').then((r) => r.data)
