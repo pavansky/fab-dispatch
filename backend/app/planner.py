@@ -11,6 +11,12 @@ Algorithms only ever ask two questions:
 
 Because every algorithm uses the same feasibility check and cost function, their results
 are directly comparable: the only difference is the *order* and *scope* of decisions.
+
+Serving a job is optional. ``total_cost`` charges the reward of every unserved job, so an
+insertion's cost already nets that reward off: a cost >= 0 means the detour (plus workload
+and stability) costs more than serving the job earns, and the plan is cheaper without it.
+So every method commits an insertion only when its cost is < 0, exactly as the exact
+solver is free to leave a money-losing job out.
 """
 
 from __future__ import annotations
@@ -65,10 +71,21 @@ class Insertion:
 @dataclass
 class Frozen:
     """Live-shift state for one engineer: jobs already started can't move, and new
-    work can't start before ``not_before`` (the current shift clock)."""
+    work can't start before ``not_before`` (the current shift clock).
+
+    ``starts`` and ``arrivals`` record when each started job actually began and when the
+    engineer reached it. Started work is history: a re-plan replays those times rather
+    than re-deriving them from shift start, which would forget the "not before now" delay
+    that applied when the job was planned and could double-book the engineer."""
 
     route: list[str] = field(default_factory=list)
     not_before: float = 0.0
+    starts: list[float] = field(default_factory=list)
+    arrivals: list[float] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if len(self.starts) > len(self.route) or len(self.arrivals) > len(self.starts):
+            raise ValueError("recorded times must cover a prefix of the started route")
 
 
 class Planner:
@@ -113,7 +130,14 @@ class Planner:
 
     # ------------------------------------------------------------------ simulation
     def _simulate(self, tech_id: str, route: list[str]) -> tuple[RouteSim | None, str | None]:
-        """Walk the route from the home bay; return the timing or the first hard violation."""
+        """Walk the route from the home bay; return the timing or the first hard violation.
+
+        An engineer leaves the home bay just in time for their first job, so any slack
+        before it is spent at the bay, not idle at a tool: no idle wait is charged before
+        the first stop (its ``arrival`` is still the earliest the engineer could be there).
+        From the second stop on, arriving before a window opens is idle wait. Every strategy
+        and the exact solver cost routes through this one simulation, so they all share the
+        rule."""
         tech = self.techs[tech_id]
         frozen = self.frozen[tech_id]
         t, here = float(tech.shift_start), tech_id
@@ -125,11 +149,17 @@ class Planner:
                 t = max(t, frozen.not_before)  # open work starts no earlier than "now"
             job = self.jobs[jid]
             d = self.metres(here, jid)
-            arrival = t + d / self._speed
-            if arrival > job.latest:
-                return None, WINDOW_MISSED
-            start = max(arrival, job.earliest)
-            wait += start - arrival
+            if i < len(frozen.starts):
+                # Started work: replay the recorded times, it already happened.
+                start = frozen.starts[i]
+                arrival = frozen.arrivals[i] if i < len(frozen.arrivals) else min(t + d / self._speed, start)
+            else:
+                arrival = t + d / self._speed
+                if arrival > job.latest:
+                    return None, WINDOW_MISSED
+                start = max(arrival, job.earliest)
+            if i > 0:  # slack before the first job is spent at the bay, not idle at a tool
+                wait += start - arrival
             overq += tech.skills[job.skill] - job.min_level
             t, here = start + job.duration, jid
             arrivals.append(arrival)
@@ -171,19 +201,27 @@ class Planner:
             if sim is None:
                 fails[why] += 1  # type: ignore[index]
                 continue
-            after = self._soft(sim)
-            breakdown = {k: round(after[k] - before[k], 2) for k in after}
-            breakdown["workload"] = self.w.workload_balance * len(route)
-            breakdown["priority"] = -self.w.priority_reward * job.priority
-            moved = self._moved(tech_id, job_id)
-            if moved:
-                breakdown["reassignment"] = moved
-            cost = sum(breakdown.values())
+            cost, breakdown = self._marginal(tech_id, job_id, before, sim)
             if best is None or cost < best.cost:
                 best = Insertion(tech_id, job_id, True, None, pos, cost, breakdown)
         if best is None:
             return Insertion(tech_id, job_id, False, fails.most_common(1)[0][0])
         return best
+
+    def _marginal(
+        self, tech_id: str, job_id: str, before: dict[str, float], sim: RouteSim
+    ) -> tuple[float, dict[str, float]]:
+        """Exact change in ``total_cost`` from adding ``job_id`` to the route (giving
+        ``sim``), plus its breakdown rounded for display. The cost is summed unrounded, so
+        it equals the ``total_cost`` delta, not the sum of the displayed parts."""
+        after = self._soft(sim)
+        parts = {k: after[k] - before[k] for k in after}
+        parts["workload"] = self.w.workload_balance * len(self.routes[tech_id])
+        parts["priority"] = -self.w.priority_reward * self.jobs[job_id].priority
+        moved = self._moved(tech_id, job_id)
+        if moved:
+            parts["reassignment"] = moved
+        return sum(parts.values()), {k: round(v, 2) for k, v in parts.items()}
 
     def scan(self, job_id: str, tech_ids: list[str] | None = None) -> tuple[list[Insertion], Counter[str]]:
         """All feasible insertions for a job (cheapest first) and why the rest failed."""
@@ -211,19 +249,14 @@ class Planner:
     def append(self, tech_id: str, job_id: str) -> Insertion | None:
         """Put a job at the end of a route (used to replay an external solver's
         sequence). Returns None if that breaks a hard constraint."""
-        tech, job, route = self.techs[tech_id], self.jobs[job_id], self.routes[tech_id]
+        tech, route = self.techs[tech_id], self.routes[tech_id]
         if self.tech_can_do(tech_id, job_id) is not None or len(route) >= tech.max_jobs:
             return None
         sim, _ = self._simulate(tech_id, route + [job_id])
         if sim is None:
             return None
-        before, after = self._soft(self._sims[tech_id]), self._soft(sim)
-        breakdown = {k: round(after[k] - before[k], 2) for k in after}
-        breakdown["workload"] = self.w.workload_balance * len(route)
-        breakdown["priority"] = -self.w.priority_reward * job.priority
-        if self._moved(tech_id, job_id):
-            breakdown["reassignment"] = self._moved(tech_id, job_id)
-        ins = Insertion(tech_id, job_id, True, None, len(route), sum(breakdown.values()), breakdown)
+        cost, breakdown = self._marginal(tech_id, job_id, self._soft(self._sims[tech_id]), sim)
+        ins = Insertion(tech_id, job_id, True, None, len(route), cost, breakdown)
         self.commit(ins)
         return ins
 
@@ -261,15 +294,20 @@ class Planner:
 
     def total_cost(self) -> float:
         """The full objective every search method minimises: route soft costs, the convex
-        workload term each insertion pays, and the reward forgone for every unserved job."""
-        total = 0.0
+        workload term each insertion pays, the reward forgone for every unserved job and,
+        in live re-plans, the stability cost of every job moved to a different engineer."""
+        return sum(self.cost_parts().values())
+
+    def cost_parts(self) -> dict[str, float]:
+        """``total_cost`` split into its terms: ``operating`` (walking, waiting,
+        over-qualification and the reward forgone for unserved jobs), ``workload`` (the
+        convex balance term, w*k(k-1)/2 per engineer) and ``reassignment`` (stability)."""
         placed = self.assigned_jobs()
-        for tid, route in self.routes.items():
-            k = len(route)
-            total += self.route_soft_cost(tid) + self.w.workload_balance * k * (k - 1) / 2
-            total += sum(self._moved(tid, j) for j in route)
-        total += sum(self.w.priority_reward * j.priority for jid, j in self.open_jobs.items() if jid not in placed)
-        return total
+        operating = sum(self.route_soft_cost(tid) for tid in self.routes)
+        operating += sum(self.w.priority_reward * j.priority for jid, j in self.open_jobs.items() if jid not in placed)
+        workload = sum(self.w.workload_balance * len(r) * (len(r) - 1) / 2 for r in self.routes.values())
+        reassignment = sum(self._moved(tid, j) for tid, r in self.routes.items() for j in r)
+        return {"operating": operating, "workload": workload, "reassignment": reassignment}
 
     def tech_can_do(self, tech_id: str, job_id: str) -> str | None:
         tech, job = self.techs[tech_id], self.jobs[job_id]
