@@ -15,10 +15,11 @@ benchmarks. Mapping this problem onto it:
                      priced into the arc that enters the job
 * walking, idle   -> arc cost carries walking. PyVRP's per-minute duration cost carries
                      waiting; the walking and service minutes it would also charge are
-                     cancelled out exactly in the arc cost and the prize
+                     cancelled out exactly in the arc cost and the prize, using the same
+                     integer rate PyVRP charges
 
-PyVRP works in integers, so time is in tenths of a minute and cost in hundredths of a
-point. The one term it can't express is the convex workload-balance penalty, so the
+PyVRP works in integers, so time is in tenths of a minute and cost in thousandths of a
+point (fine enough that a waiting weight with two decimals, e.g. 0.25/min, is exact). The one term it can't express is the convex workload-balance penalty, so the
 result is re-simulated and re-costed by our own planner. Every reported number therefore
 comes from the same engine the other algorithms use.
 """
@@ -26,6 +27,7 @@ comes from the same engine the other algorithms use.
 from __future__ import annotations
 
 import time
+from typing import NamedTuple
 
 import numpy as np
 from pyvrp import Activity, ActivityType, Model, ProblemData, Route, Solution, solve
@@ -37,7 +39,7 @@ from .base import Decision
 from .regret import run_regret
 
 T = 10  # time units per minute
-C = 100  # cost units per point
+C = 1000  # cost units per point
 FORBIDDEN = 10**9
 
 
@@ -59,6 +61,7 @@ def run_pyvrp(
 
     # Each engineer starts where their committed work leaves them.
     starts, start_time, capacity = {}, {}, {}
+    xs, ys = [0.0], [0.0]  # location coordinates in insertion order: sink, starts, jobs
     for e in techs:
         fr = p.frozen[e.id]
         sim = p.sim(e.id) if fr.route else None
@@ -70,22 +73,30 @@ def run_pyvrp(
         starts[e.id] = m.add_depot(m.add_location(x, y, name=f"start-{e.id}"), name=f"start-{e.id}")
         start_time[e.id] = ready
         capacity[e.id] = e.max_jobs - len(fr.route)
+        xs.append(x)
+        ys.append(y)
+    xs += [j.x for j in jobs]
+    ys += [j.y for j in jobs]
 
-    clients = []
-    for j in jobs:
-        # Duration cost also charges service minutes; add them back to the prize so they net out.
-        prize = w.priority_reward * j.priority + w.wait_min * j.duration
-        clients.append(
-            m.add_client(
-                m.add_location(j.x, j.y, name=j.id),
-                delivery=[1],
-                service_duration=round(j.duration * T),
-                tw_early=round(j.earliest * T),
-                tw_late=round(j.latest * T),
-                prize=round(prize * C),
-                required=False,
-                name=j.id,
-            )
+    # PyVRP charges this per time unit of route duration. Only the waiting part is meant to
+    # be charged: the walking and service time are cancelled using this same integer rate.
+    unit_duration_cost = round(w.wait_min * C / T)
+    arcs = _arcs(np.array(xs), np.array(ys), p, unit_duration_cost, n_fixed=1 + len(techs))
+
+    for k, j in enumerate(jobs):
+        service = round(j.duration * T)
+        # Duration cost also charges the service time: add it back to the prize so it nets
+        # out. The prize also carries the arc offset (see _arcs), which nets out the same way.
+        prize = round(w.priority_reward * j.priority * C) + unit_duration_cost * service + arcs.offset[k]
+        m.add_client(
+            m.add_location(j.x, j.y, name=j.id),
+            delivery=[1],
+            service_duration=service,
+            tw_early=round(j.earliest * T),
+            tw_late=round(j.latest * T),
+            prize=int(prize),
+            required=False,
+            name=j.id,
         )
 
     # One profile per certification set keeps the matrix count small.
@@ -106,7 +117,7 @@ def run_pyvrp(
             start_late=round(start_time[e.id] * T),
             tw_late=round(e.shift_end * T),
             unit_distance_cost=1,
-            unit_duration_cost=round(w.wait_min * C / T),
+            unit_duration_cost=unit_duration_cost,
             profile=profiles[key],
             name=e.id,
         )
@@ -114,7 +125,7 @@ def run_pyvrp(
     if not vt_order:
         return {}
 
-    data = _with_matrices(m.data(), techs, jobs, profiles, p)
+    data = _with_matrices(m.data(), arcs, jobs, profiles, p)
     initial = _warm_start(p, data, vt_order, [j.id for j in jobs])
     stop = MultipleCriteria([MaxIterations(max_iterations), MaxRuntime(runtime_s)])
     res = solve(data, stop, seed=seed, collect_stats=False, display=False, initial_solution=initial)
@@ -169,34 +180,52 @@ def _warm_start(p: Planner, data, vt_order: list[str], client_names: list[str]) 
         return None
 
 
-def _with_matrices(data: ProblemData, techs, jobs, profiles: dict, p: Planner) -> ProblemData:
+class _Arcs(NamedTuple):
+    net: np.ndarray  # walking cost of every arc minus the walking time duration cost charges
+    duration: np.ndarray  # walking time of every arc, in time units
+    offset: np.ndarray  # per job: lifts its column so no arc into it is negative
+
+
+def _arcs(xs: np.ndarray, ys: np.ndarray, p: Planner, unit_duration_cost: int, n_fixed: int) -> _Arcs:
+    """Walking cost and time of every arc, in PyVRP's integer units.
+
+    PyVRP charges ``unit_duration_cost`` for every time unit of a route, walking included,
+    so the arc cost subtracts exactly that charge for its own walking time. That can make
+    an arc negative, which PyVRP doesn't handle (it stops visiting the job), so each job's
+    column is lifted by ``offset`` and the same amount is added to its prize: a served job
+    has exactly one incoming arc, so serving it costs the offset once and skipping it
+    forfeits the offset once, and the comparison is unchanged.
+    """
+    w, speed = p.w, p.scenario.settings.walk_m_per_min
+    metres = np.abs(xs[:, None] - xs[None, :]) + np.abs(ys[:, None] - ys[None, :])
+    duration = np.rint(metres / speed * T).astype(np.int64)
+    net = np.rint(w.travel_100m * metres / 100 * C).astype(np.int64) - unit_duration_cost * duration
+    # Arcs into jobs come from a start or another job; the sink (row 0) is never left.
+    offset = np.maximum(0, -net[1:, n_fixed:].min(axis=0)) if net.shape[1] > n_fixed else np.zeros(0, np.int64)
+    return _Arcs(net, duration, offset)
+
+
+def _with_matrices(data: ProblemData, arcs: _Arcs, jobs, profiles: dict, p: Planner) -> ProblemData:
     """Build every profile's cost and walking-time matrix with NumPy in one pass.
 
     Location order matches insertion order: sink, one start per engineer, then jobs.
     """
-    w, speed = p.w, p.scenario.settings.walk_m_per_min
-    locs = data.locations()
-    xs = np.array([loc.x for loc in locs], dtype=float)
-    ys = np.array([loc.y for loc in locs], dtype=float)
-    metres = np.abs(xs[:, None] - xs[None, :]) + np.abs(ys[:, None] - ys[None, :])
-    walk = metres / speed
-    duration = np.rint(walk * T).astype(np.int64)
-
-    n_fixed = 1 + len(techs)  # sink + starts come before the jobs
-    base = w.travel_100m * metres / 100 - w.wait_min * walk
+    w = p.w
+    n_fixed = arcs.net.shape[0] - len(jobs)  # sink + starts come before the jobs
     dist_mats, dur_mats = [], []
     for key in profiles:
         skills = dict(key)
-        cost = np.full(metres.shape, FORBIDDEN, dtype=np.int64)
+        cost = np.full(arcs.net.shape, FORBIDDEN, dtype=np.int64)
         for k, job in enumerate(jobs):
             col = n_fixed + k
             level = skills.get(job.skill, 0)
             if level >= job.min_level:
-                pts = base[:, col] + w.overqualification * (level - job.min_level)
-                cost[:, col] = np.maximum(0, np.rint(pts * C)).astype(np.int64)
+                overq = round(w.overqualification * (level - job.min_level) * C)
+                cost[1:, col] = arcs.net[1:, col] + overq + arcs.offset[k]
         cost[:, 0] = 0  # anything -> sink is free (open routes)
         np.fill_diagonal(cost, 0)
-        dur = duration.copy()
+        assert (cost >= 0).all(), "PyVRP needs non-negative arc costs"
+        dur = arcs.duration.copy()
         dur[:, 0] = 0
         dur[0, :] = FORBIDDEN // 1000  # never leave the sink
         dur[0, 0] = 0

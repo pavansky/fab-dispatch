@@ -63,6 +63,40 @@ def test_frozen_work_is_kept_in_place_by_every_method():
                     assert s.start >= 90.0 - 1e-6, f"{algo} scheduled open work in the past"
 
 
+@pytest.mark.parametrize("weights", [Weights(wait_min=0.25), Weights(wait_min=0.03), Weights(travel_100m=0.1)])
+def test_pyvrp_objective_is_our_cost_for_its_own_routes(monkeypatch, weights):
+    """PyVRP's own objective for the plan it returns, less a constant, equals the planner's
+    operating cost of those routes: waiting is charged at the configured rate and the
+    walking and service corrections cancel exactly (even when walking is cheap)."""
+    from pyvrp import ActivityType
+
+    from app.algorithms import pyvrp_ils
+
+    seen = {}
+    real_solve = pyvrp_ils.solve
+
+    def spy(data, *args, **kwargs):
+        seen["data"], seen["result"] = data, real_solve(data, *args, **kwargs)
+        return seen["result"]
+
+    monkeypatch.setattr(pyvrp_ils, "solve", spy)
+    sc = generate(3, 8, 24, "normal")
+    run_pyvrp(Planner(sc, weights), seed=0, max_iterations=500)
+    data, best = seen["data"], seen["result"].best
+    assert best.is_feasible()
+
+    replay = Planner(sc, weights)  # PyVRP's routes exactly as it returned them
+    names, vehicles = [c.name for c in data.clients()], [v.name for v in data.vehicle_types()]
+    for route in best.routes():
+        for act in route.schedule():
+            if act.type == ActivityType.CLIENT:
+                assert replay.append(vehicles[route.vehicle_type()], names[act.idx]) is not None
+    rewards = {j.id: round(weights.priority_reward * j.priority * pyvrp_ils.C) for j in sc.jobs}
+    constant = sum(c.prize - rewards[c.name] for c in data.clients())  # service-time and arc offsets
+    pyvrp_points = (seen["result"].cost() - constant) / pyvrp_ils.C
+    assert pyvrp_points == pytest.approx(replay.cost_parts()["operating"], abs=0.1)
+
+
 def _live_instance(seed: int, clock: float = 180.0):
     """A re-plan at ``clock``: started stops frozen at their real times, previous owners known."""
     sc = generate(seed, 6, 18, "normal")
