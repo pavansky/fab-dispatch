@@ -61,8 +61,8 @@ per hour. Engineers are certified per tool family at levels 1–3, and the scarc
 industrial AI company that works on equipment reliability.
 
 ### Why isn't this a simple one-to-one assignment?
-Because an engineer does 4–6 jobs in a shift, and the **order** decides whether later time windows
-are reachable. Assigning job A to an engineer changes when they can start job B. So each engineer
+Because an engineer does several jobs in a shift (the generator caps each at 4–6, a modelling
+choice, not a fab statistic), and the **order** decides whether later time windows are reachable. Assigning job A to an engineer changes when they can start job B. So each engineer
 needs an ordered route, which makes this a vehicle routing problem with time windows (VRPTW) with
 skills, known in the literature as the technician routing and scheduling problem (TRSP). Decision
 D1 records this.

@@ -328,6 +328,34 @@ in anticipating what hasn't happened yet:
 
 ## 5. Limitations and next steps
 
+### What the model does not capture
+
+The constraint engine is deliberately small, and some of its simplifications would be wrong in a
+real fab. Each of these shapes the results above:
+
+- **Hard start-by windows, no lateness option.** A job either starts inside its window or is left
+  unserved; there is no penalty for starting a bottleneck down ten minutes late. Together with the
+  hard `max_jobs` cap this makes the *proven optimum* abandon priority-3 litho downs while a
+  certified engineer sits idle: in the excursion preset, seed 2, J022 and J024 are dropped because no
+  engineer can reach them inside the window, and the model has no way to prefer "late" over "never".
+  A soft window with a lateness cost is the standard fix in the technician-routing literature.
+- **`max_jobs` of 4–6 is a generator constant, not a fab fact.** Each synthetic engineer gets
+  `max_jobs` drawn from {4, 5, 5, 6}. Real fabs limit a shift by hours, fatigue rules and handover,
+  not by a job count; the cap exists so route enumeration stays finite for the exact solver.
+- **One engineer per job.** Two-person jobs (some PMs, source rebuilds, heavy lifts) are not modelled.
+- **No parts, no stores.** A repair is assumed to have its part on hand.
+- **No handover, breaks, gowning or sub-fab travel.** Shift start to shift end is uninterrupted
+  working time at floor level; a trip to the sub-fab or a gowning cycle between bays costs nothing.
+- **Fixed durations regardless of who is sent.** A level-3 engineer and a level-1 engineer take the
+  same time; the only skill effect is eligibility (and the over-qualification cost).
+- **Manhattan distance on open rectangles.** Walking is axis-aligned distance between points; bay
+  walls, aisles, doors and bay-to-bay routing are not drawn, so some walks are optimistic.
+- **The fault catalogue's durations are illustrative.** Several standard estimates are short for the
+  task named (an ESC swap at 180 min, a chamber wet clean and season at 240, a CD-SEM gun tip at
+  140), and every family draws PM durations from the same {90, 120, 180, 240}. They are placeholders
+  that make the shifts interesting at 14 × 45; a real fab supplies its own catalogue in the profile,
+  and the benchmark figures scale with whatever it supplies.
+
 - **Synthetic data.** Real MES events and maintenance history would replace the generator and the
   repair catalogue. The interfaces (`Scenario`, `report_job`, `RepairIndex`) are where they'd plug in.
 - **Stochastic durations.** The repair-history prediction gives a p10–p90 range. Planning against p80

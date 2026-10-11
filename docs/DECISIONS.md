@@ -5,8 +5,9 @@ Short records of the choices that shape this system: context, decision, and what
 ---
 
 ### D1. Model routes, not one-to-one assignments
-**Context.** The brief allows a simple resource ↔ request pairing. A fab engineer handles 4–6 jobs a
-shift, and the order decides whether later windows are reachable.
+**Context.** The brief allows a simple resource ↔ request pairing. An engineer handles several jobs
+in a shift (the generator caps each at 4–6, `max_jobs`, a modelling choice rather than a measured fab
+fact), and the order decides whether later windows are reachable.
 **Decision.** Each engineer gets an ordered route, so this is a VRPTW with skills (technician routing
 and scheduling).
 **Trade-off.** Harder than bipartite matching. It's also why Hungarian has to run in rounds, which turned
