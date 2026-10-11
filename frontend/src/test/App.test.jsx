@@ -83,6 +83,22 @@ describe('planning workspace', () => {
     expect(screen.getByText(String(next))).toBeInTheDocument()
   })
 
+  it('renders findings as elements, so markup in the data is shown, not interpreted', async () => {
+    const routes = workspaceRoutes()
+    const hostile = '<img src=x onerror="window.pwned=1">'
+    // J006 is the job Greedy strands and others serve, so its id is quoted in a finding.
+    const rename = (x) => JSON.parse(JSON.stringify(x).replaceAll('J006', hostile.replaceAll('"', '\\"')))
+    routes['POST /scenario'] = rename(fixtures.scenario)
+    routes['POST /plan'] = ({ body }) => rename(fixtures.plans[body.algorithm])
+    await signInAs('dispatcher', routes)
+    const findings = await screen.findByRole('heading', { name: /Key findings/ })
+    const list = await within(findings.closest('section')).findByRole('list')
+    expect(list.querySelector('img')).toBeNull()
+    expect(list.textContent).toContain(hostile)
+    expect(list.querySelectorAll('b').length).toBeGreaterThan(0) // the lead of each finding is emphasised as an element
+    expect(window.pwned).toBeUndefined()
+  })
+
   it('shows one notice, not five error bars, when the API rate-limits every re-plan', async () => {
     const routes = workspaceRoutes()
     let limited = false

@@ -59,6 +59,10 @@ export function workspaceRoutes({ role = 'dispatcher' } = {}) {
     'GET /health': health,
     'DELETE /auth/me': { erased: { assistant_feedback: 0, shifts: 0 }, account_deleted: true },
     'POST /assistant/feedback': () => new Response(null, { status: 204 }),
+    // Dispatchers only, like the real API. The integrator mirrors this shape in the fixtures.
+    'GET /assistant/stats': ({ headers }) => ((headers?.Authorization ?? '').endsWith('viewer')
+      ? json(403, errorBody('forbidden', 'dispatcher role required'))
+      : { days: 30, total: 40, helpful_rate: 0.85, by_intent: [{ intent: 'job', total: 25, helpful: 22, helpful_rate: 0.88 }, { intent: 'docs', total: 15, helpful: 12, helpful_rate: 0.8 }] }),
     'GET /help': helpIndex,
     'GET /help/search': ({ url }) => ({ ...helpSearch, query: new URL(url, 'http://x').searchParams.get('q') }),
     ...Object.fromEntries(Object.entries(helpArticles).map(([slug, a]) => [`GET /help/${slug}`, a])),

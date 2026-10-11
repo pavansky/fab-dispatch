@@ -1,9 +1,10 @@
 import { Component } from 'react'
-import { LINKS, reportProblemUrl } from '../lib/links.js'
+import { getHealth, getMeta } from '../api.js'
+import { LINKS, redactError, reportProblemUrl } from '../lib/links.js'
 
 /** Last line of defence: a render error shows a way forward, not a blank page. */
 export default class ErrorBoundary extends Component {
-  state = { error: null }
+  state = { error: null, release: '', commit: '' }
 
   static getDerivedStateFromError(error) {
     return { error }
@@ -11,10 +12,13 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('UI error', error, info?.componentStack) // reaches the browser console and any log drain
+    // The report names the release and build, the same way the About panel does.
+    getHealth().then((h) => this.setState((s) => ({ release: h.release ?? s.release, commit: h.commit ?? s.commit }))).catch(() => {})
+    getMeta().then((m) => this.setState((s) => ({ release: s.release || m.release || '', commit: s.commit || m.commit || '' }))).catch(() => {})
   }
 
   render() {
-    const { error } = this.state
+    const { error, release, commit } = this.state
     if (!error) return this.props.children
     return (
       <main className="signin" role="alert">
@@ -25,7 +29,7 @@ export default class ErrorBoundary extends Component {
           <pre className="error-detail">{String(error.message || error)}</pre>
           <div className="signin-roles">
             <button className="btn primary" onClick={() => location.reload()}>Reload</button>
-            <a className="btn" href={reportProblemUrl({ title: `UI error: ${String(error.message || error).slice(0, 80)}`, error: error.message })} target="_blank" rel="noopener noreferrer">Report this problem</a>
+            <a className="btn" href={reportProblemUrl({ title: `UI error: ${redactError(error.message || error).slice(0, 80)}`, error: error.message || error, release, commit })} target="_blank" rel="noopener noreferrer">Report this problem</a>
           </div>
           <p className="help" style={{ marginTop: 14 }}><a href={LINKS.support} target="_blank" rel="noopener noreferrer">Support</a> · <a href={LINKS.docs} target="_blank" rel="noopener noreferrer">Documentation</a></p>
         </div>

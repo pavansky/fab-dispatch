@@ -2,8 +2,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
-import { LINKS, REPO, reportProblemUrl } from '../lib/links.js'
-import { fixtures } from './api.js'
+import { LINKS, REPO, redactError, reportPage, reportProblemUrl } from '../lib/links.js'
+import { fixtures, mockApi, workspaceRoutes } from './api.js'
 import { signInAs } from './app.jsx'
 
 describe('Deleting your account', () => {
@@ -43,6 +43,35 @@ describe('About & support', () => {
     expect(screen.queryByRole('dialog', { name: 'About and support' })).not.toBeInTheDocument()
   })
 
+  it('tells dispatchers how often assistant answers were rated helpful', async () => {
+    const { api, user } = await signInAs('dispatcher')
+    await user.click(screen.getByRole('button', { name: 'D' }))
+    await user.click(screen.getByRole('menuitem', { name: 'About & support' }))
+    const about = await screen.findByRole('dialog', { name: 'About and support' })
+    expect(await within(about).findByText('Assistant answers rated helpful: 85% of 40 ratings in the last 30 days.')).toBeInTheDocument()
+    expect(api.find('GET', '/assistant/stats')).toHaveLength(1)
+  })
+
+  it('shows no helpful rate to viewers, who may not read it', async () => {
+    const { api, user } = await signInAs('viewer')
+    await user.click(screen.getByRole('button', { name: 'V' }))
+    await user.click(screen.getByRole('menuitem', { name: 'About & support' }))
+    const about = await screen.findByRole('dialog', { name: 'About and support' })
+    await within(about).findByText(`v${fixtures.health.release}`)
+    expect(within(about).queryByTestId('assistant-stats')).not.toBeInTheDocument()
+    expect(api.find('GET', '/assistant/stats')).toHaveLength(0)
+  })
+
+  it('says when nothing has been rated yet', async () => {
+    const routes = workspaceRoutes()
+    routes['GET /assistant/stats'] = { days: 30, total: 0, helpful_rate: null, by_intent: [] }
+    const { user } = await signInAs('dispatcher', routes)
+    await user.click(screen.getByRole('button', { name: 'D' }))
+    await user.click(screen.getByRole('menuitem', { name: 'About & support' }))
+    const about = await screen.findByRole('dialog', { name: 'About and support' })
+    expect(await within(about).findByText('No assistant answers rated in the last 30 days yet.')).toBeInTheDocument()
+  })
+
   it('is reachable from the help center too', async () => {
     const { user } = await signInAs('dispatcher')
     await user.keyboard('?')
@@ -76,6 +105,38 @@ describe('crash screen', () => {
   it('builds reports that never exceed what a URL can carry', () => {
     const url = new URL(reportProblemUrl({ error: 'x'.repeat(5000) }))
     expect(url.searchParams.get('body').length).toBeLessThan(1200)
+  })
+
+  it('reports only the fab and view from the URL, never a shift link, job or engineer', () => {
+    history.replaceState(null, '', '/?fab=fab1-300mm-logic&shift=fab1-300mm-logic.0123456789ab&tab=live&job=J006&engineer=E3&help=x')
+    expect(reportPage()).toBe('/?fab=fab1-300mm-logic&tab=live')
+    const body = new URL(reportProblemUrl({})).searchParams.get('body')
+    expect(body).toContain('- Page: `/?fab=fab1-300mm-logic&tab=live`')
+    expect(body).not.toMatch(/shift=|job=|engineer=|0123456789ab/)
+    history.replaceState(null, '', '/')
+    expect(reportPage()).toBe('/')
+  })
+
+  it('redacts email addresses from the error text', () => {
+    const error = 'conflict: ops.lead+shift@fab.example is driving the clock; Jane.Doe@corp.co.uk too'
+    expect(redactError(error)).toBe('conflict: [email redacted] is driving the clock; [email redacted] too')
+    const body = new URL(reportProblemUrl({ error })).searchParams.get('body')
+    expect(body).not.toMatch(/@/)
+    expect(body).toContain('[email redacted] is driving the clock')
+    expect(redactError('a'.repeat(400))).toHaveLength(300)
+  })
+
+  it('names the release and build in a crash report, like the About panel', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const api = mockApi(workspaceRoutes())
+    const Boom = () => { throw new Error('seen by viewer@customer.example') }
+    render(<ErrorBoundary><Boom /></ErrorBoundary>)
+    const link = screen.getByRole('link', { name: 'Report this problem' })
+    await waitFor(() => expect(new URL(link.getAttribute('href')).searchParams.get('body')).toContain(`Release: ${fixtures.health.release} (${fixtures.health.commit})`))
+    const url = new URL(link.getAttribute('href'))
+    expect(url.searchParams.get('body')).not.toContain('viewer@customer.example')
+    expect(url.searchParams.get('title')).toBe('UI error: seen by [email redacted]')
+    expect(api.find('GET', '/health')).toHaveLength(1)
   })
 })
 
