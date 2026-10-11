@@ -33,7 +33,7 @@ def run_hungarian(p: Planner) -> dict[str, Decision]:
         for r, t in enumerate(techs):
             for c, j in enumerate(open_jobs):
                 ins = p.best_insertion(t, j)
-                if ins.feasible:
+                if ins.feasible and ins.cost < 0:  # a pair that costs more than it earns isn't worth matching
                     cost[r, c] = ins.cost
         if (cost >= INFEASIBLE).all():
             break
