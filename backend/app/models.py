@@ -67,7 +67,9 @@ class Weights(BaseModel):
     """Soft-constraint weights. Everything is expressed in 'cost points'."""
 
     travel_100m: float = Field(4.0, ge=0, description="per 100 m walked on the floor")
-    wait_min: float = Field(0.2, ge=0, description="per minute idle before a window opens")
+    wait_min: float = Field(
+        0.2, ge=0, description="per minute idle at a tool before a window opens (not before the first job)"
+    )
     overqualification: float = Field(8.0, ge=0, description="per level above the job's need")
     workload_balance: float = Field(5.0, ge=0, description="per job the engineer already holds")
     priority_reward: float = Field(60.0, ge=0, description="reward per priority point served")
@@ -92,6 +94,11 @@ class Scenario(BaseModel):
             ids = [i.id for i in items]
             if len(ids) != len(set(ids)):
                 raise ValueError(f"duplicate {kind} ids")
+        # Engineers and jobs share one id space: the planner resolves a route location
+        # (a home bay or a job) by id, so an engineer and a job can't share a name.
+        clash = sorted({e.id for e in self.engineers} & {j.id for j in self.jobs})
+        if clash:
+            raise ValueError(f"ids used by both an engineer and a job: {', '.join(clash)}")
         return self
 
 
@@ -142,5 +149,7 @@ class AllocationResult(BaseModel):
     assignments: list[Assignment]
     unassigned: list[Unassigned]
     routes: list[Route]
-    metrics: dict[str, float]
+    metrics: dict[str, float | None] = Field(
+        description="null where a metric has no basis yet, e.g. critical_coverage_pct with no priority-3 work"
+    )
     solver: dict = Field(default_factory=dict, description="search statistics, e.g. iterations")
