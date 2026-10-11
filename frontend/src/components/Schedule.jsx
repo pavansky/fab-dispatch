@@ -4,7 +4,7 @@ import { useTooltip, Tooltip } from './Tooltip.jsx'
 
 
 export default function Schedule({ scenario, result, selection, onSelect, offShift, now }) {
-  const { tip, show, hide } = useTooltip()
+  const { tip, show, hide, id: tipId, describedBy } = useTooltip()
   const SHIFT_MIN = shiftLength()
   const pct = (m) => `${(m / SHIFT_MIN) * 100}%`
   const jobs = Object.fromEntries(scenario.jobs.map((j) => [j.id, j]))
@@ -28,7 +28,9 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
         const busy = r?.stops.reduce((s, x) => s + (x.end - x.start), 0) ?? 0
         return (
           <div key={e.id} className={`g-row ${off ? 'off' : ''}`} role="row" style={!r && !off ? { opacity: 0.6 } : undefined}>
-            <div className="g-name" role="rowheader" onClick={() => onSelect({ type: 'engineer', id: e.id })}>{e.id}<small>{e.name}</small></div>
+            <div className="g-name" role="rowheader" onClick={() => onSelect({ type: 'engineer', id: e.id })}>
+              <button type="button" className="row-link" aria-label={`Inspect ${e.id} ${e.name}`}>{e.id}<small>{e.name}</small></button>
+            </div>
             <div className="g-track" role="cell">
               {hours.map((h) => <span key={h} className="g-grid" style={{ left: pct(h) }} />)}
               {now !== undefined && <span className="g-now" style={{ left: pct(now) }} />}
@@ -37,6 +39,14 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
                 const j = jobs[s.job_id]
                 const prevEnd = i === 0 ? e.shift_start : r.stops[i - 1].end
                 const walk = s.arrival - prevEnd
+                const detail = (
+                  <>
+                    <div className="t">{s.job_id} · {j.tool}</div>
+                    <div className="r">{PRIORITY[j.priority].long}</div>
+                    <div className="r">{clock(s.start)}–{clock(s.end)} · window {clock(j.earliest)}–{clock(j.latest)}</div>
+                    <div className="r">Walk {fmt(walk, 0)} min ({fmt(walk * speed, 0)} m){s.start > s.arrival + 0.5 ? ` · waits ${fmt(s.start - s.arrival, 0)} min` : ''}</div>
+                  </>
+                )
                 return (
                   <span key={s.job_id}>
                     {walk > 0.5 && <span className="g-walk" style={{ left: pct(prevEnd), width: pct(walk) }} />}
@@ -45,15 +55,11 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
                       className={`g-bar p${j.priority} ${selection?.id === s.job_id ? 'sel' : ''} ${s.locked ? 'locked' : ''}`}
                       style={{ left: pct(s.start), width: pct(s.end - s.start) }}
                       onClick={() => onSelect({ type: 'job', id: s.job_id })}
-                      onMouseMove={(ev) => show(ev, (
-                        <>
-                          <div className="t">{s.job_id} · {j.tool}</div>
-                          <div className="r">{PRIORITY[j.priority].long}</div>
-                          <div className="r">{clock(s.start)}–{clock(s.end)} · window {clock(j.earliest)}–{clock(j.latest)}</div>
-                          <div className="r">Walk {fmt(walk, 0)} min ({fmt(walk * speed, 0)} m){s.start > s.arrival + 0.5 ? ` · waits ${fmt(s.start - s.arrival, 0)} min` : ''}</div>
-                        </>
-                      ))}
+                      onMouseMove={(ev) => show(ev, detail, s.job_id)}
                       onMouseLeave={hide}
+                      onFocus={(ev) => show(ev, detail, s.job_id)}
+                      onBlur={hide}
+                      aria-describedby={describedBy(s.job_id)}
                       aria-label={`${s.job_id} ${clock(s.start)} to ${clock(s.end)}`}
                     >{s.job_id}</button>
                   </span>
@@ -64,7 +70,7 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
           </div>
         )
       })}
-      <Tooltip tip={tip} />
+      <Tooltip tip={tip} id={tipId} />
     </div>
   )
 }

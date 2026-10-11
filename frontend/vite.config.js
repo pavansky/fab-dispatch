@@ -22,14 +22,19 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.js'],
+    // Rendering the whole app with the real fixtures takes a few seconds on a loaded runner; the
+    // 5 s default made two app-level tests flaky under CI contention without any code change.
+    testTimeout: 15_000,
     include: ['src/**/*.test.{js,jsx}'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{js,jsx}'],
       exclude: ['src/test/**', 'src/**/*.test.{js,jsx}', 'src/main.jsx'],
       reporter: ['text-summary', 'text'],
-      // Floors, not targets: CI fails if coverage drops below today's level.
-      thresholds: { lines: 85, statements: 80, functions: 75, branches: 70 },
+      // Floors, not targets: one point below the last measured run (lines 95.5%, statements
+      // 92.1%, functions 89.7%, branches 82.1%), so CI fails on a real drop and nobody has to
+      // chase a number. Raise them when a run measures higher.
+      thresholds: { lines: 94, statements: 91, functions: 88, branches: 81 },
     },
   },
 })

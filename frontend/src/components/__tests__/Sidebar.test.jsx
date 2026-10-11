@@ -59,6 +59,28 @@ describe('Sidebar', () => {
     expect(setWeights).toHaveBeenLastCalledWith(meta.default_weights)
   })
 
+  it('follows the thumb while dragging but commits the weight only when the drag ends', () => {
+    const { setWeights } = renderSidebar()
+    const slider = screen.getByRole('slider', { name: 'Walking' })
+    fireEvent.input(slider, { target: { value: '4' } }) // mid-drag: what React's onChange sees per pixel
+    fireEvent.input(slider, { target: { value: '6' } })
+    expect(slider.closest('label')).toHaveTextContent('6')
+    expect(setWeights).not.toHaveBeenCalled()
+    fireEvent.pointerUp(slider)
+    expect(setWeights).toHaveBeenCalledTimes(1)
+    expect(setWeights).toHaveBeenLastCalledWith({ ...meta.default_weights, travel_100m: 6 })
+    fireEvent.blur(slider) // the same value again is not a second commit
+    expect(setWeights).toHaveBeenCalledTimes(1)
+  })
+
+  it('commits a keyboard step on key-up', () => {
+    const { setWeights } = renderSidebar()
+    const slider = screen.getByRole('slider', { name: 'Idle wait' })
+    fireEvent.input(slider, { target: { value: '0.3' } })
+    fireEvent.keyUp(slider, { key: 'ArrowRight' })
+    expect(setWeights).toHaveBeenCalledWith({ ...meta.default_weights, wait_min: 0.3 })
+  })
+
   it('offers to restore engineers taken off shift', async () => {
     const { onRestoreAll } = renderSidebar({ offShiftCount: 2 })
     await userEvent.click(screen.getByRole('button', { name: 'Restore all 2 engineers' }))
@@ -76,10 +98,13 @@ describe('Sidebar', () => {
 describe('shift size limits', () => {
   it('flags sizes outside the API limits', () => {
     expect(shiftSizeErrors({ seed: 100, n_engineers: 100, n_jobs: 1000 })).toEqual({
-      n_engineers: 'Engineers must be a whole number from 1 to 60 in the live demo.',
-      n_jobs: 'Jobs must be a whole number from 1 to 200 in the live demo.',
+      n_engineers: 'Engineers must be a whole number from 1 to 60 in this deployment (FAB_MAX_ENGINEERS and FAB_MAX_JOBS raise it).',
+      n_jobs: 'Jobs must be a whole number from 1 to 200 in this deployment (FAB_MAX_ENGINEERS and FAB_MAX_JOBS raise it).',
     })
     expect(shiftSizeErrors({ seed: 7, n_engineers: 14, n_jobs: 45 })).toEqual({})
+    // The ceiling comes from the deployment (/api/meta limits): a local run can raise it to 1000 x 1000.
+    expect(shiftSizeErrors({ seed: 7, n_engineers: 1000, n_jobs: 1000 }, { max_engineers: 1000, max_jobs: 1000 })).toEqual({})
+    expect(shiftSizeErrors({ seed: 7, n_engineers: 1001, n_jobs: 1000 }, { max_engineers: 1000, max_jobs: 1000 })).toHaveProperty('n_engineers')
     expect(shiftSizeErrors({ seed: 7, n_engineers: 0, n_jobs: 4.5 })).toHaveProperty('n_jobs')
   })
 })

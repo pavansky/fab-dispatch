@@ -53,7 +53,7 @@ export default function Workforce({ scenario, result, offShift, onSelect }) {
             <tbody>
               {scenario.engineers.map((e) => (
                 <tr key={e.id} onClick={() => onSelect({ type: 'engineer', id: e.id })} style={offShift.has(e.id) ? { opacity: 0.45 } : undefined}>
-                  <td><b>{e.id}</b> {e.name}{offShift.has(e.id) && <span className="badge" style={{ marginLeft: 6 }}>off</span>}</td>
+                  <td><button type="button" className="row-link" aria-label={`Inspect ${e.id} ${e.name}`}><b>{e.id}</b> {e.name}</button>{offShift.has(e.id) && <span className="badge" style={{ marginLeft: 6 }}>off</span>}</td>
                   {FAMILIES.map((f) => (
                     <td key={f} className="lvlcell">{e.skills[f] ? <span className={`lvl l${e.skills[f]}`}>{e.skills[f]}</span> : <span className="none">·</span>}</td>
                   ))}

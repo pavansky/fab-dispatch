@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PRIORITY } from '../lib/format.js'
 import { shiftLength } from '../lib/fab.js'
 import InfoLink from './InfoLink.jsx'
-import { SIZE_FIELDS, shiftSizeErrors } from '../shiftLimits.js'
+import { sizeFields, shiftSizeErrors } from '../shiftLimits.js'
 
 const WEIGHTS = [
   ['priority_reward', 'Priority reward', 'per priority point served', 0, 200, 5],
@@ -12,11 +12,43 @@ const WEIGHTS = [
   ['workload_balance', 'Workload balance', 'per job already held', 0, 30, 1],
 ]
 
+/**
+ * A cost-weight slider. The number next to it follows the thumb; the weight itself (and so
+ * the re-plan of every strategy) is committed only when the drag or key press ends: the native
+ * change event, pointer-up, key-up or blur. Dragging across a slider is then one solve, not
+ * one per pixel.
+ */
+function WeightSlider({ label, unit, min, max, step, value, onCommit }) {
+  const [shown, setShown] = useState(value)
+  const ref = useRef(null)
+  const committed = useRef(value)
+  useEffect(() => { setShown(value); committed.current = value }, [value])
+  const commit = () => {
+    const v = +ref.current.value
+    if (v === committed.current) return
+    committed.current = v
+    onCommit(v)
+  }
+  // React's onChange fires on every input event; the browser's own change event marks the end.
+  useEffect(() => {
+    const el = ref.current
+    el.addEventListener('change', commit)
+    return () => el.removeEventListener('change', commit)
+  })
+  return (
+    <label className="field">
+      <span>{label} <span className="muted">{unit}</span><b>{shown}</b></span>
+      <input ref={ref} type="range" min={min} max={max} step={step} value={shown} aria-label={label}
+        onChange={(e) => setShown(+e.target.value)} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+    </label>
+  )
+}
+
 /** Scenario, cost weights and what-ifs. A column on desktop, a drawer on small screens. */
 export default function Sidebar({
-  open, onClose, profile, params, setParams, onGenerate, weights, setWeights, defaultWeights,
+  open, onClose, profile, params, applied, setParams, onGenerate, weights, setWeights, defaultWeights,
   addMode, setAddMode, newJob, setNewJob, predicted, onTogglePredicted, offShiftCount, onRestoreAll,
-}) {
+ limits }) {
   useEffect(() => {
     if (!open) return
     const esc = (e) => { if (e.key === 'Escape') onClose() }
@@ -25,7 +57,7 @@ export default function Sidebar({
   }, [open, onClose])
 
   const preset = profile.presets[params.preset] ?? Object.values(profile.presets)[0]
-  const sizeErrors = shiftSizeErrors(params)
+  const sizeErrors = shiftSizeErrors(params, limits)
   const hasSizeErrors = Object.keys(sizeErrors).length > 0
   return (
     <>
@@ -37,17 +69,18 @@ export default function Sidebar({
           <label className="field"><span>Preset</span>
             <select className="input" value={params.preset} onChange={(e) => {
               // A preset is a whole new kind of shift: generate it now, so the results on screen
-              // always match the preset shown. Seed and sizes are typed, so they wait for Generate.
-              const next = { ...params, preset: e.target.value }
-              setParams(next)
-              onGenerate(next)
+              // always match the preset shown. Seed and sizes are typed, so they wait for Generate
+              // (and may be half-typed or invalid): the new shift keeps the sizes already applied.
+              const preset = e.target.value
+              setParams({ ...params, preset })
+              onGenerate({ ...(applied ?? params), preset })
             }}>
               {Object.entries(profile.presets).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
             </select>
           </label>
           <p className="help">{preset.description}</p>
           <div className="row-3">
-            {SIZE_FIELDS.map(({ key, label, min, max }) => (
+            {sizeFields(limits).map(({ key, label, min, max }) => (
               <label className="field" key={key}><span>{label}</span>
                 <input className="input" type="number" inputMode="numeric" min={min} max={max} value={params[key]}
                   aria-invalid={!!sizeErrors[key]} aria-describedby={sizeErrors[key] ? `${key}-err` : undefined}
@@ -61,13 +94,10 @@ export default function Sidebar({
 
         <details className="card card-b section" open data-tour="weights">
           <summary><p className="eyebrow" style={{ margin: 0 }}>Cost weights</p></summary>
-          <p className="help" style={{ marginTop: 8 }}>Soft constraints. Every strategy re-solves as you drag. <InfoLink slug="constraints-and-weights" anchor="soft-constraints-the-cost-weights" label="Cost weights" /></p>
+          <p className="help" style={{ marginTop: 8 }}>Soft constraints. Every strategy re-solves when you let go of a slider. <InfoLink slug="constraints-and-weights" anchor="soft-constraints-the-cost-weights" label="Cost weights" /></p>
           {WEIGHTS.map(([key, label, unit, min, max, step]) => (
-            <label key={key} className="field">
-              <span>{label} <span className="muted">{unit}</span><b>{weights[key]}</b></span>
-              <input type="range" min={min} max={max} step={step} value={weights[key]}
-                onChange={(e) => setWeights({ ...weights, [key]: +e.target.value })} aria-label={label} />
-            </label>
+            <WeightSlider key={key} label={label} unit={unit} min={min} max={max} step={step} value={weights[key]}
+              onCommit={(v) => setWeights({ ...weights, [key]: v })} />
           ))}
           <button className="btn block" onClick={() => setWeights(defaultWeights)}>Reset to defaults</button>
         </details>
@@ -100,7 +130,7 @@ export default function Sidebar({
               : "Swap each tool-down's standard estimate for what similar past repairs actually took."}
           </p>
           <p className="help" style={{ marginTop: 10 }}>Select an engineer to take them off shift (sick call, training) and see who absorbs their work.</p>
-          {offShiftCount > 0 && <button className="btn block" onClick={onRestoreAll}>Restore all {offShiftCount} engineers</button>}
+          {offShiftCount > 0 && <button className="btn block" onClick={onRestoreAll}>{offShiftCount === 1 ? 'Restore 1 engineer' : `Restore all ${offShiftCount} engineers`}</button>}
         </details>
       </aside>
     </>

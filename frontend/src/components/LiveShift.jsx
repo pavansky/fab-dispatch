@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { advanceShift, createShift, engineerOff, getShift, listShifts, releaseClock, reportJob, streamUrl } from '../api.js'
+import { advanceShift, createShift, engineerOff, getShift, listShifts, releaseClock, reportJob, streamUrlFor } from '../api.js'
 import { useAuth } from '../auth.jsx'
 import { ALGO_ORDER, ALGO_SHORT } from '../lib/metrics.js'
-import { PRIORITY, clock, fmt } from '../lib/format.js'
+import { PRIORITY, clock, fmt, plural } from '../lib/format.js'
 import { familyAt, familyPrefix, isConstraint, shiftLength } from '../lib/fab.js'
+import { liveJobId, responseTargets, shiftWindows } from '../lib/scenario.js'
+import { RECONNECT_MS } from '../lib/stream.js'
 import FloorPlan from './FloorPlan.jsx'
 import Schedule from './Schedule.jsx'
 import InfoLink from './InfoLink.jsx'
 
 const SPEEDS = [[5, '5 min/s'], [15, '15 min/s'], [30, '30 min/s']]
-const SLA_BOTTLENECK = 45
 const EVENT_KINDS = ['shift_started', 'job_reported', 'replanned', 'engineer_off', 'clock', 'clock_released', 'shift_ended']
 
 function useOnline() {
@@ -23,11 +24,12 @@ function useOnline() {
   return online
 }
 
+/** The one live region of the view: polite, so a toast never cuts off what is being read. */
 function Toasts({ items, onDismiss }) {
   return (
-    <div className="toasts" aria-live="assertive">
+    <div className="toasts" role="status" aria-live="polite" aria-atomic="false">
       {items.map((t) => (
-        <div key={t.id} className={`toast ${t.tone}`} role="status">
+        <div key={t.id} className={`toast ${t.tone}`}>
           <span>{t.text}</span><button className="btn ghost" onClick={() => onDismiss(t.id)} aria-label="Dismiss">✕</button>
         </div>
       ))}
@@ -40,11 +42,17 @@ function Toasts({ items, onDismiss }) {
  * only, one at a time via a lease) and listens on Server-Sent Events, so every open
  * dashboard (another tab, another device) sees each re-plan as it happens.
  */
-export default function LiveShift({ scenario, weights, areas, profile, canDispatch, onError }) {
+// A shift id carries its fab ("<fab id>.<hex>"), so a link can't open one fab's shift under another.
+const belongsTo = (id, fabId) => Boolean(id) && id.startsWith(`${fabId}.`)
+
+export default function LiveShift({ scenario, preset, weights, areas, profile, canDispatch, onError }) {
   const { user } = useAuth()
   const online = useOnline()
   const [algorithm, setAlgorithm] = useState('alns')
-  const [shiftId, setShiftId] = useState(() => new URLSearchParams(location.search).get('shift'))
+  const [shiftId, setShiftId] = useState(() => {
+    const id = new URLSearchParams(location.search).get('shift')
+    return belongsTo(id, profile.id) ? id : null
+  })
   const [view, setView] = useState(null)
   const [recent, setRecent] = useState([])
   const [feed, setFeed] = useState([])
@@ -56,6 +64,14 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
   const [reportMode, setReportMode] = useState(false)
   const [toasts, setToasts] = useState([])
   const etag = useRef(null)
+  const lastEvent = useRef(0) // the newest event id seen, so a reconnect resumes where it left off
+  const openId = useRef(shiftId) // the shift this view shows now; answers for any other are dropped
+  openId.current = shiftId
+  const inFlight = useRef(false)
+  // The shift version this view last saw, sent as If-Match on every write: a write that would
+  // land on a version someone else has since changed is refused (409) instead of applied blind.
+  const pin = useRef(null)
+  pin.current = view ? `"${view.version}"` : null
 
   const toast = useCallback((text, tone = '') => {
     const id = Math.random().toString(36).slice(2)
@@ -65,9 +81,10 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
 
   const refresh = useCallback(async (id) => {
     const r = await getShift(id, etag.current)
-    if (r.notModified) return
+    if (r.notModified || id !== openId.current) return
     etag.current = r.etag
-    setView(r.data)
+    // A slow poll must not roll the view back past a newer one from an action.
+    setView((v) => (v && v.state.id === r.data.state.id && v.version > r.data.version ? v : r.data))
   }, [])
 
   // Recent shifts for this fab, so anyone can rejoin a shift after closing the tab.
@@ -76,77 +93,140 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
     listShifts(profile.id).then(setRecent).catch(() => setRecent([]))
   }, [shiftId, profile.id])
 
+  // The open shift lives in the URL (?shift=…) for sharing, and only while this view shows it:
+  // leaving, switching tab or switching fab takes it out again.
   useEffect(() => {
     if (!shiftId) return
     const url = new URL(location.href)
     url.searchParams.set('shift', shiftId)
     history.replaceState(null, '', url)
     etag.current = null // a cached ETag would get a 304 here, with no view to keep
+    lastEvent.current = 0
     refresh(shiftId).catch((e) => { onError(e.message); setShiftId(null) })
+    return () => {
+      const out = new URL(location.href)
+      if (out.searchParams.get('shift') === shiftId) {
+        out.searchParams.delete('shift')
+        history.replaceState(null, '', out)
+      }
+    }
   }, [shiftId, refresh, onError])
 
   // Realtime: the SSE stream relays the shift's event log; each event triggers a cheap
   // conditional refetch (ETag, so unchanged state costs a 304). A slow poll keeps
   // presence and the clock driver fresh even when nothing happens.
+  //
+  // Every connection is opened with a fresh stream ticket (or a fresh token where the API has
+  // no tickets). EventSource's own reconnect would reuse the first URL for ever, and a ticket
+  // or a rotated token in it has expired by then, so the stream is closed on error and
+  // reopened here with a new ticket, backing off 1, 2, 4, 8 … s up to 30 s.
   useEffect(() => {
     if (!shiftId || !online) return
-    const es = new EventSource(streamUrl(shiftId))
+    let es = null
+    let timer = null
+    let closed = false
+    let delay = RECONNECT_MS.first
     const onEvent = (e) => {
       const ev = JSON.parse(e.data)
+      if (typeof ev.id === 'number') lastEvent.current = Math.max(lastEvent.current, ev.id)
       setFeed((prev) => (prev.some((x) => x.id === ev.id) ? prev : [ev, ...prev].slice(0, 200)))
       if (ev.kind === 'job_reported' && ev.data?.priority === 3) toast(`Bottleneck down: ${ev.message}`, 'alert')
       if (ev.kind === 'engineer_off') toast(ev.message, 'alert')
       refresh(shiftId).catch(() => {})
     }
-    EVENT_KINDS.forEach((k) => es.addEventListener(k, onEvent))
-    es.onopen = () => setConnected(true)
-    es.onerror = () => setConnected(false) // EventSource reconnects by itself (Last-Event-ID)
+    const later = () => {
+      timer = setTimeout(connect, delay)
+      delay = Math.min(delay * 2, RECONNECT_MS.max)
+    }
+    async function connect() {
+      let url
+      try {
+        url = await streamUrlFor(shiftId, lastEvent.current)
+      } catch {
+        if (!closed) later() // no ticket (API down, signed out …): try again later
+        return
+      }
+      if (closed) return
+      es = new EventSource(url)
+      EVENT_KINDS.forEach((k) => es.addEventListener(k, onEvent))
+      es.onopen = () => { delay = RECONNECT_MS.first; setConnected(true) }
+      es.onerror = () => {
+        setConnected(false)
+        es.close()
+        if (!closed) later()
+      }
+    }
+    connect()
     const poll = setInterval(() => refresh(shiftId).catch(() => {}), 15000)
-    return () => { es.close(); clearInterval(poll) }
+    return () => { closed = true; es?.close(); clearTimeout(timer); clearInterval(poll) }
   }, [shiftId, refresh, online, toast])
 
+  // One action at a time: a double click (or a click during an autoplay tick) is dropped
+  // rather than sent twice, and the buttons are disabled while one is in flight.
   const act = useCallback(async (fn) => {
+    if (inFlight.current) return
+    inFlight.current = true
     setBusy(true)
     try {
-      const out = await fn()
-      if (out?.state) { setView(out); etag.current = null }
+      const out = await fn({ etag: pin.current })
+      if (out?.state && out.state.id === openId.current) { setView(out); etag.current = null }
     } catch (e) {
-      if (e.status === 409) toast(e.message)
-      else onError(e.message)
+      if (e.status === 409) {
+        // A conflict: show the shift as it is now and let the user decide again, never retry.
+        toast(/shift changed/i.test(e.message) ? 'Someone else changed this shift; showing the latest' : e.message)
+        etag.current = null
+        if (openId.current) refresh(openId.current).catch(() => {})
+      } else onError(e.message)
       setPlaying(false)
     } finally {
+      inFlight.current = false
       setBusy(false)
     }
-  }, [onError, toast])
+  }, [onError, toast, refresh])
 
   const driver = view?.clock_driver
   const drivenByOther = Boolean(driver && driver !== user.email)
+  const driving = useRef(false)
+  useEffect(() => { driving.current = driver === user.email }, [driver, user.email])
 
   // Autoplay: one request per second while this dispatcher holds the clock.
   useEffect(() => {
     if (!playing || !shiftId || view?.state.ended || !online) return
-    const t = setInterval(() => { if (!busy) act(() => advanceShift(shiftId, speed)) }, 1000)
+    const t = setInterval(() => { if (!busy) act((opts) => advanceShift(shiftId, speed, opts)) }, 1000)
     return () => clearInterval(t)
   }, [playing, shiftId, speed, busy, view?.state.ended, online, act])
   useEffect(() => { if (view?.state.ended) setPlaying(false) }, [view?.state.ended])
+  // Hand the clock back as soon as this view stops playing, however it stops: Pause, Leave,
+  // an error, or the view going away (another tab or fab). Otherwise other dispatchers wait
+  // out the lease. (This cleanup runs before `driving` is updated for the same commit.)
+  useEffect(() => {
+    if (!playing || !shiftId) return
+    return () => { if (driving.current) releaseClock(shiftId, { etag: pin.current }).catch(() => {}) }
+  }, [playing, shiftId])
 
-  const pause = () => {
-    setPlaying(false)
-    if (shiftId) releaseClock(shiftId).catch(() => {})   // hand the clock back straight away
-  }
+  const pause = () => setPlaying(false)
 
   const start = () => act(async () => {
     const out = await createShift(scenario, weights, algorithm)
     setFeed([])
     etag.current = null
+    openId.current = out.state.id // so act() shows this answer without waiting for a re-render
     setShiftId(out.state.id)
     return out
   })
 
   const leave = () => {
-    if (playing) pause()
+    setPlaying(false)
     setShiftId(null); setView(null); setFeed([]); etag.current = null
-    const url = new URL(location.href); url.searchParams.delete('shift'); history.replaceState(null, '', url)
+  }
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(location.href)
+      toast('Share link copied')
+    } catch {
+      toast("Couldn't copy the link here. Copy it from the address bar.", 'alert')
+    }
   }
 
   if (!shiftId || !view) {
@@ -196,22 +276,27 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
 
   const { state, status, progress, viewers } = view
   const plan = state.plan
-  const knownJobs = new Set(state.released)
+  // Only released jobs are shown (the API may or may not send the unreleased ones).
+  const knownJobs = new Set(state.released ?? state.scenario.jobs.map((j) => j.id))
   const visible = { ...state.scenario, jobs: state.scenario.jobs.filter((j) => knownJobs.has(j.id)) }
+  const jobById = Object.fromEntries(visible.jobs.map((j) => [j.id, j]))
   const offShift = new Set(Object.keys(state.off_shift))
   const pct = (state.clock / shiftLength()) * 100
-  const critOpen = state.scenario.jobs.filter((j) => knownJobs.has(j.id) && j.priority === 3 && status[j.id] === 'unassigned').length
+  const critOpen = visible.jobs.filter((j) => j.priority === 3 && status[j.id] === 'unassigned')
+  const reasons = Object.fromEntries((plan?.unassigned ?? []).map((u) => [u.job_id, u.reason]))
 
+  // A reported bottleneck down gets this shift's response target: the window its own bottleneck
+  // downs have, else the fab preset's.
+  const bottleneckTarget = shiftWindows(visible)[3] ?? responseTargets(profile, preset, scenario)[3]
   const onFloor = (pt) => {
-    if (!reportMode || !canDispatch) return
+    if (!reportMode || !canDispatch || busy) return
     const fam = familyAt(pt)
     if (!fam) { onError('Tap inside a tool area to report a tool-down there.'); return }
-    const n = state.scenario.jobs.length + 1
-    act(() => reportJob(state.id, {
-      id: `L${String(n).padStart(3, '0')}`, x: pt.x, y: pt.y, skill: fam, min_level: isConstraint(fam) ? 2 : 1,
-      priority: 3, kind: 'down', earliest: 0, latest: SLA_BOTTLENECK, duration: 60, tool: `${familyPrefix(fam)}-LIVE`,
+    act((opts) => reportJob(state.id, {
+      id: liveJobId(), x: pt.x, y: pt.y, skill: fam, min_level: isConstraint(fam) ? 2 : 1,
+      priority: 3, kind: 'down', earliest: 0, latest: bottleneckTarget, duration: 60, tool: `${familyPrefix(fam)}-LIVE`,
       symptom: 'operator reported tool down',
-    }))
+    }, opts))
   }
 
   return (
@@ -234,17 +319,17 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
           {canDispatch ? (
             <>
               <button className="btn primary" onClick={() => (playing ? pause() : setPlaying(true))}
-                disabled={state.ended || (!playing && drivenByOther)}>{playing ? 'Pause' : state.ended ? 'Ended' : 'Play'}</button>
+                disabled={state.ended || (!playing && (drivenByOther || busy))}>{playing ? 'Pause' : state.ended ? 'Ended' : 'Play'}</button>
               <div className="seg" role="group" aria-label="Speed">
                 {SPEEDS.map(([v, l]) => <button key={v} aria-pressed={speed === v} onClick={() => setSpeed(v)}>{l}</button>)}
               </div>
-              <button className="btn" disabled={busy || state.ended || drivenByOther} onClick={() => act(() => advanceShift(state.id, 60))}>+1 h</button>
+              <button className="btn" disabled={busy || state.ended || drivenByOther} onClick={() => act((opts) => advanceShift(state.id, 60, opts))}>+1 h</button>
               <label className="toggle"><input type="checkbox" checked={reportMode} onChange={(e) => setReportMode(e.target.checked)} />Tap floor to report a bottleneck down</label>
             </>
           ) : <span className="badge">Viewing only</span>}
           {driver && <span className="help" style={{ margin: 0 }}>Clock driven by <b>{driver === user.email ? 'you' : driver}</b></span>}
           <span className="spacer" />
-          <button className="btn ghost" onClick={() => { navigator.clipboard?.writeText(location.href); toast('Share link copied') }}>Copy link</button>
+          <button className="btn ghost" onClick={copyLink}>Copy link</button>
           <button className="btn ghost" onClick={leave}>Leave</button>
         </div>
       </section>
@@ -255,7 +340,13 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
           <div key={l} className="card score"><div className="kpi"><div className="label">{l}</div><div className="value">{v}</div></div></div>
         ))}
       </div>
-      {critOpen > 0 && <div className="error-bar" role="alert">⚠ {critOpen} bottleneck tool-down{critOpen > 1 ? 's are' : ' is'} unassigned. No qualified engineer can reach {critOpen > 1 ? 'them' : 'it'} within the window.</div>}
+      {critOpen.length > 0 && (
+        <div className="error-bar" role="alert">
+          ⚠ {plural(critOpen.length, 'bottleneck tool-down')} {critOpen.length === 1 ? 'is' : 'are'} unassigned.
+          {critOpen.slice(0, 3).map((j) => <span key={j.id}> <b>{j.id}</b>: {reasons[j.id] ?? 'waiting for the next re-plan.'}</span>)}
+          {critOpen.length > 3 && <span> And {critOpen.length - 3} more, listed under Unassigned now.</span>}
+        </div>
+      )}
 
       <div className="floor-layout">
         <section className="card">
@@ -273,14 +364,15 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
               offShift={offShift} status={status} addMode={reportMode && canDispatch} onFloorClick={onFloor} />
           </div>
         </section>
-        <section className="card feed" aria-label="Dispatch log" aria-live="polite">
+        {/* Not a live region: up to 200 entries and buttons inside; new events reach the toasts instead. */}
+        <section className="card feed" aria-label="Dispatch log">
           <div className="card-h"><div><div className="h-row"><h2>Dispatch log</h2><InfoLink slug="live-dispatch" anchor="re-plans-don-t-reshuffle-people" label="Re-plans" /></div><p>Every change and who made it, as it streams in.</p></div></div>
           {selection?.type === 'engineer' && canDispatch && (
             <div className="card-b" style={{ display: 'flex', gap: 8, alignItems: 'center', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
               <b>{selection.id}</b>
               {offShift.has(selection.id)
                 ? <span className="muted">left the shift at {clock(state.off_shift[selection.id])}</span>
-                : <button className="btn" disabled={busy || state.ended} onClick={() => act(() => engineerOff(state.id, selection.id))}>Take off shift now</button>}
+                : <button className="btn" disabled={busy || state.ended} onClick={() => act((opts) => engineerOff(state.id, selection.id, opts))}>Take off shift now</button>}
               <button className="btn ghost" onClick={() => setSelection(null)}>Clear</button>
             </div>
           )}
@@ -308,7 +400,7 @@ export default function LiveShift({ scenario, weights, areas, profile, canDispat
           <div className="card-b table-wrap" tabIndex={0}>
             <table className="data"><tbody>
               {plan.unassigned.map((u) => {
-                const j = state.scenario.jobs.find((x) => x.id === u.job_id)
+                const j = jobById[u.job_id]
                 return <tr key={u.job_id} style={{ cursor: 'default' }}><td><b>{u.job_id}</b> {j?.tool}</td><td><span className={`badge p${j?.priority}`}>{PRIORITY[j?.priority]?.label}</span></td><td>{u.reason}</td></tr>
               })}
             </tbody></table>
