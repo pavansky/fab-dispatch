@@ -73,7 +73,8 @@ def generate(
         primary = constraint if i < n_constraint else others[(i - n_constraint) % len(others)]
         skills = {primary: rng.choice([2, 3, 3] if primary == constraint else [2, 2, 3])}
         for extra in rng.sample([f for f in all_families if f != primary], k=rng.choice([1, 1, 2])):
-            # Cross-training onto the constraint family is rare and shallow.
+            # Cross-training onto the constraint family is rare and shallow: level 1 is enough
+            # for some of its PMs, never for a tool-down on it.
             skills[extra] = 1 if extra == constraint else rng.choice([1, 2])
         x, y = _point_in(rng, profile, primary)
         engineers.append(
@@ -109,7 +110,12 @@ def generate(
             earliest = rng.randint(0, max(0, shift_len - 300))
             priority, latest, duration, kind = 1, earliest + 240, rng.choice([90, 120, 180, 240]), "pm"
             symptom = profile.family(fam).pm_task
-        min_level = rng.choice([2, 2, 3]) if fam == constraint else rng.choice([1, 1, 2])
+        if fam == constraint:
+            # Tool-downs on the constraint tools need a certified engineer; a third of its PMs
+            # are routine enough for someone cross-trained at level 1.
+            min_level = rng.choice([1, 2, 2] if kind == "pm" else [2, 2, 3])
+        else:
+            min_level = rng.choice([1, 1, 2])
         jobs.append(
             Job(
                 id=f"J{i + 1:03d}",

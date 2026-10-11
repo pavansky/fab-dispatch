@@ -36,6 +36,18 @@ def test_each_fab_uses_its_own_families_floor_and_shift():
         assert res.metrics["assigned"] > 0
 
 
+def test_cross_training_on_the_constraint_family_is_usable():
+    """Engineers cross-trained onto the constraint family are level 1: enough for some of
+    its PMs, never for a tool-down on a constraint tool."""
+    for p in all_profiles().values():
+        c = p.constraint_family
+        shifts = [generate(seed, 14, 45, preset, p.id) for preset in p.presets for seed in range(3)]
+        jobs = [j for sc in shifts for j in sc.jobs if j.skill == c]
+        assert all(j.min_level >= 2 for j in jobs if j.kind == "down")
+        assert any(j.min_level == 1 for j in jobs if j.kind == "pm")
+        assert any(e.skills.get(c) == 1 for sc in shifts for e in sc.engineers)
+
+
 def test_api_lists_fabs_and_plans_for_fab2():
     client = TestClient(app, headers=auth_headers("dispatcher"))
     ids = [f["id"] for f in client.get("/api/fabs").json()]
