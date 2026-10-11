@@ -100,6 +100,8 @@ access are configured in Supabase itself: see [supabase/README.md](../supabase/R
 | `FAB_TURNSTILE_SITE_KEY` | the Turnstile site key | the same key (add the preview hostnames to the widget) |
 | `FAB_ASSISTANT_LLM` | `none` (or `anthropic` with `ANTHROPIC_API_KEY`) | `none` |
 | `FAB_TENANT_DATABASES` | `{"fab2-200mm-analog": "env:FAB2_DATABASE_URL"}` | unset (one database) |
+| `FAB_STREAM_TICKET_SECRET` | unset: the integration's `SUPABASE_JWT_SECRET` signs stream tickets; set it if that is ever removed (several instances need one shared key) | same |
+| `EXPECTED_DATABASES` (repository variable, not Vercel) | `2`: smoke and release fail if production reports fewer databases | not checked |
 
 **Production runs a database per fab.** Fab 1 uses the default database (Supabase). Fab 2 has its
 own: a Neon Postgres added through the Vercel Marketplace, connected to *Production only* with the

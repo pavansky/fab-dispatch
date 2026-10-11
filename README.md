@@ -346,8 +346,8 @@ What a production AI application needs, and where to see it here.
 
 | Area | In place |
 |---|---|
-| **Access** | Supabase Auth (passwordless email code or link), one-click guest access, `viewer` / `dispatcher` roles, per-user fab access, Cloudflare Turnstile CAPTCHA |
-| **Data security** | Row-level security on every app table (closed to the public API), strict CSP, HSTS, rate limits, request size limits, secrets only in the platform |
+| **Access** | Supabase Auth (passwordless email code or link), `viewer` / `dispatcher` roles, per-user fab access, Cloudflare Turnstile CAPTCHA. Named users start as viewers (`FAB_DEFAULT_ROLE`) unless an admin or `FAB_DISPATCHER_EMAILS` says otherwise. On the hosted demo, one-click guests are **dispatchers by configuration** (`FAB_GUEST_ROLE=dispatcher`): they can start live shifts, drive the clock, report tool-downs and call engineers off, but only on shifts they started themselves; a real fab sets `none` or `viewer` |
+| **Data security** | App tables closed to Supabase's public API (RLS on with no policies, public grants revoked); tenant isolation by fab scoping in the API and a database per fab, not by RLS. CSP, HSTS and a no-script CSP on the API, rate limits in two layers (per instance + shared counter for signed-in users), request size limits, secrets only in the platform |
 | **Reliability** | Versioned migrations under a lock, optimistic concurrency, idempotent live actions, a clock lease, an SSE stream that resumes, cached plans |
 | **Operations** | Health and liveness endpoints, request ids, structured logs, daily data retention, post-deploy smoke tests, an [uptime check every 30 minutes](.github/workflows/uptime.yml) that opens an incident issue |
 | **Delivery** | CI on every PR (lint, 3 test layers, coverage floors, audits, accessibility, images), branch protection, actions pinned to commits, tagged releases that wait for a green UAT deployment and smoke run of that commit before promoting to production, Dependabot (pip, npm, actions, Docker) |
@@ -364,7 +364,11 @@ What a production AI application needs, and where to see it here.
 - **Roles:** `viewer` can plan, explore and watch live shifts. `dispatcher` can also drive the clock,
   report tool-downs, take engineers off shift and run benchmarks.
 - **Fab access** comes from each user's Supabase `app_metadata` (admin-controlled). Requests for a fab
-  outside a user's list return 404, so one customer can't discover another's.
+  outside a user's list return 404, so one customer can't discover another's. That scoping, in the
+  API, is what isolates tenants: the database's row-level security only closes the tables to
+  Supabase's public API (the app connects as table owner, so no policy filters its queries).
+- **Guests** (anonymous sign-in) get `FAB_GUEST_ROLE`; where that is `dispatcher`, as on the hosted
+  demo, a guest can change only the live shifts it started. Named dispatchers share every shift.
 - **A database per fab:** `FAB_TENANT_DATABASES` puts each fab's shifts, events, assignments and
   cached plans in its own database. CI starts one Postgres per fab and checks, by querying each
   database directly, that no fab's data appears anywhere else

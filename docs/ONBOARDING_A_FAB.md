@@ -43,11 +43,16 @@ Set it in Supabase → Authentication → Users → *user* → app metadata, e.g
 
 ## 4. Give it its own database (optional)
 
-To keep the fab's data in a separate database, add it to `FAB_TENANT_DATABASES`:
+To keep the fab's data in a separate database, add it to `FAB_TENANT_DATABASES`, pointing at the
+variable that holds its connection URL (for example one a hosting integration injects, like Vercel's
+Neon integration with the prefix `FAB3`), so the password is never copied into a second variable:
 
 ```bash
-FAB_TENANT_DATABASES='{"fab3-300mm-memory": "postgresql://user:pass@host:5432/fab3"}'
+FAB3_DATABASE_URL='postgresql://user:pass@host:5432/fab3'    # injected by the host, or set once
+FAB_TENANT_DATABASES='{"fab3-300mm-memory": "env:FAB3_DATABASE_URL"}'
 ```
+
+A literal URL in `FAB_TENANT_DATABASES` also works, but then the secret lives there as well.
 
 Its schema is created on first use, and `/api/health` reports every database it checks. Fabs not
 listed share the default database, isolated by `fab_id`.

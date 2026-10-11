@@ -20,6 +20,10 @@ services:
       FAB_DATABASE_URL: postgresql://fab:fab@postgres:5432/fab
       FAB_QDRANT_URL: http://qdrant:6333
       FAB_CORS_ORIGINS: '["http://localhost:8080"]'
+      # nginx (the web service) is the only thing that can reach the API here, so its
+      # X-Forwarded-* headers are trusted; the image's default is 127.0.0.1.
+      FORWARDED_ALLOW_IPS: "*"
+      FAB_TRUSTED_PROXY_HOPS: "1"
       # Production settings with one-click demo sign-in, so the stack runs with no accounts.
       # For real sign-in: FAB_AUTH_MODE=supabase plus the FAB_SUPABASE_* settings.
       FAB_ALLOW_DEMO_AUTH_IN_PRODUCTION: "true"

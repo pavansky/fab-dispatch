@@ -64,11 +64,19 @@ flowchart LR
   runs this way: fab 2's data is in its own Neon database, fab 1's in Supabase
   ([ENVIRONMENTS.md](ENVIRONMENTS.md)).
 - **Identity**: `app/auth.py`. Supabase-issued tokens are verified against the project's JWKS
-  (ES256/RS256) or the legacy HS256 secret, with issuer and audience checks. Local development
-  uses short-lived demo tokens, which settings refuse in production.
+  (ES256/RS256) or the legacy HS256 secret, with issuer and audience checks, and must carry `exp`.
+  Local development uses short-lived demo tokens, which settings refuse in production. The SSE
+  stream, which can't send headers, opens with a 90-second HMAC ticket from
+  `POST /shifts/{id}/stream-ticket` bound to the user and shift (signed with
+  `FAB_STREAM_TICKET_SECRET`, else the JWT/demo secret).
 - **Authorisation**: `viewer` (plan, explore, watch) < `dispatcher` (drive live shifts, report
   tool-downs, call engineers off, run benchmarks). Fab access comes from `app_metadata.fabs`, and
-  requests outside it return 404.
+  requests outside it return 404. Guests (anonymous sign-in) get `FAB_GUEST_ROLE` and may change
+  only the live shifts they started; named dispatchers share shifts.
+- **What RLS does and doesn't do**: migration 3 turns row-level security on with no policies and
+  revokes the public PostgREST roles' grants, which closes the app tables to Supabase's Data API.
+  The app connects as the table owner, so RLS never filters its own queries; tenant isolation is
+  the fab scoping above plus a database per fab. On Neon and SQLite the migration is a no-op.
 
 ## 3. The core: one constraint engine, many strategies
 
@@ -142,7 +150,9 @@ sequenceDiagram
 - **Fan-out.** The event log is the source of truth. SSE tails it by id, so reconnects resume exactly
   where they left off and any instance can serve any viewer. Each SSE response closes after
   `FAB_SSE_WINDOW_S` (25 s) to stay inside serverless limits, and `EventSource` reconnects by itself.
-  Polling backs off while a shift is quiet (0.25 s → 2 s) and snaps back on the next event.
+  Polling backs off while a shift is quiet (0.25 s → 2 s) and snaps back on the next event; once an
+  instance serves more than 32 streams the floor rises to 1 s. Stream opens are rate-limited and a
+  user may hold at most 4 streams open per instance (429 beyond that).
 - **Read model.** The shift document is the write model; every write also replaces the shift's rows
   in `assignments` (engineer, times, status per job) **in the same transaction**. Questions about the
   domain, such as an engineer's history across shifts, are indexed queries, not document scans.
