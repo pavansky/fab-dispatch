@@ -201,7 +201,7 @@ describe('views', () => {
     const replanned = api.find('POST', '/plan').at(-1).body.scenario.engineers.map((e) => e.id)
     expect(replanned).not.toContain('E01')
     expect(replanned).toHaveLength(fixtures.scenario.engineers.length - 1)
-    expect(screen.getByRole('button', { name: 'Restore all 1 engineers' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Restore 1 engineer' })).toBeInTheDocument()
   })
 })
 

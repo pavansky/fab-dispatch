@@ -62,7 +62,7 @@ function remember(key, value) {
 export function clearPlanCache() { planCache.clear() }
 
 export const getMeta = () => request('/meta').then((r) => r.data)
-export const generateScenario = (params) => request('/scenario', { method: 'POST', body: params }).then((r) => r.data)
+export const generateScenario = (params, signal) => request('/scenario', { method: 'POST', body: params, signal }).then((r) => r.data)
 
 // ------------------------------------------------------------------ auth and fabs
 export const authConfig = () => request('/auth/config').then((r) => r.data)

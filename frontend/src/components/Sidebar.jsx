@@ -14,7 +14,7 @@ const WEIGHTS = [
 
 /** Scenario, cost weights and what-ifs. A column on desktop, a drawer on small screens. */
 export default function Sidebar({
-  open, onClose, profile, params, setParams, onGenerate, weights, setWeights, defaultWeights,
+  open, onClose, profile, params, applied, setParams, onGenerate, weights, setWeights, defaultWeights,
   addMode, setAddMode, newJob, setNewJob, predicted, onTogglePredicted, offShiftCount, onRestoreAll,
 }) {
   useEffect(() => {
@@ -37,10 +37,11 @@ export default function Sidebar({
           <label className="field"><span>Preset</span>
             <select className="input" value={params.preset} onChange={(e) => {
               // A preset is a whole new kind of shift: generate it now, so the results on screen
-              // always match the preset shown. Seed and sizes are typed, so they wait for Generate.
-              const next = { ...params, preset: e.target.value }
-              setParams(next)
-              onGenerate(next)
+              // always match the preset shown. Seed and sizes are typed, so they wait for Generate
+              // (and may be half-typed or invalid): the new shift keeps the sizes already applied.
+              const preset = e.target.value
+              setParams({ ...params, preset })
+              onGenerate({ ...(applied ?? params), preset })
             }}>
               {Object.entries(profile.presets).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
             </select>
@@ -100,7 +101,7 @@ export default function Sidebar({
               : "Swap each tool-down's standard estimate for what similar past repairs actually took."}
           </p>
           <p className="help" style={{ marginTop: 10 }}>Select an engineer to take them off shift (sick call, training) and see who absorbs their work.</p>
-          {offShiftCount > 0 && <button className="btn block" onClick={onRestoreAll}>Restore all {offShiftCount} engineers</button>}
+          {offShiftCount > 0 && <button className="btn block" onClick={onRestoreAll}>{offShiftCount === 1 ? 'Restore 1 engineer' : `Restore all ${offShiftCount} engineers`}</button>}
         </details>
       </aside>
     </>

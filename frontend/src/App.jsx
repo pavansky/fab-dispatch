@@ -4,9 +4,10 @@ import { SignIn, useAuth } from './auth.jsx'
 import { usePlans } from './lib/usePlans.js'
 import { applyTheme, loadTheme } from './lib/theme.js'
 import { ALGO_ORDER, ALGO_SHORT } from './lib/metrics.js'
-import { PRIORITY } from './lib/format.js'
+import { PRIORITY, fmt, plural } from './lib/format.js'
 import { areasOf, familyAt, familyLabel, familyPrefix, isConstraint, setActiveFab } from './lib/fab.js'
 import { GOALS, recommend } from './lib/analysis.js'
+import { durationsById, responseTargets, withDurations } from './lib/scenario.js'
 import { HelpContext, TOUR_KEY, parseHelpTarget } from './lib/help.js'
 import FloorPlan from './components/FloorPlan.jsx'
 import Inspector from './components/Inspector.jsx'
@@ -25,7 +26,6 @@ const Assistant = lazy(() => import('./components/Assistant.jsx'))
 const About = lazy(() => import('./components/About.jsx'))
 
 const TABS = [['overview', 'Overview'], ['floor', 'Floor plan'], ['schedule', 'Schedule'], ['workforce', 'Workforce'], ['live', 'Live dispatch'], ['benchmark', 'Benchmark']]
-const SLA = { 3: 45, 2: 120, 1: 240 }
 const FAB_KEY = 'fab-dispatch-fab'
 const TYPING = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
 
@@ -50,7 +50,7 @@ export default function App() {
   const [theme, setTheme] = useState(loadTheme)
   useEffect(() => { applyTheme(theme) }, [theme])
   if (auth.status === 'loading') return <div className="loading"><span className="solving"><span className="spinner" />Loading…</span></div>
-  if (auth.status === 'error') return <div className="loading">Can't reach the API ({auth.error}). Is the backend running on port 8000?</div>
+  if (auth.status === 'error') return <div className="loading">Can't reach the API ({auth.error}). Check that the backend is running and reachable from this page.</div>
   if (auth.status !== 'signedIn') return <SignIn />
   return <Workspace key={auth.user.id} theme={theme} setTheme={setTheme} />
 }
@@ -62,8 +62,8 @@ function Workspace({ theme, setTheme }) {
   const [profile, setProfile] = useState(null)
   const [drawer, setDrawer] = useState(false)
   const closeDrawer = useCallback(() => setDrawer(false), [])
-  const [params, setParams] = useState({ preset: 'normal', seed: 7, n_engineers: 14, n_jobs: 45 })
-  const [appliedPreset, setAppliedPreset] = useState('normal')   // the preset of the shift on screen
+  const [params, setParams] = useState({ preset: 'normal', seed: 7, n_engineers: 14, n_jobs: 45 }) // the form, as typed
+  const [applied, setApplied] = useState(null) // the params of the shift on screen (always valid)
   const [scenario, setScenario] = useState(null)
   const [offShift, setOffShift] = useState(() => new Set())
   const [weights, setWeights] = useState(null)
@@ -93,7 +93,7 @@ function Workspace({ theme, setTheme }) {
   const [addMode, setAddMode] = useState(false)
   const [newJob, setNewJob] = useState({ priority: 3, at: 120 })
   const [error, setError] = useState(null)
-  const [predicted, setPredicted] = useState(null) // { original, changes } when history durations are on
+  const [predicted, setPredicted] = useState(null) // { standard: { jobId: minutes }, changes } while history durations are on
   // Help center (null = closed, { slug: null } = home), assistant, and the first-run tour.
   const [help, setHelp] = useState(() => {
     const h = new URLSearchParams(location.search).get('help')
@@ -137,30 +137,52 @@ function Workspace({ theme, setTheme }) {
     return () => document.removeEventListener('keydown', onKey)
   })
 
-  const regenerate = (p = params, { keepSelection = false, fab = profile } = {}) => {
+  // Latest values for callbacks that outlive a render.
+  const formRef = useRef(params)
+  formRef.current = params
+  const appliedRef = useRef(applied)
+  appliedRef.current = applied
+  // Only the latest request may replace the shift on screen: an older one that answers late
+  // (quick fab or preset switches) is aborted or ignored, never applied over a newer one.
+  const genReq = useRef({ seq: 0, ctrl: null })
+  const shiftSeq = useRef(0) // bumps whenever a new shift replaces the one on screen
+  const regenerate = useCallback((p, { keepSelection = false, fab }) => {
+    const req = genReq.current
+    req.ctrl?.abort()
+    const ctrl = new AbortController()
+    const seq = ++req.seq
+    req.ctrl = ctrl
     setError(null)
-    generateScenario({ ...p, fab_id: fab.id })
-      .then((s) => { setScenario(s); setAppliedPreset(p.preset); setOffShift(new Set()); if (!keepSelection) setSelection(null); setPredicted(null) })
-      .catch((e) => setError(e.message))
-  }
+    generateScenario({ ...p, fab_id: fab.id }, ctrl.signal)
+      .then((s) => {
+        if (seq !== genReq.current.seq) return
+        shiftSeq.current += 1
+        setScenario(s); setApplied(p); setOffShift(new Set()); if (!keepSelection) setSelection(null); setPredicted(null)
+      })
+      .catch((e) => { if (e.name !== 'AbortError' && seq === genReq.current.seq) setError(e.message) })
+  }, [])
 
   // Switching fab: everything site-specific (families, floor, shift, presets) comes from its profile.
+  const fabSeq = useRef(0)
   const openFab = useCallback(async (fabId, { first = false } = {}) => {
+    const mine = ++fabSeq.current
     try {
       const p = await getFab(fabId)
+      if (mine !== fabSeq.current) return // another fab was picked meanwhile
       setActiveFab(p)
       setProfile(p)
       try { localStorage.setItem(FAB_KEY, p.id) } catch { /* private mode */ }
       const url = new URL(location.href)
       url.searchParams.set('fab', p.id)
+      if (!first) url.searchParams.delete('shift') // a live shift belongs to the fab it was started in
       history.replaceState(null, '', url)
-      setParams((prev) => {
-        const next = { ...prev, preset: p.presets[prev.preset] ? prev.preset : Object.keys(p.presets)[0] }
-        regenerate(next, { keepSelection: first, fab: p })
-        return next
-      })
-    } catch (e) { setError(e.message) }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+      const form = formRef.current
+      const preset = p.presets[form.preset] ? form.preset : Object.keys(p.presets)[0]
+      setParams((prev) => ({ ...prev, preset }))
+      // Typed sizes may be unapplied or invalid; the new fab's shift keeps the sizes on screen.
+      regenerate({ ...(appliedRef.current ?? form), preset }, { keepSelection: first, fab: p })
+    } catch (e) { if (mine === fabSeq.current) setError(e.message) }
+  }, [regenerate])
 
   useEffect(() => {
     Promise.all([getMeta(), listFabs()]).then(([m, list]) => {
@@ -222,17 +244,26 @@ function Workspace({ theme, setTheme }) {
     if (window.innerWidth < 640) setAskOpen(false) // the panel covers the view on phones
   }
 
+  // History durations swap durations only, by job id: jobs reported meanwhile are kept, and
+  // turning it off restores each job's standard estimate rather than an old copy of the shift.
+  const predicting = useRef(false)
   const togglePredicted = async (on) => {
     if (!on) {
-      setScenario(predicted.original)
+      if (!predicted) return
+      setScenario((s) => withDurations(s, predicted.standard))
       setPredicted(null)
       return
     }
+    if (predicting.current || predicted) return
+    predicting.current = true
+    const shift = shiftSeq.current
+    const standard = durationsById(scenario)
     try {
       const out = await predictDurations(scenario)
-      setPredicted({ original: scenario, changes: out.changes })
-      setScenario(out.scenario)
-    } catch (e) { setError(e.message) }
+      if (shift !== shiftSeq.current) return // a new shift replaced this one meanwhile
+      setPredicted({ standard, changes: out.changes })
+      setScenario((s) => withDurations(s, durationsById(out.scenario)))
+    } catch (e) { setError(e.message) } finally { predicting.current = false }
   }
 
   const select = (sel) => {
@@ -247,11 +278,12 @@ function Workspace({ theme, setTheme }) {
   const addJob = (pt) => {
     const fam = familyAt(pt)
     if (!fam) { setError('Click inside a tool area to report a job there.'); return }
-    const n = Math.max(0, ...scenario.jobs.map((j) => parseInt(j.id.slice(1), 10))) + 1
+    const n = Math.max(0, ...scenario.jobs.map((j) => parseInt(j.id.slice(1), 10)).filter(Number.isFinite)) + 1
     const p = newJob.priority
+    const targets = responseTargets(profile, applied?.preset, scenario)
     const job = {
       id: `J${String(n).padStart(3, '0')}`, x: pt.x, y: pt.y, skill: fam, min_level: isConstraint(fam) ? 2 : 1,
-      priority: p, kind: p === 1 ? 'pm' : 'down', earliest: newJob.at, latest: newJob.at + SLA[p],
+      priority: p, kind: p === 1 ? 'pm' : 'down', earliest: newJob.at, latest: newJob.at + targets[p],
       duration: p === 1 ? 120 : 60, tool: `${familyPrefix(fam)}-NEW`,
     }
     setScenario((s) => ({ ...s, jobs: [...s.jobs, job] }))
@@ -264,7 +296,14 @@ function Workspace({ theme, setTheme }) {
   }
   const areas = areasOf(profile)
 
-  const activeResult = results.find((r) => r.algorithm === active) ?? results[results.length - 1]
+  // Only ever the pressed strategy's plan: if it hasn't answered, say so instead of drawing another's.
+  const activeResult = results.find((r) => r.algorithm === active)
+  const activeMissing = !activeResult && (
+    <div className="card empty" role="status">
+      {planErrors[active] ? `${ALGO_SHORT[active]} could not solve this shift: ${planErrors[active]}`
+        : <span className="solving"><span className="spinner" />Solving {ALGO_SHORT[active]}…</span>}
+    </div>
+  )
   const greedy = results.find((r) => r.algorithm === 'greedy')
   const unserved = activeResult?.unassigned.length ?? 0
 
@@ -272,17 +311,17 @@ function Workspace({ theme, setTheme }) {
     <HelpContext.Provider value={helpApi}>
       <TopBar fabs={fabs} fabId={profile.id} onFab={(id) => openFab(id)} theme={theme} onTheme={setTheme}
         busy={busy} pending={pending} onMenu={() => setDrawer(true)} onHelp={() => helpApi.openHelp()} onAbout={helpApi.openAbout}
-        solvedNote={`${results.length} strategies solved${Object.values(cacheInfo).some((c) => c !== 'miss') ? ' · cached' : ''}`}
+        solvedNote={`${plural(results.length, 'strategy', 'strategies')} solved${Object.values(cacheInfo).some((c) => c !== 'miss') ? ' · cached' : ''}`}
         chips={<>
-          <span className="chip">{profile.presets[appliedPreset]?.label}</span>
+          <span className="chip">{profile.presets[applied?.preset]?.label}</span>
           <span className="chip"><b>{effective.engineers.length}</b> engineers{offShift.size > 0 && ` (${offShift.size} off)`}</span>
           <span className="chip"><b>{scenario.jobs.length}</b> jobs</span>
           <span className="chip"><b>{scenario.jobs.filter((j) => j.priority === 3).length}</b> bottleneck downs</span>
         </>} />
 
       <div className="layout">
-        <Sidebar open={drawer} onClose={closeDrawer} profile={profile} params={params} setParams={setParams}
-          onGenerate={(p) => regenerate(p ?? params)} weights={weights} setWeights={setWeights} defaultWeights={meta.default_weights}
+        <Sidebar open={drawer} onClose={closeDrawer} profile={profile} params={params} applied={applied} setParams={setParams}
+          onGenerate={(p) => regenerate(p ?? params, { fab: profile })} weights={weights} setWeights={setWeights} defaultWeights={meta.default_weights}
           addMode={addMode} setAddMode={(v) => { setAddMode(v); if (v) setTab('floor') }} newJob={newJob} setNewJob={setNewJob}
           predicted={predicted} onTogglePredicted={togglePredicted} offShiftCount={offShift.size} onRestoreAll={() => setOffShift(new Set())} />
 
@@ -297,7 +336,7 @@ function Workspace({ theme, setTheme }) {
             ))}
           </nav>
 
-          {tab === 'live' ? <LiveShift scenario={effective} weights={weights} areas={areas} profile={profile} canDispatch={canDispatch} onError={setError} /> : results.length === 0 ? <div className="card empty"><span className="solving"><span className="spinner" />Solving the shift…</span></div> : (
+          {tab === 'live' ? <LiveShift key={profile.id} scenario={effective} preset={applied?.preset} weights={weights} areas={areas} profile={profile} canDispatch={canDispatch} onError={setError} /> : results.length === 0 ? <div className="card empty"><span className="solving"><span className="spinner" />Solving the shift…</span></div> : (
             <>
               {tab === 'overview' && (
                 <Overview results={results} pending={pending} reco={reco} scenario={scenario} weights={weights} goal={goal} onGoal={setGoal}
@@ -319,7 +358,7 @@ function Workspace({ theme, setTheme }) {
                         </div>
                       </div>
                     </div>
-                    {floorView === 'single' ? (
+                    {floorView === 'single' ? activeMissing || (
                       <div className="floor-wrap">
                         <FloorPlan scenario={scenario} result={activeResult} baseline={active !== 'greedy' ? greedy : null}
                           areas={areas} selection={selection} onSelect={setSelection} offShift={offShift}
@@ -334,7 +373,7 @@ function Workspace({ theme, setTheme }) {
                             <figure key={a} style={{ margin: 0 }}>
                               <figcaption style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, marginBottom: 6 }}>
                                 <span className="swatch" /><b>{ALGO_SHORT[a]}</b>
-                                <span className="muted num">{r.metrics.assigned}/{r.metrics.jobs} jobs · cost {r.metrics.objective}</span>
+                                <span className="muted num">{r.metrics.assigned}/{r.metrics.jobs} jobs · cost {fmt(r.metrics.objective)} pts</span>
                               </figcaption>
                               <FloorPlan compact scenario={scenario} result={r} areas={areas} selection={selection} onSelect={setSelection} offShift={offShift} />
                             </figure>
@@ -357,7 +396,7 @@ function Workspace({ theme, setTheme }) {
                 </div>
               )}
 
-              {tab === 'schedule' && activeResult && (
+              {tab === 'schedule' && (
                 <div className="floor-layout">
                   <section className="card">
                     <div className="floor-toolbar">
@@ -370,18 +409,18 @@ function Workspace({ theme, setTheme }) {
                         <span><i className="lg" style={{ height: 2, width: 14, background: 'repeating-linear-gradient(90deg, var(--ink-3) 0 2px, transparent 2px 5px)' }} />Idle wait</span>
                       </div>
                     </div>
-                    <Schedule scenario={scenario} result={activeResult} selection={selection} onSelect={setSelection} offShift={offShift} />
+                    {activeMissing || <Schedule scenario={scenario} result={activeResult} selection={selection} onSelect={setSelection} offShift={offShift} />}
                   </section>
                   <Inspector selection={selection} scenario={scenario} results={results} active={active}
                     offShift={offShift} onToggleEngineer={toggleEngineer} onSelect={setSelection} />
                 </div>
               )}
 
-              {tab === 'workforce' && activeResult && (
+              {tab === 'workforce' && (
                 <>
                   <div><AlgoSwitch results={results} active={active} onChange={setActive} pending={pending} /></div>
-                  <Workforce scenario={scenario} result={activeResult} offShift={offShift} onSelect={select} />
-                  {activeResult.unassigned.length > 0 && (
+                  {activeMissing || <Workforce scenario={scenario} result={activeResult} offShift={offShift} onSelect={select} />}
+                  {activeResult?.unassigned.length > 0 && (
                     <section className="card">
                       <div className="card-h"><div><h2>Unserved work · {activeResult.label}</h2><p>Why each job could not be placed.</p></div></div>
                       <div className="card-b table-wrap" tabIndex={0}>
@@ -407,7 +446,7 @@ function Workspace({ theme, setTheme }) {
                 </>
               )}
 
-              {tab === 'benchmark' && <Benchmark profile={profile} weights={weights} size={params} canDispatch={canDispatch} />}
+              {tab === 'benchmark' && <Benchmark profile={profile} weights={weights} size={applied ?? params} canDispatch={canDispatch} />}
             </>
           )}
         </main>
