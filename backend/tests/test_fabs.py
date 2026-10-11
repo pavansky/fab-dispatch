@@ -48,6 +48,18 @@ def test_cross_training_on_the_constraint_family_is_usable():
         assert any(e.skills.get(c) == 1 for sc in shifts for e in sc.engineers)
 
 
+def test_priority_3_means_a_tool_down_on_the_constraint_family():
+    """The glossary's definition: priority 3 is a tool-down on the bottleneck family, nothing
+    else; other tool-downs are priority 2 and PMs are priority 1."""
+    for p in all_profiles().values():
+        c = p.constraint_family
+        for preset in p.presets:
+            for seed in range(3):
+                for j in generate(seed, 14, 45, preset, p.id).jobs:
+                    expected = 1 if j.kind == "pm" else (3 if j.skill == c else 2)
+                    assert j.priority == expected, (p.id, preset, seed, j.id)
+
+
 def test_api_lists_fabs_and_plans_for_fab2():
     client = TestClient(app, headers=auth_headers("dispatcher"))
     ids = [f["id"] for f in client.get("/api/fabs").json()]

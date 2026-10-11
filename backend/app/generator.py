@@ -96,8 +96,10 @@ def generate(
         x, y = _point_in(rng, profile, fam)
         tool = f"{profile.family(fam).prefix}-{rng.randint(1, 4):02d}{rng.choice('ABCD')}"
         if rng.random() < cfg.down_share:
-            # The constraint family and anything flagged as a bottleneck get the tightest SLA.
-            critical = fam == constraint or rng.random() < 0.25
+            # Priority 3 is reserved for tool-downs on the constraint (bottleneck) family, as the
+            # glossary and the "bottleneck downs covered" metric define it; every other tool-down
+            # is priority 2 with the wider response window.
+            critical = fam == constraint
             earliest = rng.randint(0, max(0, shift_len - 120))
             priority = 3 if critical else 2
             latest = earliest + (cfg.sla_critical if critical else cfg.sla_down)
