@@ -43,10 +43,7 @@ On Windows, use `py run.py`.
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---|---|
-| `Python 3.11–3.14 is required` | Install a supported Python, then run it explicitly, for example `python3.12 run.py`. |
-| `Node.js 20.19+ is required` | Install Node 22 LTS from [nodejs.org](https://nodejs.org). |
-| `Is port 8000 free?` | Another process holds the port. Stop it (`lsof -i :8000` on macOS/Linux) and retry. |
-| *Can't reach the API* in the app | The API stopped; check the terminal running `run.py`. |
-| Start from a clean slate | Stop the app and delete `backend/data/`. |
+One table, kept in the README so it cannot drift from the code:
+[Troubleshooting](https://github.com/pavansky/fab-dispatch#troubleshooting) covers the `run.py`
+messages (`Python 3.11–3.14 is required`, `Node.js 20.19+ is required`, `Is port 8000 free?`),
+*Can't reach the API*, disabled buttons for viewers, and starting from a clean slate.

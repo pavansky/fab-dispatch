@@ -17,8 +17,8 @@ Copy `backend/app/fabs/profiles/fab2-200mm-analog.json` to `backend/app/fabs/pro
 | `walk_m_per_min` | Walking speed in cleanroom garb (55–65 is typical). |
 | `constraint_family` | The bottleneck tool family (usually lithography/photo). |
 | `families[]` | One per tool family: `id`, `label`, tool-ID `prefix`, bay rectangle `area` `[x0, y0, x1, y1]` (must lie inside the floor), the `pm_task` text, and a `faults` catalogue. |
-| `faults` | Per fault code: typical `symptoms`, and `causes` with `fix`, `mean_min`, `sd_min`. These drive the repair-history predictions. |
-| `presets` | Planning drills, e.g. `normal`, `<constraint>_crunch`, `excursion`: job mix per family, constraint-certified engineer share, share of unplanned downs, response SLAs in minutes. |
+| `faults` | Per fault code: typical `symptoms`, and `causes` with `fix`, `mean_min`, `sd_min`. These drive the planner's standard estimates and the repair-history predictions. The shipped catalogues are illustrative (several of Fab 1's durations are short for the task named, and PM durations are a fixed set); put your site's real repair times here, since every benchmark figure scales with them. |
+| `presets` | Planning drills, e.g. `normal`, `<constraint>_crunch`, `excursion`, `overstaffed`: job mix per family, constraint-certified engineer share, share of unplanned downs, response SLAs in minutes, and optionally `cross_training` (how many extra families an engineer is certified on, one value drawn per engineer; default `[1, 1, 2]`). |
 
 ## 2. Validate locally
 
@@ -43,18 +43,25 @@ Set it in Supabase → Authentication → Users → *user* → app metadata, e.g
 
 ## 4. Give it its own database (optional)
 
-To keep the fab's data in a separate database, add it to `FAB_TENANT_DATABASES`:
+To keep the fab's data in a separate database, add it to `FAB_TENANT_DATABASES`, pointing at the
+variable that holds its connection URL (for example one a hosting integration injects, like Vercel's
+Neon integration with the prefix `FAB3`), so the password is never copied into a second variable:
 
 ```bash
-FAB_TENANT_DATABASES='{"fab3-300mm-memory": "postgresql://user:pass@host:5432/fab3"}'
+FAB3_DATABASE_URL='postgresql://user:pass@host:5432/fab3'    # injected by the host, or set once
+FAB_TENANT_DATABASES='{"fab3-300mm-memory": "env:FAB3_DATABASE_URL"}'
 ```
+
+A literal URL in `FAB_TENANT_DATABASES` also works, but then the secret lives there as well.
 
 Its schema is created on first use, and `/api/health` reports every database it checks. Fabs not
 listed share the default database, isolated by `fab_id`.
 
 ## 5. Ship it
 
-Open a pull request (template: *Onboard a new fab*), let CI pass, merge to `main`, verify in UAT
-with the fab's key users, then release. See [ENVIRONMENTS.md](ENVIRONMENTS.md).
+Open an issue from the *Onboard a new fab* template (it lists what a profile needs; there is no
+pull request template for it), then a pull request with the profile and its golden fingerprint, let
+CI pass, merge to `main`, verify in UAT with the fab's key users, then release. See
+[ENVIRONMENTS.md](ENVIRONMENTS.md).
 
 Profiles can also live outside the repo: point `FAB_PROFILES_DIR` at a directory of JSON files.

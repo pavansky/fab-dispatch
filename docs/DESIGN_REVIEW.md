@@ -24,8 +24,10 @@ strategies on the same constraint engine, explains every decision, and runs live
 - **The solution.** One constraint engine scores every strategy identically: greedy, Hungarian in
   rounds, regret-2, adaptive large neighbourhood search (ALNS) and PyVRP. An exact solver proves the
   true optimum on all 80 full-size benchmark shifts.
-- **The results.** PyVRP is 2.7% from the proven optimum on average and the cheapest plan in 78 of
-  80 shifts. The rules a dispatcher would use by hand are 19–28% from optimal.
+- **The results.** With the shift known ahead, PyVRP is 3.9% from the proven optimum on average
+  and ALNS 5.7%; one of the two has the cheapest plan in all but one of 80 shifts. The rules a
+  dispatcher would use by hand are 20–30% from optimal. With tool-downs revealed only as they
+  happen, most of that difference disappears.
 - **The system.** React and FastAPI, live dispatch over server-sent events, Supabase sign-in, a
   database per fab (fab 2's data lives in its own Neon database in production), and a CI/CD pipeline
   with 15 required checks. The live demo is at https://fab-dispatch.vercel.app (guest access).
@@ -37,9 +39,10 @@ strategies on the same constraint engine, explains every decision, and runs live
 2. **The recommendation refuses false positives.** A slower solver has to beat the cheapest plan by
    more than the noise margin to be recommended, and the benchmark only calls a difference real when
    a paired bootstrap confidence interval excludes zero.
-3. **The scaling claim is measured.** A 20,000-engineer organisation re-plans in 47 s on one laptop
-   because the problem decomposes by fab, skill and area, and a live tool-down re-plans in about
-   200 ms.
+3. **The scaling claim is measured.** A 20,000-engineer organisation's 222 areas are each planned
+   as independent problems in parallel because the problem decomposes by fab, skill and area
+   (15 s on a laptop with 16 workers, about 1 s per area), and a live tool-down re-plans in 83 ms
+   median.
 
 ---
 
@@ -61,8 +64,8 @@ per hour. Engineers are certified per tool family at levels 1–3, and the scarc
 industrial AI company that works on equipment reliability.
 
 ### Why isn't this a simple one-to-one assignment?
-Because an engineer does 4–6 jobs in a shift, and the **order** decides whether later time windows
-are reachable. Assigning job A to an engineer changes when they can start job B. So each engineer
+Because an engineer does several jobs in a shift (the generator caps each at 4–6, a modelling
+choice, not a fab statistic), and the **order** decides whether later time windows are reachable. Assigning job A to an engineer changes when they can start job B. So each engineer
 needs an ordered route, which makes this a vehicle routing problem with time windows (VRPTW) with
 skills, known in the literature as the technician routing and scheduling problem (TRSP). Decision
 D1 records this.
@@ -88,14 +91,14 @@ structured (fault codes have root causes with their own duration distributions; 
 skill scarcity and fault mix) so the problem isn't random noise.
 
 ### What scenarios are tested?
-Four presets per fab, each with a reason to exist:
+Four presets for Fab 1 and three for Fab 2, each with a reason to exist:
 
 | Preset | What it stresses |
 |---|---|
 | Normal shift | Typical mix of PMs and tool-downs; staffing roughly matches load |
 | Lithography crunch | Scanner problems pile up while few engineers hold litho certifications |
 | Excursion / surge | Mostly unplanned downs (90%) with tight response targets (25 min critical) |
-| Overstaffed | Plenty of engineers; the question is cost, not coverage |
+| Overstaffed | More certified engineers than the work needs (one more bottleneck-certified engineer and wider windows; kept mild so the full-size optimum stays provable in minutes); the question is cost, not coverage |
 
 ---
 
@@ -113,7 +116,8 @@ Four presets per fab, each with a reason to exist:
 | **AllocationResult** | assignments, unassigned jobs with reasons, routes, metrics, solver statistics | One per strategy |
 | **Fab profile** | floor plan, tool families with bay areas, fault catalogue, shift pattern, presets | JSON, one per fab (D17) |
 
-Times are minutes since shift start, and positions are metres on a 400 × 240 m floor.
+Times are minutes since shift start, and positions are metres on the floor whose size the fab
+profile sets (400 × 240 m for fab 1, 300 × 180 m for fab 2).
 
 ### How is it persisted?
 Two models. The **write model** is one JSON document per live shift with an optimistic `version`,
@@ -177,8 +181,10 @@ that's what the user wants, for example "never give up bottleneck coverage".
 ## 4. The algorithms
 
 ### Why these five?
-They span every family of method, so the comparison means something, and they include the current
-state of the art (ANALYSIS §4, D4, D33):
+They span every family of method, so the comparison means something, and they include the strongest
+open-source engine for the routing core of the problem, the VRPTW (ANALYSIS §4, D4, D33). The
+problem class itself is the technician routing and scheduling problem, and no strategy here was run
+on its published instances, so the comparison is internal, against a proven optimum.
 
 | Strategy | Family | How it works | Strength | Weakness |
 |---|---|---|---|---|
@@ -186,7 +192,7 @@ state of the art (ANALYSIS §4, D4, D33):
 | **Hungarian in rounds** | Assignment | Each round builds an engineers × jobs matrix of marginal insertion costs and solves it optimally (`linear_sum_assignment`); every engineer gains at most one job per round | Fastest response to tool-downs; most even workload | Myopic across rounds; highest idle wait |
 | **Regret-2** | Construction | Place first the job with the biggest gap between its best and second-best engineer; a job only one engineer can do has infinite regret | Protects scarce certifications | Still one pass |
 | **ALNS** | Large neighbourhood search | From the regret-2 plan: destroy (random, worst, related/Shaw, route) and repair (greedy or regret), simulated-annealing acceptance, operator weights adapt | Optimises our exact objective, including the convex balance term | Pure Python; stalls on very large single problems |
-| **PyVRP** | Hybrid genetic search / iterated local search | The problem is mapped onto PyVRP (vehicles, optional clients with prizes, per-certification routing profiles, open routes), then the result is replayed through our planner | State of the art for VRPTW; won the 2021 DIMACS VRPTW challenge | Can't express the convex balance term natively |
+| **PyVRP** | Iterated local search (the PyVRP library) | The problem is mapped onto PyVRP (vehicles, optional clients with prizes, per-certification routing profiles, open routes), then the result is replayed through our planner | The pinned `pyvrp==0.14.0` runs ILS from the library whose hybrid genetic search won the 2021 DIMACS VRPTW challenge and the static EURO-NeurIPS 2022 track (the wins are HGS's, not this ILS's) | Can't express the convex balance term natively |
 | **Exact** | Set partitioning MILP | Enumerate every feasible route per engineer, then choose at most one route per engineer covering each job at most once (HiGHS) | Proves the optimum | Enumeration explodes past about 20 engineers |
 
 ### How is PyVRP made comparable to the others?
@@ -200,12 +206,14 @@ Heavier install (pandas, protobuf), slower cold starts on serverless, and weaker
 time limits on the published benchmarks (D4).
 
 ### Why not neural or LLM-designed solvers?
-Checked against current research (ANALYSIS §4, D33). Learned solvers such as Neural Deconstruction
-Search and RouteFinder report results *relative to* PyVRP's HGS on the VRPTW and at best match or
-narrowly beat it. They need GPU training for each instance distribution, can't express this
+Checked against current research (ANALYSIS §4, D33). Learned solvers are measured against PyVRP's
+HGS on the VRPTW (Neural Deconstruction Search reports matching or surpassing state-of-the-art
+operations research methods) or
+against earlier learned solvers (RouteFinder's claim is beating prior learning-based methods across
+VRP variants, not HGS). They need GPU training for each instance distribution, can't express this
 objective's terms, and give no per-decision explanation, which the brief requires. LLM-evolved
-heuristics (ReEvo, EoH, VRPAgent, PyVRP+) are design-time tools for improving operators offline, a
-natural extension for ALNS, not a strategy to run per request.
+heuristics (EoH, ReEvo, MEoH, VRPAgent, PyVRP+) are design-time tools for improving operators
+offline, a natural extension for ALNS, not a strategy to run per request.
 
 ### Are the solvers deterministic?
 Yes. Seeds are fixed, and search stops on an **iteration budget** (ALNS 300, PyVRP 1,000), with time
@@ -214,13 +222,13 @@ cached by content hash. A plan that hit the time cap isn't reproducible, so it i
 instances.
 
 ### How were the iteration budgets chosen?
-From the measured quality curve, not by feel (D16). Past the knee, tripling the budget bought
-0.2–3.9% for three times the latency.
+From the measured quality curve, not by feel (D16). Past the knee, doubling ALNS's budget bought
+0.1 points of cost and tripling PyVRP's 0.5 points, for two to three times the latency.
 
 ### How are decisions explained?
 Every assigned job records which engineer took it and when. Every unassigned job records why, with
 counts per hard constraint ("No engineer on shift holds litho level 3+", or "3 qualified engineers,
-but none had capacity"). The floor-plan inspector shows, per strategy, who was chosen or why nobody
+but none can arrive inside the window"). The floor-plan inspector shows, per strategy, who was chosen or why nobody
 could be. The assistant answers "why is J006 assigned this way?" from the same data, so it always
 agrees with the screen.
 
@@ -229,84 +237,124 @@ agrees with the screen.
 ## 5. Results
 
 ### Which strategy wins, and by how much?
-80 seeded shifts (4 presets × 20), 14 engineers × 45 jobs. PyVRP has the lowest cost in **78 of 80**
-(ALNS the other 2). Against regret-2 it costs 23–30% less in three presets and 8% less in the litho
-crunch, and serves about 3 points more jobs. Most of the saving is **idle wait**, which falls by
-28–35%: one-pass methods leave engineers waiting for windows to open, and only re-sequencing whole
-routes fixes that.
+80 seeded shifts (4 presets × 20), 14 engineers × 45 jobs, every job known at t = 0. PyVRP has the
+lowest cost in **50 of 80**, ALNS in 31 and regret-2 in 1 (ties count for both). Every one-pass rule
+is significantly dearer than PyVRP in every preset (regret-2, the best of them, by 57–140 points).
+Between the search methods: tied on the normal shift (below), PyVRP significantly cheaper on the
+surge and overstaffed shifts, ALNS significantly cheaper in the litho crunch (−11.3 [−17.9, −5.2]).
+Most of the saving is **idle wait**: regret-2 leaves engineers waiting for windows to open 2–7×
+longer than PyVRP, and only re-sequencing whole routes fixes that. (Idle wait is charged from the
+second stop on; an engineer leaves the bay just in time for the first job.)
 
-| Normal shift | Coverage | Bottleneck | Response min | Idle wait min | Load std | Cost |
-|---|---|---|---|---|---|---|
-| Greedy | 93.7% | 97.8% | 23.9 | 1819 | 1.7 | 924.5 |
-| Hungarian | 96.1% | 97.9% | **15.8** | 2333 | **0.6** | 967.2 |
-| Regret-2 | 94.7% | 97.1% | 22.2 | 1528 | 1.6 | 851.4 |
-| ALNS | **97.9%** | **98.4%** | 20.8 | 1263 | 1.6 | 664.6 |
-| PyVRP | 97.7% | **98.4%** | 22.5 | **1011** | 1.9 | **600.6** |
+| Normal shift | Coverage | Bottleneck | Response min | Idle wait min | Load std | Cost | Cost vs PyVRP [95% CI] |
+|---|---|---|---|---|---|---|---|
+| Greedy | 94.7% | 98.3% | 23.1 | 229 | 1.1 | 805.2 | +177.0 [+140.8, +212.5] |
+| Hungarian | 96.3% | **99.0%** | **21.5** | 574 | **0.5** | 832.8 | +204.6 [+170.8, +244.4] |
+| Regret-2 | 96.6% | **99.0%** | 29.5 | 183 | 1.0 | 760.5 | +132.3 [+108.8, +156.0] |
+| ALNS | **98.8%** | **99.0%** | 30.9 | **49** | 1.0 | 639.4 | +11.3 [−2.1, +27.3] |
+| PyVRP | 98.7% | **99.0%** | 29.0 | **49** | 1.4 | **628.2** | reference |
 
-Full tables for every preset: ANALYSIS §1. Reproduce: `python -m scripts.benchmark`.
+That table assumes full foresight. Replayed through the live code with tool-downs revealed at
+`reported_at` (`python -m scripts.benchmark --mode revealed`, 20 seeds per preset), 17 of the 20
+cost differences to PyVRP are not significant. The exceptions: Hungarian is significantly dearer on
+the normal (+106.6) and overstaffed (+65.2) shifts, and ALNS significantly cheaper in the surge
+(−32.9 [−66.1, −5.8]). Greedy is never significantly dearer and had the cheapest realised plan in
+20 of 80 shifts, for about 30 ms of solving per shift against 3–4 s. The static ranking is the
+next-shift planning case, not the live one.
+
+Full tables for every preset, both modes: ANALYSIS §1. Reproduce: `python -m scripts.benchmark`.
 
 ### How far is each strategy from the best possible plan?
 Measured against the **proven optimum** on all 80 full-size shifts (D36):
 
 | Strategy | Mean gap | Worst gap | Found the optimum |
 |---|---|---|---|
-| Greedy | 28.1% | 75.4% | 0/80 |
-| Hungarian | 25.8% | 45.3% | 0/80 |
-| Regret-2 | 19.4% | 49.7% | 0/80 |
-| ALNS | 5.7% | 18.1% | 0/80 |
-| **PyVRP** | **2.7%** | **10.0%** | **1/80** |
+| Greedy | 29.3% | 74.3% | 0/80 |
+| Hungarian | 29.8% | 83.3% | 0/80 |
+| Regret-2 | 20.1% | 61.4% | 0/80 |
+| ALNS | 5.7% | 23.2% | 0/80 |
+| **PyVRP** | **3.9%** | **11.2%** | 0/80 |
 
-PyVRP's mean gap by preset: 4.3% normal, 0.9% litho crunch, 2.1% surge, 3.6% overstaffed. Each
-proof took 20 s on average (138 s worst), over about 34,000 feasible routes per shift. Reproduce:
-`python -m scripts.benchmark --only gaps-full`.
+No strategy found the optimum in any of the 80 shifts. By preset, PyVRP's mean gap is 6.4% normal,
+1.3% litho crunch, 2.5% surge and 5.2% overstaffed; ALNS's 8.5%, 0.8%, 4.6% and 9.1%. So **in the
+litho crunch ALNS is closer to the optimum than PyVRP**, which matches its significantly lower cost
+there in the quality study; that is the strongest evidence that ALNS earns its place. The litho-crunch
+gap is deflated by the penalty for jobs nobody on shift can take, so the study also reports the gap
+on the changeable cost: Hungarian 10.6% (8.3% on the whole cost), PyVRP 1.8% (1.3%). A 14 × 45
+shift has about 42,000 feasible routes. Proof time depends on the hardware: about a minute on
+average and up to about 13 minutes for the hardest shift on a laptop (16 proofs side by side, one
+HiGHS thread each), 203 s on average and up to 55 minutes on a 4-core container; both machines
+produced the same gaps to the decimal. Reproduce: `python -m scripts.benchmark --only gaps-full`.
 
 ### How do you know the "optimum" is really optimal?
 Three checks. The exact plan is built and costed by the same planner as the heuristics, so it's a
 real, feasible plan. HiGHS proves optimality with a relative gap of 0. And the study **fails** if any
-heuristic ever beats it; none did. Giving ALNS 20,000 iterations instead of 300 brings it from 8.1%
-to 5.2% above the optimum and then it stops, never below.
+heuristic ever beats it; none did, including ALNS at a much larger budget
+(`python -m scripts.benchmark --only gaps-full --alns-iterations 20000`; the 20,000-iteration result
+is in ANALYSIS §1).
 
 ### Didn't you first report ALNS at 0.9% from optimal?
 Yes, and that's a lesson worth telling. The first exact solver had a cautious 22-job cap, so gaps
-were measured on small 4 × 12 shifts, where ALNS looked best (0.9% vs PyVRP's 1.8%). Proving the
-optimum at full size showed the gaps are 3–6× larger and PyVRP is the closest. Small test cases
-flatter heuristics; measure at the size you'll run (ANALYSIS §2, D36).
+were measured on small 4 × 12 shifts, where ALNS looked best (0.9% vs PyVRP's 1.8% then; with the
+2.9.0 code both are within 0.2%). Proving the optimum at full size showed the gaps are far larger
+(PyVRP 3.9%, ALNS 5.7%) and PyVRP is the closest overall, though not in the litho crunch. Small test
+cases flatter heuristics; measure at the size you'll run (ANALYSIS §2, D36).
 
 ### How fast are they?
 
 | Size | Greedy | Hungarian | Regret-2 | ALNS | PyVRP |
 |---|---|---|---|---|---|
-| 14 × 45 | 2 ms | 5 ms | 6 ms | 165 ms | 422 ms |
-| 30 × 100 | 8 ms | 15 ms | 45 ms | 951 ms | 922 ms |
-| 60 × 200 | 24 ms | 72 ms | 315 ms | 3,066 ms* | 2,549 ms |
+| 14 × 45 | 2 ms | 4 ms | 7 ms | 176 ms | 337 ms |
+| 30 × 100 | 8 ms | 14 ms | 38 ms | 757 ms | 612 ms |
+| 60 × 200 | 27 ms | 64 ms | 242 ms | 3,296 ms* | 1,600 ms |
 
-Laptop (Apple M5 Pro); Vercel's serverless CPU is about 3–5× slower. *Hit the 3 s safety cap.
+Median of 5 runs on a MacBook Pro (Apple silicon, 18 cores, Python 3.14.7); Vercel's serverless
+CPU is several times slower. *Hit the 3 s safety cap.
+
+### Can we run it locally at 100 × 100, or 1,000 × 1,000?
+
+Yes. The hosted demo stops at 60 × 200 so a request fits its 60 s function limit; locally the
+limit is `FAB_MAX_ENGINEERS` / `FAB_MAX_JOBS` (README, Configuration) and the UI reads it from
+`/api/meta`. At 100 × 100 every strategy answers in under 4 s and the app behaves exactly as at
+30 × 100. At 1,000 × 1,000, with the shipped settings on a 4-core container: greedy plans in 6 s,
+Hungarian in 34 s, regret-2 in 8 minutes, ALNS in 11 minutes (regret-2 plus four iterations, 0.1%
+better), and PyVRP is killed by a 15 GB memory limit while building its per-engineer matrices
+(memory grows as engineers × jobs²: 4.8 GB at 300 × 300). The UI runs all five strategies per Generate, so at that size PyVRP's request takes the API process down (killed at 13.8 GB) and the other three with it; call `/plan` one strategy at a time instead.
+
+The honest conclusion is in [ANALYSIS, "Bigger shifts locally"](ANALYSIS.md):
+the bottleneck is the pure-Python regret-2 warm start, PyVRP's memory is the hard wall, and
+neither should be fixed by brute force because a 1,000-engineer shift is 30–60 areas, which the
+scale study plans in parallel in 15 s on a laptop with full budgets. The limit is configurable so you can
+check those numbers rather than take them on trust.
 
 ### Why does Hungarian have the best response time but the worst idle time?
 Each round gives every engineer at most one job, chosen optimally for that round. So work spreads
-out and everyone's first job starts immediately (best response, most even load). But a round is
-optimal only for itself: later jobs land where engineers wait for windows, so idle time is the
-highest of all five. If the fab's top KPI is time-to-respond on a down scanner, Hungarian is a
-defensible choice despite its cost.
+out and everyone's first job starts immediately (best response in every preset, most even load).
+But a round is optimal only for itself: later jobs land where engineers wait for windows, so idle
+time is the highest of all five. It is also the one method that stays significantly dearer than
+PyVRP with tool-downs revealed as they happen (normal and overstaffed shifts). If the fab's top KPI
+is time-to-respond on a down scanner, Hungarian is a defensible choice despite its cost.
 
 ### When does the choice of method matter most?
 Where engineers are contended and windows are tight. With slack engineers and wide windows,
 bottleneck work gets done whatever the method, and the differences are cost and PMs. With scarce
 skills and tight response targets, the **order** of decisions decides whether urgent work gets done
-at all. At hard capacity limits (the litho crunch) the gap closes again: all five hit the same
-ceiling of 67–69% coverage, because no algorithm creates certified engineers. The Workforce view
-points to the real fix, cross-training or staffing.
+at all (surge: 88.5% → 90.4% of bottleneck downs). At hard capacity limits (the litho crunch) the
+gap closes again: all five hit the same ceiling of 73–74% coverage and 36–37.5% of bottleneck downs,
+because no algorithm creates certified engineers. The Workforce view points to the real fix,
+cross-training or staffing. And when tool-downs are only known as they happen, most differences
+fall inside the noise of 20 seeds.
 
 ### When would you pick each one? (The brief's question)
 
 | Situation | Choice | Why |
 |---|---|---|
-| Dispatch must happen the instant a fault arrives | Greedy or regret insertion into the current plan | Milliseconds, explainable in one sentence |
+| Dispatch must happen the instant a fault arrives | Greedy or regret insertion into the current plan | Milliseconds, explainable in one sentence; with tool-downs revealed as they happen greedy was never significantly dearer than PyVRP |
 | Many jobs competing for few qualified engineers | Regret-2 at minimum, search ideally | One-at-a-time commitment strands jobs |
 | KPI is response time or fairness | Hungarian in rounds | Spreads first jobs across everyone |
-| KPI is cost or throughput, about 1 s acceptable | PyVRP | Lowest cost in 78/80, 2.7% from optimal |
-| Objective has terms a library can't express | ALNS | Optimises the exact objective |
-| Planning ahead (next shift), minutes acceptable | Exact | Proven optimal, 2.7% cheaper than PyVRP on average |
+| KPI is cost or throughput for a shift planned ahead, a fraction of a second acceptable | PyVRP or ALNS | Lowest static cost in 50/80 and 31/80; 3.9% / 5.7% from optimal; tied on the normal shift |
+| Objective has terms a library can't express, or scarce certifications dominate | ALNS | Optimises the exact objective; closer to optimal than PyVRP in the litho crunch (0.8% vs 1.3%) |
+| Planning ahead (next shift), minutes acceptable | Exact | Proven optimal, 3.9% cheaper than PyVRP on average, up to 11% |
 | Certification shortage | Fix staffing | Every strategy hits the same ceiling |
 
 ---
@@ -349,8 +397,9 @@ It produces "nervous" plans that reshuffle the whole floor for a 1% gain. People
 plan that changes under them.
 
 ### How fast is a live re-plan?
-Measured through the real live-dispatch code, 50 tool-downs into a live 30 × 100 shift: **median
-217 ms, 95th percentile 270 ms**, max 288 ms (ALNS).
+Measured through the real live-dispatch code, 50 tool-downs into a live 30 × 100 shift, spread
+over the whole shift: **median 83 ms, 95th percentile 159 ms**, max 163 ms (ALNS, 7–53 open jobs at the event,
+none hitting the 0.6 s live cap) on a MacBook Pro (Apple silicon).
 
 ### What stops two dispatchers from corrupting a shift?
 Three mechanisms (D21):
@@ -408,7 +457,9 @@ repairs moves to a Qdrant server with one setting, behind the same interface.
 
 ### Any bugs found there?
 Yes: a symptom sharing no words with past repairs used to produce a confident-looking 0-minute
-"prediction". Neighbours with zero similarity are now discarded, and the answer is "no prediction".
+"prediction", and a vague one ("tool is down") a 104-minute prediction with a named cause at 0.07
+similarity. Below a similarity floor of 0.35 the answer is now "no similar repair history" with the
+nearest records shown only as labelled weak matches, and the planner keeps the standard estimate.
 
 ---
 
@@ -422,15 +473,19 @@ only reads; it can't change anything.
 ### How is it kept from making things up?
 It classifies the question first. Shift questions are answered by **tools** that read the real plans
 through the same cached planning service as the UI, so it always agrees with the screen. App
-questions are answered from **retrieval** over the help articles (vector, keyword, heading and
-section-text matching). Every answer carries citations and actions. Below a retrieval score of 0.5
+questions are answered from **retrieval** over the help articles (lexical: hashed n-grams plus
+keyword, heading and section-text matching; no learned model). Every answer carries citations and actions. Below a retrieval score of 0.5
 it says it doesn't know (D24).
 
 ### How is it evaluated?
-An evaluation set runs in CI on every change: **42 of 42** how-to questions cite the right article
-(required ≥ 90%), and **8 of 8** off-topic questions are declined. The refusal threshold sits in a
-measured gap: answerable questions score ≥ 0.6, off-topic ones ≤ 0.36. In production, every answer
-has thumbs up/down, stored with the user id (never the email) for 180 days.
+An evaluation set runs in CI on every change, end to end through the assistant: **62 of 67**
+answerable questions (42 keyword phrasings, 25 paraphrases written without the articles' keyword
+lists) cite the right article (required ≥ 90%), and **26 of 26** off-topic questions, 10 of them in
+the app's own words ("Python code for the greedy strategy"), are declined. Tasks the app doesn't do
+are refused by rule; the rest sit under a retrieval threshold of 0.5, the method and the before/after
+numbers are in [ai.md](ai.md). In production, every answer has thumbs up/down, stored with the user id
+(never the email) for 180 days, and `scripts/feedback_to_eval.py` exports unhelpful answers as new
+evaluation cases.
 
 ### Is there an LLM?
 Optional and off by default (`FAB_ASSISTANT_LLM=anthropic` or a local `ollama` model). If on, it
@@ -504,8 +559,8 @@ string itself (`FAB2_DATABASE_URL`, Production only) and nobody copies a passwor
 through an `env:` reference. Using two providers also shows the design doesn't depend on one vendor.
 
 ### How do rate limits work on serverless?
-Two layers (D30). An in-memory token bucket per instance absorbs bursts with no I/O. A per-minute
-counter in the database enforces the quota across instances, because on serverless every instance
+Two layers (D30). An in-memory token bucket per instance rejects bursts without touching the database. Each allowed
+request costs one upsert to a per-minute counter in the database, which enforces the quota across instances, because on serverless every instance
 would otherwise count alone. If the database is unreachable, requests are allowed: rate limiting
 must not take the service down with it.
 
@@ -519,36 +574,42 @@ near-independent skill groups, and dispatch is per shift and area. So 20,000 eng
 of independent problems of 15–60 engineers each, solved in parallel (D35).
 
 ### Is that measured?
-Yes (`python -m scripts.scale_study`, ANALYSIS "Scale"):
+Yes (`python -m scripts.scale_study`, ANALYSIS "Scale"). The company study plans 222 independent
+areas (each a fresh plan of its own 30 × 100 shift, not a re-plan of one shared plan) in parallel,
+and records per area whether the solver's safety cap stopped it:
 
-| What | Measured |
+| What | Measured (MacBook Pro, Apple silicon, 16 workers) |
 |---|---|
-| Re-plan a whole 20,000-engineer company (6,660 on shift, 22,200 jobs, 222 areas, PyVRP, 16 workers on one laptop) | **46.7 s** wall clock, 722 CPU-seconds, 3.25 s per area (p95 3.39 s) |
-| Live tool-down re-plan through the real dispatch code | **217 ms** median, 270 ms p95 |
-| Live load at 20,000 engineers (about 0.6 tool-downs a second) | under a fifth of one CPU core |
+| Plan a whole 20,000-engineer company (6,660 on shift, 22,200 jobs, 222 areas, PyVRP) | **14.6 s** wall clock, 223 CPU-seconds, 0.99 s per area (p95 1.17 s); 0/222 areas hit the 3 s cap |
+| Live tool-down re-plan through the real dispatch code (50 events over the whole shift, 7–53 open jobs) | **83 ms** median, 159 ms p95 |
+| Live load implied by the generated company (12,312 tool-downs per 720-minute shift, 0.29 a second) | about 2.4% of one CPU core |
 
 ### What if you don't decompose?
 It's slower and worse:
 
-| One problem | Regret-2 | ALNS | PyVRP |
+| One problem (one seed, 3 s search cap) | Regret-2 | ALNS | PyVRP |
 |---|---|---|---|
-| 100 × 300 | 1.1 s, cost 3,504 | 3.9 s, cost 3,464 | 4.5 s, cost 2,493 |
-| 150 × 500 | 5.3 s, cost 6,446 | 6.1 s, cost 6,446 | 9.8 s, cost 4,049 |
-| 300 × 1,000 | 56 s, cost 10,891 | 58 s, cost 10,891 | 62 s, cost 6,994 |
+| 100 × 300 | 0.9 s, cost 3,299 | 4.0 s, 62 iterations, cost 3,260 | 3.2 s, 1,000 iterations, cost 3,299 |
+| 150 × 500 | 4.1 s, cost 6,075 | 7.7 s, 26 iterations, cost 6,048 | 7.7 s, 849 iterations, cost 6,040 |
+| 300 × 1,000 | 51 s, cost 11,841 | 71 s, 5 iterations, cost 11,841 | 63 s, 500 iterations, cost 11,841 |
 
-From 150 × 500 up, ALNS returns its regret-2 start unchanged: its safety cap runs out before it
-improves anything. And the gaps grow with size: PyVRP is 2.7% from optimal at 14 × 45, about 4% at
-20 × 65, and 7.5–8.4% at 30 × 100.
+ALNS's search budget used to start before its regret-2 warm start, so from 150 × 500 up it ran
+zero iterations and returned the warm start unchanged; the budget now starts after the warm start,
+as PyVRP's does, and both report `warm_start_s` and `search_s`. At these sizes a 3 s search buys
+about 1% at most over regret-2, and nothing at 300 × 1,000 (ANALYSIS "Scale"). And the gaps grow
+with size: PyVRP is 3.9% from optimal at 14 × 45 (80 shifts), at most about 11% at 20 × 65 (three
+seeds, earlier build) and 12.0–13.1% at 30 × 100 (one seed); ALNS 5.7%, about 10% and 12.6–13.7%.
 
 ### How did you get the optimum at 30 × 100?
-Full enumeration doesn't scale: 39,000 routes at 14 × 45, 409,000 at 20 × 65 (27 minutes to prove),
-and 8.3 million at 30 × 100, where a direct MILP over every route didn't finish its first LP in
-hours. **Column generation** replaced it: solve a small LP, use its prices to scan all 8.3 million
-routes for any that could improve the plan (one sparse matrix-vector product), add those, repeat.
-The converged LP value is a **certified lower bound** no plan can beat; an integer solve over the
-generated routes gives a real plan. At 30 × 100 the optimum lies between **1828.0 and 1844.3** (a
-0.89% band). Validated first on a 14 × 45 shift with a known optimum: it brackets it within 0.49% in
-7 s, versus 83 s for the full proof (`python -m scripts.certified_bound`).
+Full enumeration doesn't scale: about 42,000 routes at 14 × 45, about 400,000 at 20 × 65, and
+12.7 million at 30 × 100, where in an earlier run a direct MILP over every route didn't finish its
+first LP in hours. **Column generation** replaced it: solve a small LP, use its prices to scan all
+12.7 million routes for any that could improve the plan (one sparse matrix-vector product), add
+those, repeat. The converged LP value is a **certified lower bound** no plan can beat; an integer
+solve over the generated routes gives a real plan. At 30 × 100, on one seed, the optimum lies
+between **1002.8 and 1012.7** (a 0.99% band), found in under 5 minutes on a laptop (261 s of
+enumeration, 5 s of column generation, 10 s of integer search); `--seeds N --preset P` runs more
+(`python -m scripts.certified_bound`).
 
 ### What changes at real enterprise scale?
 The platform around the solver, not the solver (ARCHITECTURE §10):
@@ -607,11 +668,11 @@ the database URL keeps `channel_binding`, which protects the password exchange.
 
 | Layer | Tool | Count | Covers |
 |---|---|---|---|
-| Backend | pytest | **320** (11 need Postgres) | Constraints, every algorithm, optimality, API, auth, live dispatch, store and migrations, tenancy isolation, security, help, assistant quality |
-| Components | Vitest + Testing Library | **102** | Every view and flow, rendered against **real API responses** |
-| End-to-end | Playwright | **33** (28 desktop, 5 phone) | The real API and UI together, two browsers on one live shift, axe-core WCAG 2.1 AA checks |
+| Backend | pytest | **519** (the Postgres-only ones skip without `FAB_TEST_PG_URL`; 5 are slow) | Constraints, every algorithm, optimality, API, auth, live dispatch, store and migrations, tenancy isolation, security, help, assistant quality, the study scripts |
+| Components | Vitest + Testing Library | **219** | Every view and flow, rendered against **real API responses** |
+| End-to-end | Playwright | **29** (24 desktop, 5 phone) | The real API and UI together, two browsers on one live shift, axe-core WCAG 2.1 AA checks |
 
-Coverage: 92% of the API and about 89% of UI lines, both enforced as floors in CI.
+Coverage floors enforced in CI: 92% over the API and study scripts, 85% of UI lines.
 
 ### Why test the UI against captured API responses?
 Hand-written mocks drift from the API, so component tests pass against data that no longer exists.
@@ -715,15 +776,17 @@ month of real tool-downs through the live engine and compare against what dispat
 Because the brief asks when each approach wins, and they do win at different things: Hungarian has
 the best response time and fairness, greedy and regret-2 answer in milliseconds for instant dispatch,
 ALNS optimises objective terms PyVRP can't express. And they're the baselines that show what search is
-worth (19–28% from optimal by hand versus 2.7%).
+worth (20–30% from optimal by hand versus 3.9%).
 
 **"Why not just use the exact solver everywhere?"**
-It takes 20 s on average and up to 138 s at 14 × 45, and 27 minutes at 20 × 65. Fine for planning
-the next shift, too slow for a live tool-down that needs an answer in a second.
+About a minute on average at 14 × 45 and up to about 13 minutes for the hardest shift on a laptop
+(the timing depends on the hardware), and far longer at 20 × 65. Fine for planning the next shift,
+too slow for a live tool-down that needs an answer in a second.
 
 **"Why did ALNS look best and then not?"**
-It was measured on small shifts first. At full size, proven optimal on 80 shifts, PyVRP is closer.
-I changed the docs when the evidence changed (D36).
+It was measured on small shifts first. At full size, proven optimal on 80 shifts, PyVRP is closer
+overall (3.9% vs 5.7%), while ALNS stays closer in the litho crunch. I changed the docs when the
+evidence changed (D36).
 
 **"What's the biggest risk in production?"**
 Not the solver. It's integration: the MES feed, the data quality of certifications and durations,
@@ -760,17 +823,17 @@ else.
 |---|---|
 | Strategies | 5, plus an exact solver |
 | Benchmark | 80 shifts (4 presets × 20), 14 engineers × 45 jobs |
-| PyVRP lowest cost | 78 of 80 shifts |
-| Gap to proven optimum | PyVRP 2.7%, ALNS 5.7%, regret-2 19.4%, Hungarian 25.8%, greedy 28.1% |
-| Exact proof time at 14 × 45 | 20 s mean, 138 s worst, about 34,000 routes |
-| Certified bound at 30 × 100 | optimum in [1828.0, 1844.3]; PyVRP within 8.4% |
-| Idle wait saved by search vs regret-2 | 28–35% |
-| Live re-plan | 217 ms median, 270 ms p95 |
-| 20,000-engineer company re-plan | 46.7 s on one laptop |
+| Lowest static cost | PyVRP 50 of 80 shifts, ALNS 31, regret-2 1; with revealed information 17 of 20 differences to PyVRP are not significant |
+| Gap to proven optimum | PyVRP 3.9%, ALNS 5.7%, regret-2 20.1%, greedy 29.3%, Hungarian 29.8%; none optimal in any of 80 shifts |
+| Exact proof time at 14 × 45 | about a minute on average, about 13 minutes worst on a laptop (hardware-dependent); about 42,000 routes |
+| Certified bound at 30 × 100 | optimum in [1002.8, 1012.7]; PyVRP at most 13.1% above it, ALNS 13.7% (one seed) |
+| Idle wait saved by search vs regret-2 | 37–85% (static; charged from the second stop) |
+| Live re-plan | 83 ms median, 159 ms p95 (laptop) |
+| 20,000-engineer company, 222 areas planned in parallel | 14.6 s on a laptop, 16 workers, no area capped |
 | Repair search | 0.1 ms per query, 80 ms index build |
-| Assistant evaluation | 42/42 cited correctly, 8/8 off-topic refused |
-| Tests | 455 (320 backend, 102 components, 33 end-to-end) |
-| Coverage | 92% API, about 89% UI lines |
+| Assistant evaluation | 62/67 cited correctly, 26/26 off-topic refused |
+| Tests | 767 (519 backend, 219 components, 29 end-to-end) |
+| Coverage floors | 92% API and scripts, 85% UI lines |
 | Required CI checks | 15 |
 | Design decisions recorded | 36 |
 | Fabs / databases in production | 2 fabs, 2 databases (Supabase and Neon) |
@@ -786,7 +849,7 @@ else.
 | **Bottleneck tool** | A tool whose downtime limits the fab's output, typically a lithography scanner |
 | **Certification level** | 1–3 per tool family; a job needs a minimum level |
 | **ALNS** | Adaptive large neighbourhood search: destroy and repair parts of a plan, adapting which operators to use |
-| **HGS / ILS** | Hybrid genetic search / iterated local search, the methods behind PyVRP |
+| **HGS / ILS** | Hybrid genetic search, the PyVRP method that won the VRPTW competitions; iterated local search, the method the pinned PyVRP release runs on the same local search |
 | **Regret** | The gap between a job's best and second-best option; high regret means place it first |
 | **Set partitioning** | Choosing a set of routes that covers each job at most once at minimum cost |
 | **Column generation** | Solving an LP over a subset of routes and using its prices to find routes worth adding |

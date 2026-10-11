@@ -5,8 +5,9 @@ Short records of the choices that shape this system: context, decision, and what
 ---
 
 ### D1. Model routes, not one-to-one assignments
-**Context.** The brief allows a simple resource ↔ request pairing. A fab engineer handles 4–6 jobs a
-shift, and the order decides whether later windows are reachable.
+**Context.** The brief allows a simple resource ↔ request pairing. An engineer handles several jobs
+in a shift (the generator caps each at 4–6, `max_jobs`, a modelling choice rather than a measured fab
+fact), and the order decides whether later windows are reachable.
 **Decision.** Each engineer gets an ordered route, so this is a VRPTW with skills (technician routing
 and scheduling).
 **Trade-off.** Harder than bipartite matching. It's also why Hungarian has to run in rounds, which turned
@@ -19,15 +20,17 @@ replayed through it.
 hard-constraint tests cover all strategies at once.
 
 ### D3. Manhattan distance on a floor plan, SVG instead of a map
-**Decision.** Positions are metres on a 400 × 240 m fab floor, and walking is Manhattan distance along
-aisles. Rendered as SVG.
+**Decision.** Positions are metres on the fab floor whose size comes from the fab profile (400 × 240 m
+for fab 1, 300 × 180 m for fab 2), and walking is Manhattan distance along aisles. Rendered as SVG.
 **Why.** That's how people move in a fab, and it needs no map tiles or keys. The brief explicitly allows
 SVG.
 
 ### D4. Which advanced algorithms
-**Context.** Literature review: ALNS (Ropke & Pisinger 2006; Kovacs et al. 2012, applied to technician
-routing with skill levels) and HGS/ILS (Vidal; PyVRP) dominate. On the published VRPTW benchmarks,
-PyVRP reaches about 0.2–0.8% gaps against about 10% for OR-Tools.
+**Context.** Literature review: ALNS (Ropke & Pisinger 2006; Cordeau, Laporte, Pasin & Ropke 2010
+and Kovacs et al. 2012, applied to technician routing with skill levels) and HGS/ILS (Vidal; PyVRP)
+dominate. On the published VRPTW benchmarks, PyVRP reaches about 0.2–0.8% gaps against about 10% for
+OR-Tools. The pinned `pyvrp==0.14.0` ships iterated local search; its hybrid genetic search is the
+method behind the competition results (ANALYSIS §4).
 **Decision.** Add **PyVRP** (best quality per second, 1.2 MB wheel, MIT), a hand-written **ALNS** (optimises
 our exact objective including balance), and an **exact MILP** baseline (SciPy/HiGHS, no extra dependency).
 **Rejected.** OR-Tools routing: heavier install (pandas, protobuf), slower cold starts on serverless, and
@@ -118,16 +121,27 @@ problem) entirely. The fallback still applies when `FAB_QDRANT_PATH` is set.
 ### D16. Search budgets sized from the quality curve, not by feel
 **Context.** On Vercel, PyVRP at 3000 iterations hit the 3 s cap: slower, non-reproducible, and
 uncacheable.
-**Decision.** ALNS 300 and PyVRP 1000 iterations, the knee of the measured curve. Going higher triples
-latency for a further 0.2–3.9% cost. Configurable, and part of the cache key.
+**Decision.** ALNS 300 and PyVRP 1000 iterations. Going higher (ALNS 600, PyVRP 3000) doubles or
+triples latency for a further 0.1–0.5 points of cost. Configurable, and part of the cache key.
+**Honest note.** By D14's own rule (plans within 2% are tied; take the fastest), PyVRP's knee is
+250 iterations, not 1000: the measured curve (ANALYSIS, "Sizing the search budget") shows 1000
+buying 0.6 points of cost over 250 at 3.7× the latency (294 vs 80 ms), inside the noise margin.
+1000 is kept because every figure in ANALYSIS was measured at that budget and the plan cache keys on
+it; a deployment that values latency should set `FAB_PYVRP_ITERATIONS=250` and lose nothing the
+recommendation rule would notice.
 
 ### D17. Fab-specific knowledge is data (fab profiles), not code
 **Context.** The first build hard-coded one fab: its floor, tool families, shift and fault
 catalogue. Each new customer site would have meant a code change and a release.
 **Decision.** One validated JSON profile per fab (`backend/app/fabs/profiles`). The generator, repair
-history, API and UI all read it. A second, deliberately different fab (200mm, 8-hour shifts, photo as
-the constraint) ships alongside to prove the engine is generic. Fab 1 was converted with a golden
-test proving its generated scenarios are byte-identical to the old hard-coded generator.
+history, API and UI all read it. A second fab (200mm, 8-hour shifts, photo as the constraint) ships
+alongside. Honestly described, it differs from fab 1 in *constants*: tool families and their bays,
+fault catalogue, shift length and start, floor size, walking speed and response SLAs. It uses the
+same generator template (the same staffing rule, PM-duration set and job-mix mechanics), so it
+proves that the engine reads everything from the profile, not that the engine copes with a
+structurally different fab (two-person jobs, a second bottleneck, split shifts). Fab 1 was converted
+with a golden test proving its generated scenarios are byte-identical to the old hard-coded
+generator; the golden hashes are regenerated whenever the generator's rules change on purpose.
 **Trade-off.** Profile authors must describe the floor and fault catalogue. The onboarding guide and
 schema validation keep that tractable.
 
@@ -178,13 +192,14 @@ keeps the UI accessible: the floor plan's jobs became real buttons because the t
 
 ### D24. A grounded assistant: retrieval and tools first, an LLM only to reword
 **Decision.** The assistant classifies the question, then answers only from tools: retrieval over the
-help articles (hybrid: vectors in Qdrant plus keyword, heading and section-text matches) and the
+help articles (lexical: hashed n-gram vectors plus keyword, heading and section-text matches) and the
 planning service for the shift on screen. Every answer carries citations and actions. Below a
 measured retrieval score it says "I don't know". An LLM is optional and only rewords the grounded
 answer; citations and actions never come from it.
 **Why.** A dispatcher acts on these answers, so a confident wrong one is worse than none. Grounding
-makes answers checkable and identical to what the screen shows; the refusal threshold sits between
-on-topic (≥ 0.6) and off-topic (≤ 0.36) scores on an evaluation set that runs in CI. It also meets
+makes answers checkable and identical to what the screen shows; the refusal threshold (0.5) is set on
+an evaluation set that runs in CI end to end (keyword phrasings, paraphrases and off-topic questions,
+figures in [ai.md](ai.md)), and tasks the app doesn't do are refused by rule. It also meets
 the brief's no-keys rule, and makes the LLM a swappable enhancement, not a dependency.
 
 ### D25. One-click guest access for the public demo
@@ -224,11 +239,17 @@ domain must be queryable: "what did E03 work on this week?" shouldn't parse docu
 in one transaction means the read model can never disagree with the truth.
 
 ### D30. Rate limits in two layers
-**Decision.** An in-memory token bucket per instance absorbs bursts with no I/O; a per-minute counter
-in the database enforces the quota across instances. If the database is unreachable, requests pass.
+**Decision.** An in-memory token bucket per instance rejects bursts without touching the database; each allowed
+request from a signed-in caller costs one upsert to a per-minute counter in the database, which
+enforces the quota across instances. If the database is unreachable, cheap requests
+pass; the expensive endpoints (benchmarks, the optimality gap, starting a shift, an LLM-backed
+answer) refuse with 503 and `Retry-After` instead. Unauthenticated endpoints use the in-memory
+bucket only.
 **Why.** On serverless every instance counts alone, so an in-memory limit alone barely limits. The
-shared counter costs one upsert, only on the endpoints that need it. Failing open keeps a database
-blip from taking the whole API down with it.
+shared counter costs one upsert, only for signed-in callers on the endpoints that need it (a request
+that cost nothing to authenticate must not cost a database write). Failing open keeps a database
+blip from taking the whole API down with it, but only where a flood would be cheap; where it
+wouldn't be, the limiter is the thing that must hold.
 
 ### D31. An ingestion API for equipment systems
 **Decision.** `POST /api/ingest/tool-downs`, authenticated by a per-fab token stored as a SHA-256
@@ -247,10 +268,14 @@ identifying anyone.
 
 ### D33. Spend effort on uncertainty, not on more solvers
 **Decision.** Keep five strategies plus the exact optimum; don't add neural or LLM-evolved solvers.
-**Why.** The lineup already includes the state of the art for this problem (PyVRP's hybrid genetic
-search, the DIMACS VRPTW winner), and the headroom above it is measured, not assumed: proven optimal
-on 80 full-size shifts, PyVRP is 2.7% from the optimum on average, and the exact method captures that
-gap when the plan is made ahead of time. Neural solvers at best match HGS, need training and can't explain decisions; LLM-evolved
+**Why.** The lineup includes the strongest open-source engine for the routing core of this problem
+(PyVRP: the pinned version runs its iterated local search; the hybrid genetic search behind its
+DIMACS and EURO-NeurIPS VRPTW wins is a different algorithm from the same library), and the headroom above it
+is measured, not assumed: proven optimal on 80 full-size shifts, PyVRP is 3.9% from the optimum on
+average, and the exact method captures that gap when the plan is made ahead of time. The problem
+class is the technician routing and scheduling problem, and no strategy was run on its published
+instances (ANALYSIS §4), so "state of the art" is a claim about the VRPTW engine, not the whole
+problem. Neural solvers at best match HGS, need training and can't explain decisions; LLM-evolved
 heuristics are a design-time tool for improving operators. The research frontier for technician
 routing is dynamic and stochastic dispatch, so that's where the next improvement lies, alongside
 making the exact optimum fast enough for live use (ANALYSIS §4).
@@ -270,20 +295,24 @@ no code change: the same images pointed at that fab's database.
 and area (about 15–60 engineers each), solved independently and in parallel. Don't build one solver
 for 20,000 engineers.
 **Why.** Engineers don't cross fabs, certifications split a fab into near-independent groups, and
-dispatch is per shift and area, so the split loses little. It was measured, not assumed: a
-20,000-engineer company (6,660 on shift, 222 areas) re-plans in 47 s on one laptop, and a live
-tool-down re-plans in 217 ms. Solving the same work undecomposed is slower and further from optimal:
-PyVRP's gap grows from 2.7% at 14 × 45 to about 8% at 30 × 100, and ALNS stops improving on its
-start from 150 × 500 (ANALYSIS, "Scale").
+dispatch is per shift and area, so the split should lose little. What was measured is the speed of
+the decomposition, not its cost: in the scale study the groups are independent *by construction*
+(each area is generated and planned on its own, a fresh plan rather than a re-plan), so the 14.6 s
+for a 20,000-engineer company's 222 areas (6,660 on shift) on a laptop with 16 workers and no area
+hitting the solver's cap, and the 83 ms median live re-plan of one tool-down, show that the split
+is fast, not that it is lossless. What the studies do show about quality is that solving the same
+work undecomposed is slower and further from optimal: PyVRP's certified gap grows from 3.9% at
+14 × 45 to at most about 11% at 20 × 65 and 12–13% at 30 × 100 (one seed), and at 300 × 1,000 a 3 s
+search does not improve on its regret-2 warm start at all (ANALYSIS, "Scale").
 **Trade-off.** Work that genuinely crosses a boundary (a shared expert, a cross-bay job) needs a
 coordination step between areas; at the measured sizes that hasn't been needed.
 
 ### D36. Prove optimality gaps instead of estimating them
 **Decision.** Measure every strategy against the proven optimum at the size it runs: exact set
 partitioning (route enumeration + MILP) on all 80 benchmark shifts at 14 × 45, and certified bounds
-by column generation where full enumeration stops scaling (30 × 100: optimum between 1828.0 and
-1844.3).
-**Why.** Gaps measured on small shifts flattered the heuristics: ALNS looked 0.9% from optimal on
-4 × 12 and is 5.7% at 14 × 45. A claim about quality is only as good as the size it was measured at.
+by column generation where full enumeration stops scaling (30 × 100: optimum between 1002.8 and
+1012.7).
+**Why.** Gaps measured on small shifts flattered the heuristics: ALNS and PyVRP are within 0.2% of
+the optimum on 4 × 12 and 5.7% and 3.9% from it at 14 × 45. A claim about quality is only as good as the size it was measured at.
 The study fails if any heuristic beats the "optimum", which guards the proof itself.
 

@@ -17,7 +17,7 @@ It never declares a winner on a difference that could be noise.
   cost is within the noise margin of the cheapest, it picks the **fastest to compute**.
 - **Protect bottleneck tools.** Most bottleneck tool-downs covered, then the fastest response.
 - **Maximise coverage.** The most priority-weighted work served, then the lowest cost.
-- **Lowest operating cost.** The lowest total cost, whatever the solve time.
+- **Lowest total cost.** The lowest total cost (the objective every strategy minimises, workload balance included), whatever the solve time.
 
 ## The noise margin
 
@@ -39,6 +39,6 @@ something else.
 
 ## The cost × latency chart
 
-Each point is a strategy: operating cost (down is better) against solve time (left is better, on a
+Each point is a strategy: total cost (down is better) against solve time (left is better, on a
 log scale). The line joins the **efficient frontier**: strategies no other strategy beats on both
 cost and speed. A strategy off the frontier is dominated.

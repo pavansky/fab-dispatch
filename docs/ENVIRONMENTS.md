@@ -17,8 +17,8 @@ flowchart LR
   F[feature branch] -->|pull request: CI + preview deploy| M[main]
   M -->|auto deploy| U[UAT]
   U -->|key users sign off| T[tag vX.Y.Z]
-  T -->|Release workflow: CI again, must be on main| I[signed images on GHCR]
-  I --> P[production branch]
+  T -->|Release workflow: must be on main, CI again| I[images on GHCR with provenance attestations]
+  I -->|UAT deployed + smoke green for this commit| P[production branch]
   P -->|auto deploy| PR[Production]
   PR -->|serves the new release?| R[GitHub release]
 ```
@@ -29,10 +29,15 @@ flowchart LR
    so a bad migration is caught there, not in production.
 3. **Sign off in UAT** with the fab's key users. Add the release notes under a new version
    heading in `CHANGELOG.md`.
-4. **Release**: `git tag -a v2.1.0 -m v2.1.0 && git push origin v2.1.0`. The *Release* workflow re-runs CI
-   on that exact commit, refuses tags that aren't on `main`, publishes the images to GHCR (SBOM,
-   signed provenance, vulnerability scan), fast-forwards `production`, waits until production
-   reports the new release, and only then publishes the GitHub release from the changelog.
+4. **Release**: `git tag -a v2.1.0 -m v2.1.0 && git push origin v2.1.0`. The *Release* workflow first
+   refuses a tag that isn't on `main` (before anything is published), re-runs CI on that exact
+   commit, publishes the images to GHCR (SBOM, build-provenance attestation, vulnerability scan),
+   then **waits for UAT**: GitHub must hold a successful `Preview` deployment of the tagged commit
+   *and* a passing run of the post-deploy smoke workflow for it, polled for up to 15 minutes (a tag
+   pushed seconds after a merge used to promote before UAT had even built). Only then does it
+   fast-forward `production`, wait until production reports the new release (and, when the
+   `EXPECTED_DATABASES` repository variable is set, that many databases), and publish the GitHub
+   release from the changelog.
 5. **Smoke test**: every successful deployment (preview, UAT, production) is checked automatically:
    `/api/health` must report `status: ok` and `schema_ok: true`, and auth must be `supabase`, never demo.
 
@@ -51,14 +56,19 @@ flowchart LR
 | Images | Build, start the full stack, sign in, scan with Trivy | the stack doesn't serve the app, or a fixable critical/high CVE |
 | Workflows | actionlint with shellcheck | a broken workflow or shell bug |
 | Hygiene | Conventional Commits, single author (pull requests) | a non-conventional commit or a co-author trailer |
-| Release | Images to GHCR with SBOM and signed provenance; scan | a fixable critical/high CVE in the published image |
-| Release | Production serves the tagged release, healthy, schema current | it doesn't within 10 minutes |
+| Release | Tag is on `main` | it isn't (nothing is published) |
+| Release | Images to GHCR with SBOM and build-provenance attestation; scan | a fixable critical/high CVE in the published image |
+| Release | UAT gate: a successful Preview deployment of the tagged commit and a passing smoke run for it | neither appears within 15 minutes |
+| Release | Production serves the tagged release, healthy, schema current, expected number of databases | it doesn't within 10 minutes |
 | Deploy | Smoke test on every deployment | unhealthy, stale schema, demo auth, or app tables open to the public API |
 | Ongoing | Uptime every 30 minutes | production down: opens an incident issue, closes it on recovery |
 
-Every job has a timeout. `main` requires the CI, CodeQL, workflow, image and hygiene checks.
+Every job has a timeout and every action is pinned to a commit SHA (a test in `backend/tests/test_release.py`
+checks both). `main` requires the CI, CodeQL, workflow, image and hygiene checks.
 
-Verify a published image's provenance:
+"Signed images" means **GitHub Artifact Attestations**: a Sigstore-signed build-provenance statement
+that GitHub's own workflow built the image digest from this repository at that commit, stored with
+the image in GHCR. The images are not cosign-signed with a key the project holds. Verify one with:
 
 ```bash
 gh attestation verify oci://ghcr.io/pavansky/fab-dispatch-api:latest -R pavansky/fab-dispatch
@@ -90,6 +100,8 @@ access are configured in Supabase itself: see [supabase/README.md](../supabase/R
 | `FAB_TURNSTILE_SITE_KEY` | the Turnstile site key | the same key (add the preview hostnames to the widget) |
 | `FAB_ASSISTANT_LLM` | `none` (or `anthropic` with `ANTHROPIC_API_KEY`) | `none` |
 | `FAB_TENANT_DATABASES` | `{"fab2-200mm-analog": "env:FAB2_DATABASE_URL"}` | unset (one database) |
+| `FAB_STREAM_TICKET_SECRET` | unset: the integration's `SUPABASE_JWT_SECRET` signs stream tickets; set it if that is ever removed (several instances need one shared key) | same |
+| `EXPECTED_DATABASES` (repository variable, not Vercel) | `2`: smoke and release fail if production reports fewer databases | not checked |
 
 **Production runs a database per fab.** Fab 1 uses the default database (Supabase). Fab 2 has its
 own: a Neon Postgres added through the Vercel Marketplace, connected to *Production only* with the
@@ -115,5 +127,13 @@ a Postgres advisory lock, so concurrent serverless cold starts can't race. `/api
 ## Data retention
 
 Vercel Cron calls `POST /api/internal/prune` daily at 03:00 UTC with `CRON_SECRET`. It removes plan
-cache entries older than 7 days, idempotency keys older than 24 hours, and shifts (with their events
-and presence) not updated for 30 days.
+cache entries older than 7 days, idempotency keys older than 24 hours, shifts (with their events
+and presence) not updated for 30 days, and guest (anonymous) accounts in Supabase Auth that have
+had no sign-in, session refresh or live-shift activity in any fab's database for 30 days (a no-op
+on SQLite and on a Postgres without an `auth` schema, such as a fab's Neon database). The count is
+logged and returned as `guest_accounts`.
+
+Vercel runs crons on the production deployment only, so **the UAT schema is never pruned by the
+platform**. To prune UAT, call its endpoint from elsewhere (for example a scheduled GitHub Actions
+job, or by hand): `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<uat-url>/api/internal/prune`
+(with `x-vercel-protection-bypass` when the preview is protected).

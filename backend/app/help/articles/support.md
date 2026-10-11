@@ -38,4 +38,4 @@ analysis, design decisions, operations and an interactive API reference. It's li
 ## Security and privacy
 
 Report security issues privately through the security policy, never in a public issue. The privacy
-page lists what's stored and for how long; to delete your account, ask through support.
+page lists what's stored and for how long; to delete your account and its data, use **Delete my account** in the account menu.
