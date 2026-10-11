@@ -408,7 +408,9 @@ repairs moves to a Qdrant server with one setting, behind the same interface.
 
 ### Any bugs found there?
 Yes: a symptom sharing no words with past repairs used to produce a confident-looking 0-minute
-"prediction". Neighbours with zero similarity are now discarded, and the answer is "no prediction".
+"prediction", and a vague one ("tool is down") a 104-minute prediction with a named cause at 0.07
+similarity. Below a similarity floor of 0.35 the answer is now "no similar repair history" with the
+nearest records shown only as labelled weak matches, and the planner keeps the standard estimate.
 
 ---
 
@@ -422,15 +424,19 @@ only reads; it can't change anything.
 ### How is it kept from making things up?
 It classifies the question first. Shift questions are answered by **tools** that read the real plans
 through the same cached planning service as the UI, so it always agrees with the screen. App
-questions are answered from **retrieval** over the help articles (vector, keyword, heading and
-section-text matching). Every answer carries citations and actions. Below a retrieval score of 0.5
+questions are answered from **retrieval** over the help articles (lexical: hashed n-grams plus
+keyword, heading and section-text matching; no learned model). Every answer carries citations and actions. Below a retrieval score of 0.5
 it says it doesn't know (D24).
 
 ### How is it evaluated?
-An evaluation set runs in CI on every change: **42 of 42** how-to questions cite the right article
-(required ≥ 90%), and **8 of 8** off-topic questions are declined. The refusal threshold sits in a
-measured gap: answerable questions score ≥ 0.6, off-topic ones ≤ 0.36. In production, every answer
-has thumbs up/down, stored with the user id (never the email) for 180 days.
+An evaluation set runs in CI on every change, end to end through the assistant: **62 of 67**
+answerable questions (42 keyword phrasings, 25 paraphrases written without the articles' keyword
+lists) cite the right article (required ≥ 90%), and **26 of 26** off-topic questions, 10 of them in
+the app's own words ("Python code for the greedy strategy"), are declined. Tasks the app doesn't do
+are refused by rule; the rest sit under a retrieval threshold of 0.5, the method and the before/after
+numbers are in [ai.md](ai.md). In production, every answer has thumbs up/down, stored with the user id
+(never the email) for 180 days, and `scripts/feedback_to_eval.py` exports unhelpful answers as new
+evaluation cases.
 
 ### Is there an LLM?
 Optional and off by default (`FAB_ASSISTANT_LLM=anthropic` or a local `ollama` model). If on, it
@@ -768,7 +774,7 @@ else.
 | Live re-plan | 217 ms median, 270 ms p95 |
 | 20,000-engineer company re-plan | 46.7 s on one laptop |
 | Repair search | 0.1 ms per query, 80 ms index build |
-| Assistant evaluation | 42/42 cited correctly, 8/8 off-topic refused |
+| Assistant evaluation | 62/67 cited correctly, 26/26 off-topic refused |
 | Tests | 455 (320 backend, 102 components, 33 end-to-end) |
 | Coverage | 92% API, about 89% UI lines |
 | Required CI checks | 15 |

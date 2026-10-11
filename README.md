@@ -224,13 +224,15 @@ user menu for the version, live status, docs and support links.
   Production behaviours included: one clock driver at a time, retry-safe actions (idempotency keys),
   presence, an audit trail, recent shifts to rejoin, offline handling.
 - **Every decision explained.** For any job you can see who was chosen, the runner-up, why other
-  engineers were rejected, the cost breakdown, and a **repair-history** prediction (Qdrant) of how
+  engineers were rejected, the cost breakdown, and a **repair-history** prediction (k-NN over past repairs, with an honest "no similar history" when the symptom is vague) of how
   long the fault will take and who has fixed it before.
 - **Help built in, and an assistant that cites its sources.** A searchable help center, contextual
   ⓘ links, a first-run tour and keyboard shortcuts. **Ask Dispatch** answers questions about the shift
-  on screen ("why is J006 unassigned?") and the app, from the help articles and the real plans,
-  always with sources. It says "I don't know" rather than guess: measured on an evaluation set in CI.
-  Runs locally with no key; an LLM can optionally reword answers, never add facts.
+  on screen ("why is J006 unassigned?", "how long will J006 take?") and the app, from the real plans,
+  the repair index and lexical retrieval over the help articles (hashed n-grams, no learned model),
+  always with sources. It says "I don't know" or "I can't do that" rather than guess: measured on an
+  evaluation set in CI, end to end. Runs locally with no key; an LLM can optionally reword answers,
+  and the rewrite is checked against the draft so it can't add facts.
 - **Works on a phone.** The controls become a drawer, the tabs scroll, the floor plan works by touch,
   and the light theme is the default.
 - **Tested at every layer.** 320 backend tests, 102 frontend component tests rendered against real API
@@ -269,10 +271,10 @@ flowchart LR
   AUTH -->|"POST /api/shifts/*"| LIVE["Live dispatch<br/>lease · idempotency · audit"]
   LIVE --> ENG
   UI -.->|SSE stream| LIVE
-  AUTH -->|POST /api/repairs/*| KN["Repair history<br/>k-NN on Qdrant, per fab"]
+  AUTH -->|POST /api/repairs/*| KN["Repair history<br/>exact k-NN in NumPy, per fab<br/>(Qdrant optional)"]
   AUTH -->|POST /api/assistant/ask| AS["Assistant<br/>intents → tools → cited answer"]
   AS --> PS
-  AS --> HI["Help index<br/>hybrid search on Qdrant"]
+  AS --> HI["Help index<br/>lexical retrieval over hashed n-grams"]
   HELP[("Help articles<br/>Markdown")] --> HI
   PROF[("Fab profiles<br/>JSON")] --> ENG & KN
   PS & LIVE --> DB[("SQLite locally<br/>Postgres / Supabase in prod<br/>versioned migrations")]
@@ -335,9 +337,11 @@ Postgres database. To reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.
   from those fixtures, so the UI tests can't pass against stale data (`make fixtures` refreshes them).
 - **Phone layout:** the drawer, touch selection, no sideways scrolling on any view, and the user menu
   staying reachable.
-- **Assistant quality:** an evaluation set of real questions must cite the right article (≥ 90%; 100%
-  today), and every off-topic question must get "I don't know". Answers about a job match the plans
-  exactly. The optional LLM is tested to fall back to the grounded answer on any failure.
+- **Assistant quality:** an evaluation set of real questions, keyword phrasings and paraphrases, runs
+  end to end and must cite the right article (≥ 90%; 93% today), and every off-topic question, with
+  or without app vocabulary, must be declined. Answers about a job match the plans exactly. The
+  optional LLM is tested to fall back to the grounded answer on any failure and on any rewrite that
+  adds an id, a number or a strategy the draft didn't have.
 - **Every end-to-end test fails on any browser console error.**
 
 ## Production readiness
@@ -351,7 +355,7 @@ What a production AI application needs, and where to see it here.
 | **Reliability** | Versioned migrations under a lock, optimistic concurrency, idempotent live actions, a clock lease, an SSE stream that resumes, cached plans |
 | **Operations** | Health and liveness endpoints, request ids, structured logs, daily data retention, post-deploy smoke tests, an [uptime check every 30 minutes](.github/workflows/uptime.yml) that opens an incident issue |
 | **Delivery** | CI on every PR (lint, 3 test layers, coverage floors, audits, accessibility, images), branch protection, actions pinned to commits, tagged releases that wait for a green UAT deployment and smoke run of that commit before promoting to production, Dependabot (pip, npm, actions, Docker) |
-| **AI quality** | A grounded assistant with sources and honest refusals, an [evaluation set](backend/tests/eval/assistant_eval.json) in CI (42/42), 👍/👎 feedback with stats, an [AI transparency page](https://pavansky.github.io/fab-dispatch/ai/), an optional LLM that can only reword |
+| **AI quality** | A grounded assistant with sources and honest refusals (lexical retrieval over hashed n-grams, no learned model), an [evaluation set](backend/tests/eval/assistant_eval.json) in CI run end to end (62/67 answerable cases cited correctly, 26/26 off-topic declined), 👍/👎 feedback with stats and an export to new evaluation cases, an [AI transparency page](https://pavansky.github.io/fab-dispatch/ai/), an optional LLM that can only reword and is checked against the draft |
 | **Experience** | Light/dark themes, phone layouts, keyboard shortcuts, a first-run tour, contextual help, WCAG 2.1 AA checks, a crash screen with a prefilled report, link previews |
 | **Documentation** | [Docs site](https://pavansky.github.io/fab-dispatch/) (guide, architecture, decisions, operations), [interactive API reference](https://fab-dispatch.vercel.app/api/docs), in-app help center |
 | **Support** | In-app **About & support**, [Discussions](https://github.com/pavansky/fab-dispatch/discussions), issue templates, a [security policy](SECURITY.md), a [privacy page](https://pavansky.github.io/fab-dispatch/privacy/) |
@@ -405,11 +409,11 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
 | `FAB_DISPATCHER_EMAILS`, `FAB_DEFAULT_ROLE`, `FAB_DEFAULT_FABS` | `[]`, `viewer`, `["*"]` | Bootstrap dispatchers, least-privilege default, default fab access |
 | `FAB_DATABASE_URL` | `sqlite:///./data/fab.db` | Postgres in production. `POSTGRES_URL` from Vercel's Supabase integration is also accepted |
 | `FAB_PROFILES_DIR`, `FAB_DEFAULT_FAB` | bundled, `fab1-300mm-logic` | Where fab profiles live; the fab shown first |
-| `FAB_QDRANT_URL`, `FAB_QDRANT_API_KEY` | unset (in-memory index) | Use a Qdrant server or Qdrant Cloud |
+| `FAB_QDRANT_URL`, `FAB_QDRANT_API_KEY` | unset (exact NumPy search) | Use a Qdrant server or Qdrant Cloud for repair history |
 | `FAB_ALNS_ITERATIONS` / `FAB_PYVRP_ITERATIONS` | `300` / `1000` | Search budgets, sized from the measured quality curve |
 | `FAB_TURNSTILE_SITE_KEY` | unset | Cloudflare Turnstile site key, when CAPTCHA protection is on in Supabase Auth |
 | `FAB_GUEST_ROLE` | `viewer` | Role for one-click guest sign-ins (Supabase anonymous users), or `none` to refuse guests |
-| `FAB_ASSISTANT_LLM` | `none` | Optional model to reword assistant answers: `anthropic` (`ANTHROPIC_API_KEY`) or `ollama` (local) |
+| `FAB_ASSISTANT_LLM` | `none` | Optional model to reword assistant answers: `anthropic` (`ANTHROPIC_API_KEY`, `claude-haiku-5-5` by default) or `ollama` (local) |
 | `CRON_SECRET` | unset | Protects the daily data-retention endpoint |
 
 ## Delivery: dev → UAT → production
@@ -453,7 +457,7 @@ backend/
     algorithms/            greedy · hungarian · regret · alns · pyvrp_ils · exact
     engine.py              run a strategy -> assignments, explanations, metrics
     live.py                rolling-horizon live dispatch, clock lease
-    knowledge.py           repair history and Qdrant index, per fab
+    knowledge.py           repair history and its k-NN index (NumPy; Qdrant optional), per fab
     help/                  help center articles (Markdown) and their validation
     assistant/             grounded assistant: retrieval, intents and tools, optional LLM
     store.py               SQLite / Postgres repository + versioned migrations

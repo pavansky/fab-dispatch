@@ -1,4 +1,4 @@
-"""Repair-history retrieval (Qdrant) and history-based duration estimates, per fab."""
+"""Repair-history retrieval (exact k-NN by default, Qdrant optional) and history-based duration estimates, per fab."""
 
 from __future__ import annotations
 
@@ -50,17 +50,21 @@ def predict_durations(
     scenario: Scenario, user: User = Depends(require("viewer")), _rl: None = Depends(rate_limit("repairs", 120, 20))
 ) -> dict:
     """Replace each tool-down's standard estimate with the history-based estimate (k-NN mean).
-    PMs keep their scheduled duration. Returns the new scenario, what changed (with each
-    estimate's p10-p90 band, likely cause and basis) and a plain-language ``basis``."""
+    PMs keep their scheduled duration, and so does a tool-down whose symptom has no similar
+    repair history (listed in ``skipped`` with the reason). Returns the new scenario, what
+    changed (with each estimate's p10-p90 band, likely cause, match label and basis) and a
+    plain-language ``basis``."""
     profile = check_scenario(user, scenario)
     idx = get_repairs()
     roster = [e.id for e in scenario.engineers]
-    changes, jobs = [], []
+    changes, skipped, jobs = [], [], []
     for j in scenario.jobs:
         if j.kind == "down" and j.symptom:
             found = idx.similar(profile, j.skill, j.symptom, roster=roster)
             pred = found["prediction"]
-            if pred:
+            if not pred:
+                skipped.append({"job_id": j.id, "standard": j.duration, "reason": found.get("reason", "no prediction")})
+            else:
                 minutes = max(15, int(round(pred["minutes"] / 5) * 5))
                 changes.append(
                     {
@@ -71,6 +75,8 @@ def predict_durations(
                         "p90": pred["p90"],
                         "likely_cause": pred["likely_cause"],
                         "cause_share": pred["cause_share"],
+                        "confidence": pred["confidence"],
+                        "match": pred["match"],
                         "neighbours": pred["neighbours"],
                         "basis": "knn_mean",
                         "experienced_engineers": found["experienced_engineers"],
@@ -78,4 +84,9 @@ def predict_durations(
                 )
                 j = j.model_copy(update={"duration": minutes})
         jobs.append(j)
-    return {"scenario": scenario.model_copy(update={"jobs": jobs}), "changes": changes, "basis": PREDICTION_BASIS}
+    return {
+        "scenario": scenario.model_copy(update={"jobs": jobs}),
+        "changes": changes,
+        "skipped": skipped,
+        "basis": PREDICTION_BASIS,
+    }
