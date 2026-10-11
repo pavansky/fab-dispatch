@@ -154,6 +154,21 @@ describe('views', () => {
     expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent(recommend(results, 'cost').winner.label)
   })
 
+  it('describes the noise band only for the goal that draws it, as a one-sided margin', async () => {
+    const { user } = await signInAs('dispatcher')
+    const card = screen.getByRole('region', { name: 'Recommendation' })
+    await waitFor(() => expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent(recommend(results, 'value').winner.label))
+    const chart = screen.getByRole('heading', { name: /Cost × latency/ }).closest('section')
+    const { margin, pool } = recommend(results, 'value')
+    const cheapest = results.filter((r) => pool.includes(r.algorithm)).sort((a, b) => a.metrics.objective - b.metrics.objective)[0]
+    expect(chart).toHaveTextContent(`plans costing up to ${Math.round(margin)} pts more than ${ALGO_SHORT[cheapest.algorithm]}`)
+    expect(chart).not.toHaveTextContent('±')
+    expect(chart.querySelector('rect.band')).not.toBeNull()
+    await user.selectOptions(within(card).getByRole('combobox', { name: 'Planning goal' }), 'bottleneck')
+    expect(chart).not.toHaveTextContent(/shaded band/)
+    expect(chart.querySelector('rect.band')).toBeNull()
+  })
+
   it('opens a job the strategies disagree on in the floor plan', async () => {
     const { user } = await signInAs('dispatcher')
     await waitFor(() => expect(screen.getByRole('heading', { name: /Where the strategies disagree/ })).toBeInTheDocument())

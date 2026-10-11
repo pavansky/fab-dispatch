@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ALGO_BLURB, ALGO_KIND, ALGO_ORDER, ALGO_SHORT, METRICS, improvement, presentKeys } from '../lib/metrics.js'
 import { GOALS, costSplitText, disagreements, insights, paretoFront } from '../lib/analysis.js'
 import FrontierChart from './FrontierChart.jsx'
-import { PRIORITY, fmt } from '../lib/format.js'
+import { PRIORITY, fmt, listOf } from '../lib/format.js'
 import MetricBars from './MetricBars.jsx'
 import InfoLink from './InfoLink.jsx'
 
@@ -41,6 +41,16 @@ export default function Overview({ results, pending, reco, scenario, weights, go
   // Findings compare strategies, so they wait for the full field rather than mislead early.
   const notes = reco.provisional ? null : insights(results, scenario, { weights })
   const solved = ALGO_ORDER.filter((a) => results.some((r) => r.algorithm === a))
+  // Cost × latency chart: the noise band only exists for the best-value goal, anchored on the
+  // cheapest plan the recommendation actually considered (the one its margin comes from).
+  const front = new Set(paretoFront(results).map((r) => r.algorithm))
+  const band = goal === 'value' && reco.margin
+    ? { from: reco.bandFrom, margin: reco.margin, cheapest: results.filter((r) => reco.pool.includes(r.algorithm)).sort((a, b) => a.metrics.objective - b.metrics.objective)[0].algorithm }
+    : null
+  const dominators = results.filter((o) => o !== reco.winner && o.metrics.objective <= reco.winner.metrics.objective && o.metrics.runtime_ms <= reco.winner.metrics.runtime_ms)
+  const recoNote = front.has(reco.winner.algorithm) ? undefined : goal === 'value'
+    ? `recommended: ${listOf(dominators.map((r) => ALGO_SHORT[r.algorithm]))} ${dominators.length === 1 ? 'is' : 'are'} cheaper or faster but cover${dominators.length === 1 ? 's' : ''} less bottleneck or priority work`
+    : `recommended for "${GOALS[goal].label}", not for cost or speed`
   const diffs = disagreements(results, scenario.jobs).filter((d) => !onlyCoverage || d.coverageDiffers)
   const jobsTotal = scenario.jobs.length
 
@@ -66,14 +76,12 @@ export default function Overview({ results, pending, reco, scenario, weights, go
 
       <section className="card" data-tour="frontier">
         <div className="card-h"><div><div className="h-row"><h2><span className="section-no">01</span>Cost × latency</h2><InfoLink slug="recommendation" anchor="the-cost-latency-chart" label="Cost × latency chart" /></div>
-          <p>Lower-left is better on both. The line is the efficient frontier: nothing on it is beaten on both cost and speed. A hollow point is beaten on both, and its dashed line points to the strategy that beats it. The shaded band is the noise margin ({reco.margin ? `±${fmt(reco.margin, 0)} pts` : 'per goal'}) above the cheapest plan; differences inside it aren't counted as wins.</p></div></div>
+          <p>Lower-left is better on both. The line is the efficient frontier: nothing on it is beaten on both cost and speed. A hollow point is dominated (no better on either axis and worse on at least one), and its dashed line points to the strategy that dominates it.
+            {band && ` The shaded band is the noise margin: plans costing up to ${fmt(band.margin, 0)} pts more than ${ALGO_SHORT[band.cheapest]}, the cheapest plan that keeps the best coverage. Differences inside it aren't counted as wins.`}</p></div></div>
         <div className="card-b">
-          <FrontierChart wide={wide} margin={goal === 'value' ? reco.margin : 0}
-            points={(() => {
-              const front = new Set(paretoFront(results).map((r) => r.algorithm))
-              return results.map((r) => ({ key: r.algorithm, cost: r.metrics.objective, latency: r.metrics.runtime_ms,
-                front: front.has(r.algorithm), reco: r.algorithm === reco.winner.algorithm }))
-            })()} />
+          <FrontierChart wide={wide} band={band}
+            points={results.map((r) => ({ key: r.algorithm, cost: r.metrics.objective, latency: r.metrics.runtime_ms, split: costSplitText(r.metrics),
+              front: front.has(r.algorithm), reco: r.algorithm === reco.winner.algorithm, note: r.algorithm === reco.winner.algorithm ? recoNote : undefined }))} />
         </div>
       </section>
 
