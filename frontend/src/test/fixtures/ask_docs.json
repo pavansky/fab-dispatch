@@ -18,5 +18,6 @@
  ],
  "suggestions": [],
  "grounded": true,
- "provider": "local"
+ "provider": "local",
+ "fallback_reason": null
 }
