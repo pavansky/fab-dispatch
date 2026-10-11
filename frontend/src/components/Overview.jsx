@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { ALGO_BLURB, ALGO_KIND, ALGO_ORDER, ALGO_SHORT, METRICS, improvement } from '../lib/metrics.js'
-import { GOALS, disagreements, insights, paretoFront, recommend } from '../lib/analysis.js'
+import { ALGO_BLURB, ALGO_KIND, ALGO_ORDER, ALGO_SHORT, METRICS, improvement, presentKeys } from '../lib/metrics.js'
+import { GOALS, costSplitText, disagreements, insights, paretoFront } from '../lib/analysis.js'
 import FrontierChart from './FrontierChart.jsx'
 import { PRIORITY, fmt } from '../lib/format.js'
 import MetricBars from './MetricBars.jsx'
 import InfoLink from './InfoLink.jsx'
 
 const KPI_KEYS = ['coverage_pct', 'critical_coverage_pct', 'mean_response_min', 'objective']
+const BAR_KEYS = ['coverage_pct', 'critical_coverage_pct', 'priority_weighted_coverage_pct', 'mean_response_min', 'walk_m_per_job', 'wait_min_total', 'overqualification_levels', 'workload_std', 'utilization_pct', 'objective']
 
 function Delta({ k, value, base }) {
   if (base === undefined) return <span className="delta flat">baseline</span>
@@ -28,12 +29,18 @@ function useWide(min = 760) {
   return wide
 }
 
-export default function Overview({ results, pending, scenario, goal, onGoal, onPickAlgo, onSelect }) {
+/** A finding's text: plain strings, with { b } parts emphasised. Never parsed as HTML. */
+function FindingText({ parts }) {
+  return <span>{parts.map((p, i) => (typeof p === 'string' ? p : <b key={i}>{p.b}</b>))}</span>
+}
+
+export default function Overview({ results, pending, reco, scenario, weights, goal, onGoal, onPickAlgo, onSelect }) {
   const wide = useWide()
   const [onlyCoverage, setOnlyCoverage] = useState(false)
-  const reco = recommend(results, goal)
   const greedy = results.find((r) => r.algorithm === 'greedy')
-  const notes = insights(results, scenario)
+  // Findings compare strategies, so they wait for the full field rather than mislead early.
+  const notes = reco.provisional ? null : insights(results, scenario, { weights })
+  const solved = ALGO_ORDER.filter((a) => results.some((r) => r.algorithm === a))
   const diffs = disagreements(results, scenario.jobs).filter((d) => !onlyCoverage || d.coverageDiffers)
   const jobsTotal = scenario.jobs.length
 
@@ -41,7 +48,7 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
     <>
       <section className="card reco" aria-label="Recommendation" data-tour="reco">
         <div>
-          <p className="eyebrow"><span className="sig">● Recommended</span> dispatch plan{pending.size > 0 && <span className="solving" style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}><span className="spinner" />waiting for {[...pending].map((a) => ALGO_SHORT[a]).join(', ')}</span>}</p>
+          <p className="eyebrow"><span className="sig">{reco.provisional ? '◌ Provisional' : '● Recommended'}</span> dispatch plan{pending.size > 0 && <span className="solving" style={{ marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}><span className="spinner" />waiting for {[...pending].map((a) => ALGO_SHORT[a]).join(', ')}</span>}</p>
           <h2>{reco.winner.label}</h2>
           <p>{reco.why}</p>
           {reco.tradeoff.length > 0 && <p className="tradeoff">Trade-off: {reco.tradeoff.join('; ')}.</p>}
@@ -78,7 +85,7 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
             <section key={key} className={`card score ${reco.winner.algorithm === key ? 'recommended' : ''}`}>
               <div className="score-h">
                 <span className={`swatch ${reco.winner.algorithm === key ? 'is-reco' : ''}`} style={{ marginTop: 6 }} />{ALGO_SHORT[key]}
-                {reco.winner.algorithm === key && <span className="badge brand">Recommended</span>}
+                {reco.winner.algorithm === key && <span className="badge brand">{reco.provisional ? 'Best so far' : 'Recommended'}</span>}
               </div>
               <p className="help"><span className="badge" style={{ marginRight: 6 }}>{ALGO_KIND[key]}</span>{ALGO_BLURB[key]}</p>
               <div className="kpis">
@@ -90,6 +97,7 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
                   </div>
                 ))}
               </div>
+              {costSplitText(r.metrics) && <p className="help num" style={{ margin: 0 }}>Cost = {costSplitText(r.metrics)} pts</p>}
               <button className="btn block" style={{ marginTop: 14 }} onClick={() => onPickAlgo(key)}>View on floor plan</button>
             </section>
           )
@@ -100,11 +108,13 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
         <section className="card">
           <div className="card-h"><div><h2><span className="section-no">02</span>Key findings</h2><p>Generated from this shift's results.</p></div></div>
           <div className="card-b">
-            <ul className="insights">
-              {notes.map((n, i) => (
-                <li key={i}><span className="ico" aria-hidden>{n.icon}</span><span dangerouslySetInnerHTML={{ __html: n.html }} /></li>
-              ))}
-            </ul>
+            {notes ? (
+              <ul className="insights">
+                {notes.map((n, i) => (
+                  <li key={i}><span className="ico" aria-hidden>{n.icon}</span><FindingText parts={n.parts} /></li>
+                ))}
+              </ul>
+            ) : <p className="solving" style={{ margin: 0 }}><span className="spinner" />Findings appear once every strategy has solved.</p>}
           </div>
         </section>
         <section className="card">
@@ -114,13 +124,13 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
           <div className="card-b table-wrap" tabIndex={0} style={{ maxHeight: 340, overflowY: 'auto' }}>
             {diffs.length === 0 ? <div className="empty">All strategies produce the same assignment.</div> : (
               <table className="data">
-                <thead><tr><th>Job</th><th>Type</th>{ALGO_ORDER.map((a) => <th key={a}>{ALGO_SHORT[a]}</th>)}</tr></thead>
+                <thead><tr><th>Job</th><th>Type</th>{solved.map((a) => <th key={a}>{ALGO_SHORT[a]}</th>)}</tr></thead>
                 <tbody>
                   {diffs.map((d) => (
                     <tr key={d.job.id} onClick={() => onSelect({ type: 'job', id: d.job.id })}>
                       <td><b>{d.job.id}</b> <span className="muted">{d.job.tool}</span></td>
                       <td><span className={`badge p${d.job.priority}`}>{PRIORITY[d.job.priority].label}</span></td>
-                      {ALGO_ORDER.map((a) => (
+                      {solved.map((a) => (
                         <td key={a}>{d.who[a] ? <span className="cell-eng">{d.who[a]}</span> : <span className="cell-none">—</span>}</td>
                       ))}
                     </tr>
@@ -136,7 +146,7 @@ export default function Overview({ results, pending, scenario, goal, onGoal, onP
         <div className="card-h"><div><h2><span className="section-no">04</span>Metric comparison</h2><p>Same shift, same constraints, same cost function. Only the decision strategy differs.</p></div></div>
         <div className="card-b">
           <MetricBars results={results} onPick={onPickAlgo} highlight={reco.winner.algorithm}
-            keys={['coverage_pct', 'critical_coverage_pct', 'priority_weighted_coverage_pct', 'mean_response_min', 'walk_m_per_job', 'wait_min_total', 'overqualification_levels', 'workload_std', 'utilization_pct', 'objective', 'runtime_ms']} />
+            keys={[...BAR_KEYS, ...presentKeys(results, ['operating_cost', 'workload_cost']), 'runtime_ms']} />
         </div>
       </section>
     </>

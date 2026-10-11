@@ -181,9 +181,10 @@ function Workspace({ theme, setTheme }) {
     ...scenario, engineers: scenario.engineers.filter((e) => !offShift.has(e.id)),
   }), [scenario, offShift])
 
-  const { results, pending, errors: planErrors, cacheInfo } = usePlans(effective, weights)
+  const { results, pending, errors: planErrors, cacheInfo, done } = usePlans(effective, weights)
   const busy = pending.size > 0
-  const reco = results.length ? recommend(results, goal) : null
+  // Until every strategy has answered, the pick is provisional (and says so).
+  const reco = results.length ? recommend(results, goal, { complete: done, waiting: ALGO_ORDER.filter((a) => pending.has(a)) }) : null
 
   // First visit: walk through the workspace once the first plans are on screen.
   useEffect(() => {
@@ -204,7 +205,7 @@ function Workspace({ theme, setTheme }) {
     const c = live.current
     return {
       fab_id: c.profile?.id, scenario: c.effective, weights: c.weights, tab: c.tab, active: c.active, selection: c.selection,
-      recommendation: c.reco && { algorithm: c.reco.winner.algorithm, why: c.reco.why, goal: c.goal, goal_label: GOALS[c.goal].label, tradeoff: c.reco.tradeoff.join('; ') },
+      recommendation: c.reco && { algorithm: c.reco.winner.algorithm, why: c.reco.why, goal: c.goal, goal_label: GOALS[c.goal].label, tradeoff: c.reco.tradeoff.join('; '), provisional: c.reco.provisional },
     }
   }, [])
   const suggestions = [
@@ -299,7 +300,7 @@ function Workspace({ theme, setTheme }) {
           {tab === 'live' ? <LiveShift scenario={effective} weights={weights} areas={areas} profile={profile} canDispatch={canDispatch} onError={setError} /> : results.length === 0 ? <div className="card empty"><span className="solving"><span className="spinner" />Solving the shift…</span></div> : (
             <>
               {tab === 'overview' && (
-                <Overview results={results} pending={pending} scenario={scenario} goal={goal} onGoal={setGoal}
+                <Overview results={results} pending={pending} reco={reco} scenario={scenario} weights={weights} goal={goal} onGoal={setGoal}
                   onPickAlgo={(a) => { setActive(a); setTab('floor') }} onSelect={select} />
               )}
 
