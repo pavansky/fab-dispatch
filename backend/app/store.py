@@ -34,9 +34,11 @@ import json
 import re
 import sqlite3
 import threading
+import time
 import zlib
 from abc import ABC, abstractmethod
-from collections.abc import Collection
+from collections.abc import Collection, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -324,7 +326,7 @@ class Store(ABC):
         return False
 
     def close(self) -> None:
-        """Release held connections (Postgres opens one per call, so holds none)."""
+        """Release held connections (SQLite's one, Postgres's idle ones)."""
         return None
 
     def init_schema(self) -> None:
@@ -652,8 +654,15 @@ _TABLES = re.compile(r"\b(" + "|".join(APP_TABLES) + r")\b")
 
 
 class PostgresStore(Store):
-    """psycopg 3, one short connection per call. That suits serverless functions sitting
-    behind Supabase's transaction pooler, where prepared statements must be off.
+    """psycopg 3, with prepared statements off, which suits serverless functions sitting
+    behind Supabase's transaction pooler.
+
+    Connections are reused: each call borrows an idle one (or opens one) and hands it back,
+    so a request no longer pays a TCP + TLS + auth handshake per query. A connection is only
+    reused if it was handed back healthy, outside a transaction, less than ``POOL_IDLE_S``
+    ago; a broken one is closed and the next call reconnects. At most ``POOL_IDLE_MAX`` idle
+    connections are kept, and a single statement that fails because the server dropped an
+    idle connection is retried once on a new one.
 
     Every table is qualified with ``schema`` (``FAB_DB_SCHEMA``), so environments can share
     one database without seeing each other's data (e.g. UAT in schema ``uat``). Qualifying
@@ -662,6 +671,8 @@ class PostgresStore(Store):
 
     kind = "postgres"
     MIGRATION_LOCK = 724_311  # base advisory-lock id; offset per schema
+    POOL_IDLE_MAX = 4  # idle connections kept per store
+    POOL_IDLE_S = 30.0  # an idle connection older than this is closed, not reused
 
     def __init__(self, url: str, schema: str = "public"):
         import psycopg  # imported lazily: local SQLite runs never need the driver
@@ -672,19 +683,94 @@ class PostgresStore(Store):
         self._psycopg, self._dict_row, self._url = psycopg, dict_row, url
         self.schema = schema
         self._lock_id = self.MIGRATION_LOCK + zlib.crc32(schema.encode()) % 1_000_000
+        self._idle: list[tuple[Any, float]] = []  # (connection, when it was handed back)
+        self._pool_lock = threading.Lock()
+        self._closed = False
 
     def _sql(self, sql: str) -> str:
         return _TABLES.sub(lambda m: f'"{self.schema}".{m.group(1)}', sql)
 
-    def _conn(self, autocommit: bool = True):
-        return self._psycopg.connect(
-            self._url, autocommit=autocommit, prepare_threshold=None, row_factory=self._dict_row, connect_timeout=5
+    # ---- connection reuse ----------------------------------------------------------
+    def _checkout(self, fresh: bool = False) -> tuple[Any, bool]:
+        """(connection, reused): the most recently returned idle connection, else a new one."""
+        stale, conn = [], None
+        with self._pool_lock:
+            now = time.monotonic()
+            while self._idle and not fresh:
+                candidate, since = self._idle.pop()
+                if candidate.closed or candidate.broken or now - since >= self.POOL_IDLE_S:
+                    stale.append(candidate)
+                    continue
+                conn = candidate
+                break
+        for old in stale:
+            old.close()
+        if conn is not None:
+            return conn, True
+        new = self._psycopg.connect(
+            self._url, autocommit=True, prepare_threshold=None, row_factory=self._dict_row, connect_timeout=5
         )
+        return new, False
+
+    def _checkin(self, conn) -> None:
+        """Pool a connection that is healthy and idle; close anything else."""
+        idle = self._psycopg.pq.TransactionStatus.IDLE
+        if conn.closed or conn.broken or conn.info.transaction_status != idle:
+            conn.close()
+            return
+        with self._pool_lock:
+            if not self._closed and len(self._idle) < self.POOL_IDLE_MAX:
+                self._idle.append((conn, time.monotonic()))
+                return
+        conn.close()
+
+    @contextmanager
+    def _lease(self, conn, autocommit: bool = True) -> Iterator[Any]:
+        """Use a checked-out connection, then hand it back. Like psycopg's own ``with``:
+        commit on success, roll back on error."""
+        try:
+            conn.autocommit = autocommit  # allowed: a pooled connection is never mid-transaction
+            yield conn
+            if not conn.autocommit and not conn.closed:
+                conn.commit()
+        except BaseException:
+            if not conn.closed and not conn.broken:
+                try:
+                    conn.rollback()
+                except Exception:
+                    conn.close()
+            raise
+        finally:
+            self._checkin(conn)
+
+    @contextmanager
+    def _conn(self, autocommit: bool = True) -> Iterator[Any]:
+        conn, _ = self._checkout()
+        with self._lease(conn, autocommit) as c:
+            yield c
+
+    def close(self) -> None:
+        with self._pool_lock:
+            self._closed = True
+            idle, self._idle = self._idle, []
+        for conn, _ in idle:
+            conn.close()
 
     def _q(self, sql: str, args: tuple = ()) -> list[dict]:
-        with self._conn() as c, c.cursor() as cur:
-            cur.execute(self._sql(sql), args)
-            return cur.fetchall() if cur.description else []
+        def run(conn) -> list[dict]:
+            with self._lease(conn), conn.cursor() as cur:
+                cur.execute(self._sql(sql), args)
+                return cur.fetchall() if cur.description else []
+
+        conn, reused = self._checkout()
+        try:
+            return run(conn)
+        except self._psycopg.OperationalError:
+            if not (reused and conn.broken):
+                raise
+        # The server closed this pooled connection while it sat idle (restart, pooler timeout):
+        # the statement never ran, so run it once more on a new connection.
+        return run(self._checkout(fresh=True)[0])
 
     def migrate(self) -> list[int]:
         applied = []
