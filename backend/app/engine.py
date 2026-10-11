@@ -113,8 +113,9 @@ def _metrics(p: Planner, runtime_ms: float) -> dict[str, float]:
     walk = sum(p.sim(t).metres for t in used)
     loads = [len(r) for r in p.routes.values()]
     shift = sum(t.shift_end - t.shift_start for t in p.techs.values()) or 1
-    soft = sum(p.route_soft_cost(t) for t in p.routes)
-    unserved_penalty = sum(p.w.priority_reward * j.priority for j in jobs if j.id not in served)
+    # The objective is exactly what every method minimises (Planner.total_cost), so the
+    # ranking shown is the ranking the solvers optimise; the parts let the UI show the split.
+    parts = p.cost_parts()
 
     def pct(a: float, b: float) -> float:
         return round(100 * a / b, 1) if b else 100.0
@@ -133,6 +134,9 @@ def _metrics(p: Planner, runtime_ms: float) -> dict[str, float]:
         "utilization_pct": pct(sum(j.duration for j in served_jobs), shift),
         "engineers_used": len(used),
         "workload_std": round(statistics.pstdev(loads), 2) if loads else 0.0,
-        "objective": round(soft + unserved_penalty, 1),
+        "objective": round(p.total_cost(), 1),
+        "operating_cost": round(parts["operating"], 1),
+        "workload_cost": round(parts["workload"], 1),
+        "reassignment_cost": round(parts["reassignment"], 1),
         "runtime_ms": round(runtime_ms, 2),
     }

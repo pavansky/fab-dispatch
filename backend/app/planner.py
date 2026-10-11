@@ -280,15 +280,20 @@ class Planner:
 
     def total_cost(self) -> float:
         """The full objective every search method minimises: route soft costs, the convex
-        workload term each insertion pays, and the reward forgone for every unserved job."""
-        total = 0.0
+        workload term each insertion pays, the reward forgone for every unserved job and,
+        in live re-plans, the stability cost of every job moved to a different engineer."""
+        return sum(self.cost_parts().values())
+
+    def cost_parts(self) -> dict[str, float]:
+        """``total_cost`` split into its terms: ``operating`` (walking, waiting,
+        over-qualification and the reward forgone for unserved jobs), ``workload`` (the
+        convex balance term, w*k(k-1)/2 per engineer) and ``reassignment`` (stability)."""
         placed = self.assigned_jobs()
-        for tid, route in self.routes.items():
-            k = len(route)
-            total += self.route_soft_cost(tid) + self.w.workload_balance * k * (k - 1) / 2
-            total += sum(self._moved(tid, j) for j in route)
-        total += sum(self.w.priority_reward * j.priority for jid, j in self.open_jobs.items() if jid not in placed)
-        return total
+        operating = sum(self.route_soft_cost(tid) for tid in self.routes)
+        operating += sum(self.w.priority_reward * j.priority for jid, j in self.open_jobs.items() if jid not in placed)
+        workload = sum(self.w.workload_balance * len(r) * (len(r) - 1) / 2 for r in self.routes.values())
+        reassignment = sum(self._moved(tid, j) for tid, r in self.routes.items() for j in r)
+        return {"operating": operating, "workload": workload, "reassignment": reassignment}
 
     def tech_can_do(self, tech_id: str, job_id: str) -> str | None:
         tech, job = self.techs[tech_id], self.jobs[job_id]

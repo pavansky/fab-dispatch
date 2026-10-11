@@ -97,6 +97,23 @@ def test_insertion_cost_is_the_exact_total_cost_change():
     assert committed > 10
 
 
+@pytest.mark.parametrize("algorithm", ["greedy", "hungarian", "regret", "alns", "pyvrp"])
+def test_reported_objective_is_the_cost_the_solvers_minimise(algorithm):
+    """The 'objective' metric is Planner.total_cost of the returned plan (workload term
+    included), and its parts add up to it."""
+    sc = generate(seed=7, n_engineers=10, n_jobs=30)
+    res = allocate(sc, Weights(), algorithm)
+    replay = Planner(sc, Weights())
+    for route in res.routes:
+        for stop in route.stops:
+            assert replay.append(route.tech_id, stop.job_id) is not None
+    m = res.metrics
+    assert m["objective"] == pytest.approx(replay.total_cost(), abs=0.051)
+    assert m["workload_cost"] > 0
+    parts = m["operating_cost"] + m["workload_cost"] + m["reassignment_cost"]
+    assert m["objective"] == pytest.approx(parts, abs=0.16)
+
+
 def test_batch_and_regret_serve_at_least_as_much_priority_on_average():
     """Across many seeds, smarter ordering should never lose priority-weighted coverage on average."""
     scores = {a: [] for a in ("greedy", "hungarian", "regret")}
