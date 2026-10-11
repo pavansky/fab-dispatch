@@ -237,7 +237,7 @@ single 30 × 100 reading of at most 8.4% above the optimum is inside the range a
 14 × 45, where the worst of 80 shifts was 10.0%, so on its own it does not establish that the gap
 grows with size. The three-seed 20 × 65 measurement above does support it (about 10% mean against
 2–4% at 14 × 45), and the 30 × 100 row is consistent with it. Reproduce at any size, seed count and
-preset: `python -m scripts.certified_bound 30 100 out/cg_30x100 --seeds 3 --preset normal`.
+preset: `python -m scripts.certified_bound 30 100 0 out/cg_30x100 --seeds 3 --preset normal`.
 
 ### Scale: 20,000 engineers, measured
 
