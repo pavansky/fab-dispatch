@@ -44,6 +44,46 @@ def test_meta_is_cacheable_with_etag():
     assert again.status_code == 304
 
 
+def test_meta_reports_the_repair_index_actually_in_use():
+    from app.deps import get_repairs
+
+    assert anonymous.get("/api/meta").json()["vector_index"] == get_repairs().mode == "exact"
+
+
+def test_health_checks_the_databases_at_most_once_per_interval(monkeypatch):
+    from app.routes import system
+
+    checks = []
+    monkeypatch.setattr(system, "_health", {})
+    monkeypatch.setattr(system, "_check_databases", lambda: checks.append(1) or (True, True, 1))
+    for _ in range(5):
+        assert anonymous.get("/api/health").json()["status"] == "ok"
+    assert len(checks) == 1
+    monkeypatch.setattr(system, "HEALTH_CACHE_S", 0.0)
+    anonymous.get("/api/health")
+    assert len(checks) == 2
+
+
+def test_health_reports_a_database_that_is_down(monkeypatch):
+    from app.routes import system
+
+    class Down:
+        kind = "postgres"
+
+        def schema_version(self):
+            raise ConnectionError("refused")
+
+    monkeypatch.setattr(system, "_health", {})
+    monkeypatch.setattr(system, "all_stores", lambda: [Down()])
+    body = anonymous.get("/api/health").json()
+    assert body["status"] == "degraded" and body["db_ok"] is False and body["databases"] == 1
+
+
+def test_cache_stats_need_a_signed_in_user():
+    assert anonymous.get("/api/cache/stats").status_code == 401
+    assert set(client.get("/api/cache/stats").json()) == {"size", "hits", "misses"}
+
+
 def test_responses_carry_request_id_and_security_headers():
     r = client.get("/api/health", headers={"X-Request-ID": "abc123"})
     assert r.headers["x-request-id"] == "abc123"

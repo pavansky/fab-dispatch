@@ -3,18 +3,26 @@
 from __future__ import annotations
 
 import hmac
+import logging
+import threading
+import time
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from ..algorithms import ALGORITHMS
+from ..auth import User, require
 from ..cache import ENGINE_VERSION
 from ..config import get_settings
-from ..deps import all_stores, get_planning, get_store
+from ..deps import all_stores, get_planning, get_repairs, get_store
 from ..http import etag_json
 from ..models import Weights
 from ..version import APP_VERSION, COMMIT
 
 router = APIRouter(prefix="/api", tags=["system"])
+log = logging.getLogger("fab")
+HEALTH_CACHE_S = 10.0  # one check per instance per 10 s, however often /health is called
+_health: dict = {}
+_health_lock = threading.Lock()
 
 ALGO_INFO = {
     "greedy": {"family": "constructive", "speed": "instant"},
@@ -47,20 +55,41 @@ def livez() -> dict:
     return {"status": "ok"}
 
 
-@router.get("/health")
-def health() -> dict:
-    """Readiness: can we reach the store, and is its schema current? Output stays minimal."""
+def _check_databases() -> tuple[bool, bool, int]:
+    """(reachable, schema current, how many) over the default database and every fab's own.
+    One query per database (reading the schema version proves the connection too), on the
+    store's own connection: SQLite keeps one open and Postgres reuses its idle ones."""
     from ..store import SCHEMA_VERSION
 
+    settings = get_settings()
     db_ok = schema_ok = True
-    stores = 0
     try:
-        for store in all_stores():  # the default database and every fab's own
-            stores += 1
-            db_ok = db_ok and store.ping()
-            schema_ok = schema_ok and store.schema_version() >= SCHEMA_VERSION
-    except Exception:  # health must report, not raise
-        db_ok = schema_ok = False
+        stores = all_stores()
+    except Exception as e:  # a database that can't even be opened: health must report, not raise
+        log.warning("health: opening the databases failed (%s)", type(e).__name__)
+        return False, False, 1 + len(settings.tenant_databases)
+    for store in stores:
+        try:
+            schema_ok = store.schema_version() >= SCHEMA_VERSION and schema_ok
+        except Exception as e:
+            log.warning("health: a %s database is unreachable (%s)", store.kind, type(e).__name__)
+            db_ok = schema_ok = False
+    return db_ok, schema_ok, len(stores)
+
+
+@router.get("/health")
+def health() -> dict:
+    """Readiness: can we reach every database, and is each schema current? Public and
+    unauthenticated, so the result is cached per instance for ``HEALTH_CACHE_S``: a client
+    polling it can't make this instance query every tenant database on each call. Output
+    stays minimal (a count of databases, never their names)."""
+    s = get_settings()
+    key = (s.database_url, tuple(sorted(s.tenant_databases.items())))
+    now = time.monotonic()
+    with _health_lock:
+        if _health.get("key") != key or now - _health.get("at", -HEALTH_CACHE_S) >= HEALTH_CACHE_S:
+            _health.update(key=key, at=now, result=_check_databases())
+        db_ok, schema_ok, stores = _health["result"]
     return {
         "status": "ok" if db_ok and schema_ok else "degraded",
         "db_ok": db_ok,
@@ -87,8 +116,20 @@ def prune(authorization: str | None = Header(None)) -> dict:
     return {"deleted": deleted}
 
 
+def _vector_index() -> str:
+    """The repair index's actual mode (it falls back to memory when the Qdrant folder is locked,
+    and ignores FAB_QDRANT_PATH in tests), not one guessed from settings."""
+    try:
+        return get_repairs().mode
+    except Exception as e:  # e.g. the Qdrant client can't be built; /meta must still answer
+        log.warning("meta: repair index unavailable (%s)", type(e).__name__)
+        return "unavailable"
+
+
 @router.get("/meta")
 def meta(request: Request):
+    """Public (the sign-in screen reads it), so it describes the deployment, never its tenants:
+    no fab or database names."""
     s = get_settings()
     payload = {
         "version": ENGINE_VERSION,
@@ -99,8 +140,7 @@ def meta(request: Request):
         "auth_mode": s.auth_mode,
         "default_weights": Weights().model_dump(),
         "store": get_store().kind,
-        "fab_databases": sorted(get_settings().tenant_databases),
-        "vector_index": "qdrant-server" if s.qdrant_url else "qdrant-disk" if s.qdrant_path else "exact",
+        "vector_index": _vector_index(),
         "solver_budget": {
             "alns_iterations": s.alns_iterations,
             "pyvrp_iterations": s.pyvrp_iterations,
@@ -111,5 +151,5 @@ def meta(request: Request):
 
 
 @router.get("/cache/stats", include_in_schema=False)
-def cache_stats() -> dict:
+def cache_stats(_: User = Depends(require("viewer"))) -> dict:
     return get_planning().lru.stats()
