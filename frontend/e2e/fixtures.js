@@ -37,6 +37,7 @@ export { expect }
 
 /** Click an empty spot inside a tool area on the floor plan (where a job can be reported). */
 export async function clickToolArea(page, index = 0) {
+  await page.locator('svg.floor').first().waitFor() // the floor plan view loads on demand
   const point = await page.evaluate((i) => {
     const svg = document.querySelector('svg.floor')
     const area = svg.querySelectorAll('rect.f-area')[i].getBBox()

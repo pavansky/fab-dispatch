@@ -27,11 +27,16 @@ async function openView(page, tab) {
   await expect(READY[tab](page)).toBeVisible()
 }
 
-/** Switch to the dark theme from the user menu (the only theme control present at every width). */
+/** Switch to the dark theme: the top-bar switch on desktop, the one in the user menu on phones. */
 async function useDarkTheme(page) {
-  await page.getByRole('button', { name: 'D', exact: true }).click()
-  await page.getByRole('menu').getByRole('button', { name: 'Dark' }).click()
-  await page.keyboard.press('Escape')
+  const inBar = page.getByRole('button', { name: 'Dark', exact: true }).first()
+  if (await inBar.isVisible()) {
+    await inBar.click()
+  } else {
+    await page.getByRole('button', { name: 'D', exact: true }).click()
+    await page.getByRole('menu').getByRole('button', { name: 'Dark' }).click()
+    await page.keyboard.press('Escape')
+  }
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 }
 

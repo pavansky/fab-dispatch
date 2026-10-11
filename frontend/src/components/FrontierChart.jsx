@@ -99,7 +99,9 @@ export default function FrontierChart({ points, band, caption, wide = false }) {
           </g>
         ))}
       </svg>
-      <table className="sr-only">
+      {/* A table can't shrink below its content, so the visually-hidden wrapper is a div: on a phone the
+          bare table widened the page past the screen. */}
+      <div className="sr-only"><table>
         <caption>Total cost and solve time per strategy</caption>
         <thead><tr><th scope="col">Strategy</th><th scope="col">Total cost (pts)</th><th scope="col">Solve time (ms)</th><th scope="col">Cost × latency</th></tr></thead>
         <tbody>
@@ -113,7 +115,7 @@ export default function FrontierChart({ points, band, caption, wide = false }) {
           ))}
         </tbody>
         {bandTop !== null && <tfoot><tr><td colSpan={4}>Noise margin: up to {fmt(band.margin, 0)} pts above {fmt(band.from)} pts counts as equally cheap.</td></tr></tfoot>}
-      </table>
+      </table></div>
       {caption && <figcaption className="help" style={{ marginTop: 6 }}>{caption}</figcaption>}
       <Tooltip tip={tip} id={tipId} />
     </figure>
