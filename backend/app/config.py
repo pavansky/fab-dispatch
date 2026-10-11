@@ -85,6 +85,13 @@ class Settings(BaseSettings):
         None, validation_alias=AliasChoices("FAB_SUPABASE_JWT_SECRET", "SUPABASE_JWT_SECRET")
     )
     dispatcher_emails: list[str] = Field(default_factory=list, description="bootstrap dispatchers by email")
+    stream_ticket_secret: str | None = Field(
+        None,
+        description="signs the 90 s tickets that open an SSE stream; unset = the Supabase JWT secret "
+        "or demo signing secret, or (neither configured) a key private to each process, which breaks "
+        "with several instances",
+        repr=False,
+    )
     turnstile_site_key: str | None = Field(
         None, description="Cloudflare Turnstile site key (public); set when CAPTCHA is on in Supabase Auth"
     )

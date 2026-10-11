@@ -29,7 +29,7 @@ from starlette.responses import StreamingResponse
 
 from .. import live
 from ..algorithms import ALGORITHMS
-from ..auth import User, require
+from ..auth import STREAM_TICKET_TTL_S, User, issue_stream_ticket, require
 from ..config import get_settings
 from ..deps import get_store, rate_limit, store_for_shift
 from ..http import etag_json, if_match_version
@@ -261,6 +261,15 @@ def events(
     return store_for_shift(shift_id).events_after(shift_id, after, limit)
 
 
+@router.post("/{shift_id}/stream-ticket")
+def stream_ticket(shift_id: str, user: User = Depends(require("viewer"))) -> dict:
+    """A short-lived ticket that opens this shift's stream (``GET .../stream?ticket=``), since
+    ``EventSource`` can't send an Authorization header. Bound to the caller and this shift; ask for
+    a new one before every (re)connect, and reuse within its lifetime is fine."""
+    _load(shift_id, user)
+    return {"ticket": issue_stream_ticket(user, shift_id, get_settings()), "expires_in": STREAM_TICKET_TTL_S}
+
+
 @router.get("/{shift_id}/stream")
 async def stream(
     shift_id: str,
@@ -272,7 +281,10 @@ async def stream(
     """Server-Sent Events. The stream tails the shift's event log by id, so it works with
     many server instances and resumes on reconnect (EventSource sends Last-Event-ID).
     Each response closes after ``sse_window_s``, which stays inside serverless limits;
-    the browser reconnects on its own. Open streams double as presence heartbeats."""
+    the browser reconnects on its own. Open streams double as presence heartbeats.
+
+    Authenticate with ``?ticket=`` from ``POST .../stream-ticket`` (``?access_token=`` is
+    accepted for one more release and logs a deprecation warning)."""
     await to_thread.run_sync(_load, shift_id, user)
     store, settings = store_for_shift(shift_id), get_settings()
     # isascii: "²".isdigit() is True but int("²") raises, which would be a 500.

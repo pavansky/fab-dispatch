@@ -11,6 +11,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
+from .auth import stream_ticket_secret
 from .cache import ENGINE_VERSION
 from .config import get_settings
 from .help import load_articles
@@ -91,6 +92,7 @@ def create_app() -> FastAPI:
     ):
         app.include_router(r)
     load_articles()  # broken help content (bad link, missing title) fails at startup, not in front of users
+    stream_ticket_secret(settings)  # warns at startup, not at the first stream, when tickets are per process
     log.info("fab-dispatch %s ready (env=%s)", ENGINE_VERSION, settings.env)
     return app
 

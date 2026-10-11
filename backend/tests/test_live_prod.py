@@ -242,3 +242,82 @@ def test_migrations_upgrade_a_pre_versioning_database(tmp_path):
     assert store.schema_version() == SCHEMA_VERSION
     assert store.get_shift("old1") == ({"clock": 5}, 3)
     assert store.list_shifts("fab1-300mm-logic")[0]["id"] == "old1"  # backfilled into the default fab
+
+
+# ------------------------------------------------------------------ stream tickets
+def _stream_text(client: TestClient, url: str) -> tuple[int, str]:
+    with client.stream("GET", url) as r:
+        return r.status_code, "".join(r.iter_text()) if r.status_code == 200 else ""
+
+
+def test_a_stream_ticket_opens_the_stream_and_can_be_reused_within_its_lifetime():
+    sid = _shift()
+    viewer = TestClient(app, headers=auth_headers("viewer"))
+    body = viewer.post(f"/api/shifts/{sid}/stream-ticket").json()
+    assert body["expires_in"] == 90 and body["ticket"].count(".") == 1
+    anon = TestClient(app)
+    status, text = _stream_text(anon, f"/api/shifts/{sid}/stream?ticket={body['ticket']}")
+    assert status == 200 and "retry:" in text
+    assert _stream_text(anon, f"/api/shifts/{sid}/stream?ticket={body['ticket']}")[0] == 200  # a reconnect
+    assert "viewer@demo.local" in alice.get(f"/api/shifts/{sid}").json()["viewers"]
+    assert anon.get(f"/api/shifts/{sid}/stream").status_code == 401  # no ticket, no token
+    assert anon.get(f"/api/shifts/{sid}").status_code == 401  # a ticket is not a session
+
+
+def test_stream_tickets_are_bound_to_one_shift_expire_and_detect_tampering():
+    from app.auth import User, issue_stream_ticket
+
+    s = get_settings()
+    sid, other = _shift(), _shift()
+    user = User(id="demo-viewer", email="viewer@demo.local", role="viewer", fabs=["*"], provider="demo")
+    anon = TestClient(app)
+    for_other = issue_stream_ticket(user, other, s)
+    r = anon.get(f"/api/shifts/{sid}/stream?ticket={for_other}")
+    assert r.status_code == 401 and "another shift" in r.json()["error"]["message"]
+    expired = issue_stream_ticket(user, sid, s, ttl_s=-1)
+    r = anon.get(f"/api/shifts/{sid}/stream?ticket={expired}")
+    assert r.status_code == 401 and "expired" in r.json()["error"]["message"]
+    good = issue_stream_ticket(user, sid, s)
+    body, sig = good.split(".")
+    # A viewer promoting themselves to dispatcher in the payload breaks the signature.
+    forged_body = body[:-2] + ("AA" if body[-2:] != "AA" else "BB")
+    for bad in (f"{forged_body}.{sig}", f"{body}.{sig[:-3]}abc", body, "garbage", f"{body}.", "."):
+        assert anon.get(f"/api/shifts/{sid}/stream?ticket={bad}").status_code == 401, bad
+    # Signed with another key (another process without a shared secret): refused.
+    from app.config import Settings
+
+    foreign = issue_stream_ticket(user, sid, Settings(env="test", auth_secret="another-process-key-0123456789"))
+    assert anon.get(f"/api/shifts/{sid}/stream?ticket={foreign}").status_code == 401
+
+
+def test_a_ticket_needs_access_to_the_shift_and_the_token_fallback_warns(caplog):
+    import logging
+
+    sid = _shift()
+    assert TestClient(app).post(f"/api/shifts/{sid}/stream-ticket").status_code == 401
+    assert alice.post("/api/shifts/fab1-300mm-logic.nope/stream-ticket").status_code == 404
+    token = issue_demo_token("viewer", get_settings())
+    with caplog.at_level(logging.WARNING, logger="fab"):
+        assert _stream_text(TestClient(app), f"/api/shifts/{sid}/stream?access_token={token}")[0] == 200
+    assert any("deprecated" in r.message and "stream-ticket" in r.message for r in caplog.records)
+
+
+def test_the_ticket_key_falls_back_to_a_per_process_secret_with_a_warning(caplog):
+    import logging
+
+    from app import auth
+    from app.config import Settings
+
+    demo = Settings(env="test")
+    assert auth.stream_ticket_secret(demo) == demo.auth_secret.encode()  # demo sessions use the same key
+    explicit = Settings(env="test", stream_ticket_secret="tickets-only-key")
+    assert auth.stream_ticket_secret(explicit) == b"tickets-only-key"
+    base = {"auth_mode": "supabase", "supabase_url": "https://abc.supabase.co"}
+    with_jwt = Settings(**base, supabase_jwt_secret="shared-hs256-secret")
+    assert auth.stream_ticket_secret(with_jwt) == b"shared-hs256-secret"
+    auth._process_secret.cache_clear()
+    with caplog.at_level(logging.WARNING, logger="fab"):
+        key = auth.stream_ticket_secret(Settings(**base))  # asymmetric JWTs: no shared secret at all
+        again = auth.stream_ticket_secret(Settings(**base))
+    assert key == again and len(key) == 32
+    assert sum("per-process key" in r.message for r in caplog.records) == 1  # warned once, not per ticket
