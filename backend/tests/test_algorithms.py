@@ -14,7 +14,10 @@ def test_greedy_falls_into_the_trap(greedy_trap):
     res = allocate(greedy_trap, Weights(), "greedy")
     assert {a.job_id: a.tech_id for a in res.assignments} == {"J1": "E-A"}
     assert [u.job_id for u in res.unassigned] == ["J2"]
-    assert "none had capacity" in res.unassigned[0].reason
+    # Nobody is at max jobs: the reason given is the real one, the time window.
+    reason = res.unassigned[0].reason
+    assert "2 qualified engineer(s), but none can fit it in: 2 cannot arrive inside the time window" in reason
+    assert "capacity" not in reason and "max jobs" not in reason
 
 
 def test_hungarian_sees_the_global_picture(greedy_trap):
@@ -29,6 +32,19 @@ def test_regret_places_the_constrained_job_first(greedy_trap):
     assert {a.job_id: a.tech_id for a in res.assignments} == {"J1": "E-B", "J2": "E-A"}
     j2 = next(a for a in res.assignments if a.job_id == "J2")
     assert "only one engineer" in j2.explanation
+
+
+def test_unassigned_reason_names_capacity_only_when_it_is_the_cause():
+    sc = Scenario(
+        engineers=[Engineer(id="E1", name="a", x=0, y=0, skills={"etch": 2}, max_jobs=1)],
+        jobs=[
+            Job(id="J1", x=10, y=0, skill="etch", priority=3, earliest=0, latest=100, duration=30),
+            Job(id="J2", x=20, y=0, skill="etch", priority=2, earliest=0, latest=300, duration=30),
+        ],
+    )
+    res = allocate(sc, Weights(), "greedy")
+    assert [u.job_id for u in res.unassigned] == ["J2"]
+    assert "none can fit it in: 1 already at max jobs" in res.unassigned[0].reason
 
 
 def test_uncertified_family_is_reported_not_assigned():

@@ -7,7 +7,7 @@ import time
 
 from .algorithms import ALGORITHMS, Decision
 from .models import AllocationResult, Assignment, Route, RouteStop, Scenario, Unassigned, Weights
-from .planner import LEVEL_TOO_LOW, SKILL_MISSING, Frozen, Planner, describe_rejections
+from .planner import LEVEL_TOO_LOW, REASON_TEXT, SKILL_MISSING, Frozen, Planner
 
 
 def allocate(
@@ -81,15 +81,33 @@ def allocate(
 
 def _why_unassigned(p: Planner, job_id: str) -> Unassigned:
     job = p.jobs[job_id]
-    _, rejected = p.scan(job_id)
+    feasible, rejected = p.scan(job_id)
     n = len(p.techs)
     if rejected[SKILL_MISSING] == n:
         reason = f"No engineer on shift is certified on {job.skill}."
     elif rejected[SKILL_MISSING] + rejected[LEVEL_TOO_LOW] == n:
         reason = f"No engineer on shift holds {job.skill} level {job.min_level}+."
+    elif feasible and feasible[0].cost >= 0:
+        # Methods only commit insertions that lower the total cost (see planner.py).
+        best = feasible[0]
+        reason = (
+            f"{len(feasible)} engineer(s) could take it, but the cheapest ({best.tech_id}) would add "
+            f"{best.cost:+.1f} to the plan cost: the detour costs more than the "
+            f"{p.w.priority_reward * job.priority:.0f}-point reward for serving it, so leaving it out is cheaper."
+        )
+    elif feasible:
+        # The method settled this job before later placements made serving it worthwhile.
+        best = feasible[0]
+        reason = (
+            f"{len(feasible)} engineer(s) could now take it (cheapest {best.tech_id} at {best.cost:+.1f}), "
+            "but the method settled this job before later placements made serving it worthwhile."
+        )
     else:
         qualified = n - rejected[SKILL_MISSING] - rejected[LEVEL_TOO_LOW]
-        reason = f"{qualified} qualified engineer(s), but none had capacity: {describe_rejections(rejected)}."
+        blockers = ", ".join(
+            f"{k} {REASON_TEXT[r]}" for r, k in rejected.most_common() if r not in (SKILL_MISSING, LEVEL_TOO_LOW)
+        )
+        reason = f"{qualified} qualified engineer(s), but none can fit it in: {blockers}."
     return Unassigned(job_id=job_id, reason=reason, rejections=dict(rejected))
 
 
