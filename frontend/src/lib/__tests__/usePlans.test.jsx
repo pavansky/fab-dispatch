@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { usePlans } from '../usePlans.js'
 import { ALGO_ORDER } from '../metrics.js'
@@ -75,5 +75,24 @@ describe('usePlans', () => {
     await waitFor(() => expect(result.current.results.map((r) => r.algorithm)).toEqual(['greedy']))
     expect(result.current.results[0].label).toBe(`greedy@${w2.travel_100m}`)
     expect([...result.current.pending]).toEqual(['hungarian', 'regret', 'alns', 'pyvrp'])
+  })
+
+  it('reports strategies the API rate-limited apart from other errors, and can retry them', async () => {
+    let limited = true
+    const api = mockApi({
+      'POST /plan': ({ body }) => (limited && body.algorithm !== 'greedy'
+        ? json(429, errorBody('rate_limited', 'Too many requests'), { 'retry-after': '3600' })
+        : body.algorithm === 'greedy' ? json(500, errorBody('internal', 'boom')) : tagged(body)),
+    })
+    const { result } = renderHook((p) => usePlans(p.scenario, p.weights, { debounceMs: 0 }), { initialProps: { scenario, weights: w1 } })
+    await waitFor(() => expect(result.current.done).toBe(true))
+    expect(result.current.rateLimited).toEqual(['hungarian', 'regret', 'alns', 'pyvrp'])
+    expect(result.current.errors.greedy).toBe('boom')
+    expect(api.find('POST', '/plan')).toHaveLength(5)
+    limited = false
+    act(() => result.current.retry())
+    await waitFor(() => expect(result.current.results).toHaveLength(4))
+    expect(result.current.rateLimited).toEqual([])
+    expect(result.current.errors).toEqual({ greedy: 'boom' })
   })
 })

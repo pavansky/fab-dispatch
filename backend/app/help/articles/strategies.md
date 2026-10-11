@@ -37,16 +37,19 @@ from the proven optimum on full-size shifts.
 
 ## PyVRP
 
-A state-of-the-art vehicle-routing solver (iterated local search, C++ core), warm-started from
-Regret-2. The **lowest operating cost of the five**, mostly by cutting idle wait: about 3% from
+The PyVRP library's iterated local search (C++ core), warm-started from Regret-2. PyVRP is the
+open-source solver whose hybrid genetic search won the recent VRPTW competitions; the version used
+here runs its iterated local search, a different algorithm from the same library. The **lowest operating cost of the five**, mostly by cutting idle wait: about 3% from
 the proven optimum on full-size shifts.
 
 ## Exact solver
 
 Not a live dispatch option: it enumerates every feasible route and solves a set-partitioning
 problem to find the **proven optimum**. It works at full shift size (about 20 seconds, up to a couple
-of minutes), which suits planning ahead. The Benchmark view uses small shifts so the comparison
-returns in seconds.
+of minutes), which suits planning ahead but not a hosted request: the live app's API has a 60-second
+limit, so the Benchmark view's *Measure gaps* proves small shifts (4 engineers × 12 jobs) and returns
+in seconds. The full-size proofs, 80 shifts at 14 × 45, are in
+[the analysis](https://pavansky.github.io/fab-dispatch/ANALYSIS/#distance-from-the-proven-optimum-at-full-size).
 
 ## When each one wins
 
@@ -56,5 +59,5 @@ returns in seconds.
 | Tool-downs must be answered fastest | Hungarian |
 | Scarce certifications | Regret-2 |
 | Lowest cost on a normal shift | PyVRP |
-| Small shift, closest to optimal | ALNS |
+| Closest to the proven optimum at full shift size | PyVRP (2.7% mean gap over 80 proven shifts; ALNS 5.7%). On small 4 × 12 shifts ALNS looked closer, and the full-size proof overturned that: see [the analysis](https://pavansky.github.io/fab-dispatch/ANALYSIS/#distance-from-the-proven-optimum-at-full-size). |
 | Certified engineers have run out | None: every strategy hits the same ceiling. It's a staffing problem. |

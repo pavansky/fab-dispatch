@@ -139,11 +139,11 @@ def test_predict_durations_only_touches_tool_downs():
     kinds = {j["id"]: j["kind"] for j in sc["jobs"]}
     assert changed and all(kinds[j] == "down" for j in changed)
     assert len(out["scenario"]["jobs"]) == 20
-    assert out["basis"]
+    assert out["basis"] and out["skipped"] == []
     on_shift = {e["id"] for e in sc["engineers"]}
     for c in out["changes"]:
         # The keys the UI reads stay; the band and basis come with every change.
-        assert {"job_id", "standard", "predicted", "p10", "p90", "likely_cause"} <= set(c)
+        assert {"job_id", "standard", "predicted", "p10", "p90", "likely_cause", "match", "confidence"} <= set(c)
         assert c["p10"] <= c["p90"] and c["basis"] == "knn_mean"
         assert all(e in on_shift for e, _ in c["experienced_engineers"])
 
@@ -224,4 +224,43 @@ def test_a_symptom_with_nothing_in_common_gets_no_prediction():
     profile = get_profile("fab1-300mm-logic")
     unrelated = [(0.0, p) for _, p in idx.backend.search(profile, "etch", "RF reflected power high", 12)]
     idx.backend.search = lambda *a: unrelated
-    assert idx.similar(profile, "etch", "anything") == {"neighbours": [], "prediction": None}
+    out = idx.similar(profile, "etch", "anything")
+    assert out["prediction"] is None and out["neighbours"] == [] and out["weak_matches"] == []
+    assert out["reason"] == "no similar repair history"
+
+
+def test_vague_symptoms_get_weak_matches_not_a_confident_prediction():
+    """Cold start: "tool is down" has nearest neighbours, but they are other faults. Below the
+    similarity floor there is no prediction, only clearly labelled weak matches."""
+    from app.knowledge import CLOSE_SIMILARITY, MIN_SIMILARITY, WEAK_MATCHES
+
+    for symptom in ("tool is down", "broken", "strange noise from pump", "overlay drift"):
+        body = client.post("/api/repairs/similar", json={"family": "etch", "symptom": symptom}).json()
+        assert body["prediction"] is None, symptom
+        assert body["reason"] == "no similar repair history" and body["neighbours"] == []
+        assert body["experienced_engineers"] == [] and body["index"]["mode"] == "exact"
+        weak = body["weak_matches"]
+        assert 0 < len(weak) <= WEAK_MATCHES and all(w["score"] < MIN_SIMILARITY for w in weak)
+        assert {"score", "symptom", "cause", "fix", "minutes", "engineer"} <= set(weak[0])
+    # A real symptom still predicts, and says how close the matches are.
+    real = client.post("/api/repairs/similar", json={"family": "etch", "symptom": "RF reflected power high"}).json()
+    p = real["prediction"]
+    assert p["confidence"] >= MIN_SIMILARITY and p["match"] == (
+        "close" if p["confidence"] >= CLOSE_SIMILARITY else "partial"
+    )
+    assert "weak_matches" not in real
+    assert real["index"]["embedder"] == "hashed-ngrams-512"
+
+
+def test_predict_durations_skips_jobs_without_similar_history():
+    sc = client.post("/api/scenario", json={"seed": 3, "n_engineers": 6, "n_jobs": 20}).json()
+    downs = [j for j in sc["jobs"] if j["kind"] == "down" and j["symptom"]]
+    vague = {**sc, "jobs": [{**j, "symptom": "tool is down"} if j["id"] == downs[0]["id"] else j for j in sc["jobs"]]}
+    out = client.post("/api/repairs/predict-durations", json=vague).json()
+    assert out["skipped"] == [
+        {"job_id": downs[0]["id"], "standard": downs[0]["duration"], "reason": "no similar repair history"}
+    ]
+    assert downs[0]["id"] not in {c["job_id"] for c in out["changes"]}
+    kept = next(j for j in out["scenario"]["jobs"] if j["id"] == downs[0]["id"])
+    assert kept["duration"] == downs[0]["duration"]  # the planner keeps the standard estimate
+    assert all(c["match"] in {"close", "partial"} and 0 < c["confidence"] <= 1 for c in out["changes"])

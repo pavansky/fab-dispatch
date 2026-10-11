@@ -35,6 +35,10 @@ ignore = ["RUF001", "RUF002", "RUF003", "RUF005", "B008", "SIM108", "E731", "E50
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Slow tests (full-size optimality proofs, solvers at the shipped budgets) are skipped by default;
+# CI runs them on pushes to main (`pytest -m slow`), and so can you.
+addopts = "-m 'not slow'"
+markers = ["slow: takes more than ~20 s (full-size exact proofs, shipped solver budgets); run with -m slow"]
 filterwarnings = ["ignore::DeprecationWarning:starlette.*", "ignore:.*httpx2.*"]
 
 [tool.uv]

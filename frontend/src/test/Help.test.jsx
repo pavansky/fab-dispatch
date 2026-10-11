@@ -118,7 +118,7 @@ describe('assistant', () => {
     }
     await user.click(within(log).getByRole('button', { name: 'Open J006 on the floor plan' }))
     expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
-    expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
+    expect(within(await screen.findByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
   })
 
   it('opens a cited source in the help center', async () => {

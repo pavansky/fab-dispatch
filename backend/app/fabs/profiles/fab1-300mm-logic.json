@@ -424,8 +424,8 @@
               "sd_min": 25
             },
             {
-              "cause": "lamp at end of life",
-              "fix": "replace light source lamp",
+              "cause": "stage drift, calibration out",
+              "fix": "recalibrate stage and requalify on the reference wafer",
               "mean_min": 40,
               "sd_min": 8
             }
@@ -485,7 +485,7 @@
     },
     "overstaffed": {
       "label": "Overstaffed",
-      "description": "Plenty of engineers; the question is cost, not coverage.",
+      "description": "More certified engineers than the work needs (a larger bottleneck-certified share, broad cross-training); the question is cost, not coverage.",
       "family_mix": {
         "litho": 0.15,
         "etch": 0.22,
@@ -494,10 +494,15 @@
         "implant": 0.1,
         "metrology": 0.18
       },
-      "constraint_engineer_share": 0.2,
+      "constraint_engineer_share": 0.35,
       "down_share": 0.5,
       "sla_critical": 60,
-      "sla_down": 150
+      "sla_down": 150,
+      "cross_training": [
+        2,
+        2,
+        3
+      ]
     }
   }
 }

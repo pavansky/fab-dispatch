@@ -1,17 +1,19 @@
 """Certified bounds on the optimum at sizes the exact solver can't prove in time.
 
-    python -m scripts.certified_bound 30 100 out/cg_30x100                # seed 0, normal
-    python -m scripts.certified_bound 20 65 out/cg_20x65 --seeds 3 --preset normal
+    python -m scripts.certified_bound 30 100 0 out/cg_30x100_s0            # one seed; writes .log and .json
+    python -m scripts.certified_bound 20 65 0 out/cg_20x65 --seeds 3 --preset normal
 
-Writes ``<out>.log`` plus one ``<out>_s<seed>.json`` per seed and ``<out>.json`` with the
-per-heuristic mean and worst certified gap over the seeds.
+With ``--seeds N`` the study runs seeds ``seed .. seed+N-1``, writes one ``<out>_s<seed>.json``
+per seed and a ``<out>.json`` summary with the per-heuristic mean and worst certified gap.
 
 1. Enumerate every feasible route (same code as the exact solver).
 2. Restricted master LP over a small column set (each heuristic's routes): solve, read duals.
 3. Price ALL routes at once (reduced cost = cost - A^T duals, one sparse mat-vec); add the most
    negative; repeat until none is negative. The final LP value is a LOWER BOUND on any plan.
 4. Integer solve over the generated columns gives a real plan (UPPER BOUND).
-Every heuristic's gap to the lower bound is then a certified maximum gap to the optimum.
+Every heuristic's gap to the lower bound is then a certified maximum gap to the optimum. The
+report also gives each gap on the *changeable* cost (the bound less the penalty of jobs no
+engineer on shift is certified for; see ANALYSIS, "gap on the changeable cost").
 """
 
 import argparse
@@ -28,7 +30,7 @@ from app.generator import generate
 from app.models import Weights
 from app.planner import Planner
 
-OUT = ""
+OUT = "out/cg"
 
 
 def log(msg):
@@ -67,7 +69,8 @@ def _solve(A, c, m, colset, integer=False, time_limit=None):
     return hs, info, idx
 
 
-def certify(engineers: int, jobs: int, seed: int, preset: str, mip_time_limit: float) -> dict:
+def certify(engineers: int, jobs: int, seed: int, preset: str, mip_time_limit: float, out: str) -> dict:
+    """Bound one shift; writes ``<out>.json`` and returns the report."""
     sc = generate(seed, engineers, jobs, preset)
     w = Weights()
     log(f"size {engineers}x{jobs} seed {seed} preset {preset}")
@@ -161,43 +164,27 @@ def certify(engineers: int, jobs: int, seed: int, preset: str, mip_time_limit: f
                 "seconds": h["seconds"],
                 "gap_to_best_pct": 100 * (h["cost"] - upper) / abs(upper),
                 "max_gap_to_optimum_pct": 100 * (h["cost"] - lower) / abs(lower),
-                # Gap on the part of the cost any plan can change (see ANALYSIS, "gap on the changeable cost").
-                "max_gap_on_changeable_pct": 100 * (h["cost"] - lower) / abs(lower - uncoverable),
             }
             for a, h in heur.items()
         },
+        # The same certified gaps on the part of the cost any plan can change.
+        "max_gap_on_changeable_pct": {a: 100 * (h["cost"] - lower) / abs(lower - uncoverable) for a, h in heur.items()},
     }
-    with open(f"{OUT}_s{seed}.json", "w") as f:
+    with open(out + ".json", "w") as f:
         json.dump(report, f, indent=1)
     for a, r in report["heuristics"].items():
         log(
             f"| {a} | cost {r['cost']:.1f} | {r['gap_to_best_pct']:.2f}% above best plan | at most "
-            f"{r['max_gap_to_optimum_pct']:.2f}% above optimum ({r['max_gap_on_changeable_pct']:.2f}% on the "
+            f"{r['max_gap_to_optimum_pct']:.2f}% above optimum ({report['max_gap_on_changeable_pct'][a]:.2f}% on the "
             f"changeable cost) | {r['seconds']:.1f}s |"
         )
     return report
 
 
-def main() -> None:
-    global OUT
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("engineers", type=int)
-    ap.add_argument("jobs", type=int)
-    ap.add_argument("out", help="output prefix: writes <out>.log, <out>_s<seed>.json and <out>.json")
-    ap.add_argument("--seeds", type=int, default=1, help="number of seeded shifts, starting at --first-seed")
-    ap.add_argument("--first-seed", type=int, default=0)
-    ap.add_argument("--preset", default="normal")
-    ap.add_argument("--mip-time-limit", type=float, default=3600, help="seconds for the integer solve, per seed")
-    args = ap.parse_args()
-    OUT = args.out
-    exact.MAX_ROUTES = 10**9
-    reports = [
-        certify(args.engineers, args.jobs, seed, args.preset, args.mip_time_limit)
-        for seed in range(args.first_seed, args.first_seed + args.seeds)
-    ]
+def summarise(reports: list[dict], out: str) -> dict:
     summary = {
-        "size": f"{args.engineers}x{args.jobs}",
-        "preset": args.preset,
+        "size": reports[0]["size"],
+        "preset": reports[0]["preset"],
         "seeds": [r["seed"] for r in reports],
         "routes_mean": statistics.fmean(r["routes"] for r in reports),
         "best_plan_gap_to_bound_pct_worst": max(r["best_plan_gap_to_bound_pct"] for r in reports),
@@ -207,22 +194,51 @@ def main() -> None:
                     r["heuristics"][a]["max_gap_to_optimum_pct"] for r in reports
                 ),
                 "max_gap_to_optimum_pct_worst": max(r["heuristics"][a]["max_gap_to_optimum_pct"] for r in reports),
-                "max_gap_on_changeable_pct_mean": statistics.fmean(
-                    r["heuristics"][a]["max_gap_on_changeable_pct"] for r in reports
-                ),
+                "max_gap_on_changeable_pct_mean": statistics.fmean(r["max_gap_on_changeable_pct"][a] for r in reports),
             }
             for a in ALGORITHMS
         },
     }
-    with open(OUT + ".json", "w") as f:
+    with open(out + ".json", "w") as f:
         json.dump(summary, f, indent=1)
-    log(f"summary over {len(reports)} seed(s) at {summary['size']} ({args.preset}):")
+    log(f"summary over {len(reports)} seed(s) at {summary['size']} ({summary['preset']}):")
     log("| Strategy | Max gap to optimum, mean | worst | on the changeable cost, mean |")
     for a, h in summary["heuristics"].items():
         log(
             f"| {a} | {h['max_gap_to_optimum_pct_mean']:.2f}% | {h['max_gap_to_optimum_pct_worst']:.2f}% | "
             f"{h['max_gap_on_changeable_pct_mean']:.2f}% |"
         )
+    return summary
+
+
+def main(argv: list[str] | None = None) -> dict:
+    """One seed (the default): writes ``<out>.json`` and returns that shift's report. With
+    ``--seeds N`` > 1: writes ``<out>_s<seed>.json`` per seed and the ``<out>.json`` summary, and
+    returns the summary."""
+    global OUT
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("engineers", type=int)
+    ap.add_argument("jobs", type=int)
+    ap.add_argument("seed", type=int, help="first seed")
+    ap.add_argument("out", help="output path prefix (.log and .json are added)")
+    ap.add_argument("--seeds", type=int, default=1, help="number of seeded shifts, starting at seed")
+    ap.add_argument("--preset", default="normal")
+    ap.add_argument("--mip-time-limit", type=float, default=3600, help="seconds for the final integer solve, per seed")
+    args = ap.parse_args(argv)
+    OUT = args.out
+
+    max_routes = exact.MAX_ROUTES
+    exact.MAX_ROUTES = 10**9
+    try:
+        if args.seeds <= 1:
+            return certify(args.engineers, args.jobs, args.seed, args.preset, args.mip_time_limit, OUT)
+        reports = [
+            certify(args.engineers, args.jobs, seed, args.preset, args.mip_time_limit, f"{OUT}_s{seed}")
+            for seed in range(args.seed, args.seed + args.seeds)
+        ]
+        return summarise(reports, OUT)
+    finally:
+        exact.MAX_ROUTES = max_routes
 
 
 if __name__ == "__main__":

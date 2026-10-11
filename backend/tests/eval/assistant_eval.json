@@ -1,5 +1,5 @@
 {
-  "_about": "Questions a dispatcher actually asks. 'cite' is the help article (or any of several) that must be the top source; 'refuse' questions are out of scope and must get an 'I don't know'. tests/test_assistant.py reports retrieval accuracy and fails below the floor.",
+  "_about": "Questions a dispatcher actually asks, run end to end through Assistant.ask() by tests/test_assistant.py. 'docs': 'cite' is the help article (or any of several) that must be the first citation, and the answer must not be a refusal. 'docs_hard': the same, phrased without the articles' keyword lists (paraphrases, symptoms, UI details). 'refuse': out of scope and must be declined (intent 'unknown'). 'refuse_app_vocabulary': out of scope but using the app's own words (code, jokes, translation, booking, weather); they must be declined too, not answered with a citation. The test reports accuracy and fails below the floor.",
   "docs": [
     {
       "q": "What does idle wait mean?",
@@ -187,6 +187,156 @@
     "Write me some Python code",
     "How do I cook pasta?",
     "What is the stock price of TSMC?",
-    "Translate hello into German"
+    "Translate hello into German",
+    "How do I reset my home router?",
+    "What time is it in Taiwan?",
+    "Who is the CEO of Intel?",
+    "Is the moon landing real?",
+    "Can you order me a new laptop?",
+    "What is the meaning of life?",
+    "How do I change my car's oil?",
+    "Where is the nearest hospital?"
+  ],
+  "docs_hard": [
+    {
+      "q": "what does the orange band on the chart mean",
+      "cite": [
+        "recommendation",
+        "getting-started"
+      ]
+    },
+    {
+      "q": "my engineer is overloaded, how do I spread the work",
+      "cite": [
+        "constraints-and-weights",
+        "views"
+      ]
+    },
+    {
+      "q": "what stops a plan from being picked",
+      "cite": "recommendation"
+    },
+    {
+      "q": "one of my people just went home ill, what now",
+      "cite": [
+        "what-ifs",
+        "live-dispatch"
+      ]
+    },
+    {
+      "q": "why does nobody pick up this tool-down",
+      "cite": "faq"
+    },
+    {
+      "q": "how do I get back into a shift I closed",
+      "cite": "live-dispatch"
+    },
+    {
+      "q": "can two people run the clock at the same time",
+      "cite": "live-dispatch"
+    },
+    {
+      "q": "the numbers didn't move after I dragged a slider",
+      "cite": [
+        "faq",
+        "constraints-and-weights"
+      ]
+    },
+    {
+      "q": "which button lets me see all five maps at once",
+      "cite": [
+        "floor-plan",
+        "views"
+      ]
+    },
+    {
+      "q": "the button to run the shift for real is grey and won't click",
+      "cite": [
+        "roles-and-access",
+        "faq",
+        "live-dispatch"
+      ]
+    },
+    {
+      "q": "does a 1% cheaper plan count as a win",
+      "cite": "recommendation"
+    },
+    {
+      "q": "how far off the proven best answer are the heuristics",
+      "cite": [
+        "benchmark",
+        "strategies"
+      ]
+    },
+    {
+      "q": "what happens to work already in progress when you re-plan",
+      "cite": "live-dispatch"
+    },
+    {
+      "q": "how do I undo taking someone off shift",
+      "cite": "what-ifs"
+    },
+    {
+      "q": "how do I get exactly the same shift again next week",
+      "cite": "what-ifs"
+    },
+    {
+      "q": "how do I jump between the tabs without the mouse",
+      "cite": "keyboard-shortcuts"
+    },
+    {
+      "q": "does it remember which fab I was looking at last time",
+      "cite": "fabs"
+    },
+    {
+      "q": "what's the dot next to the clock",
+      "cite": "live-dispatch"
+    },
+    {
+      "q": "how do I use this on an iPad",
+      "cite": "views"
+    },
+    {
+      "q": "what's the penalty for sending a senior engineer to an easy job",
+      "cite": "constraints-and-weights"
+    },
+    {
+      "q": "how do I know the bot isn't making things up",
+      "cite": "assistant"
+    },
+    {
+      "q": "what does the × on the map mean",
+      "cite": "floor-plan"
+    },
+    {
+      "q": "how many seeds should I run",
+      "cite": "benchmark"
+    },
+    {
+      "q": "what is the 45-minute window for",
+      "cite": [
+        "glossary",
+        "live-dispatch"
+      ]
+    },
+    {
+      "q": "why does the fastest solver not always win",
+      "cite": [
+        "recommendation",
+        "faq"
+      ]
+    }
+  ],
+  "refuse_app_vocabulary": [
+    "Write me some Python code for the greedy strategy",
+    "Tell me a joke about the Hungarian algorithm",
+    "Translate 'bottleneck down' into German",
+    "Book me a flight to the fab in Dresden",
+    "What's the weather in the cleanroom today?",
+    "Write a SQL query that lists the unassigned jobs",
+    "Order pizza for the engineers on this shift",
+    "Write a poem about idle wait",
+    "Can you implement ALNS in Rust for me",
+    "Give me a bash script to run the benchmark every night"
   ]
 }

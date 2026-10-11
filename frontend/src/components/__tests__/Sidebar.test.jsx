@@ -59,6 +59,28 @@ describe('Sidebar', () => {
     expect(setWeights).toHaveBeenLastCalledWith(meta.default_weights)
   })
 
+  it('follows the thumb while dragging but commits the weight only when the drag ends', () => {
+    const { setWeights } = renderSidebar()
+    const slider = screen.getByRole('slider', { name: 'Walking' })
+    fireEvent.input(slider, { target: { value: '4' } }) // mid-drag: what React's onChange sees per pixel
+    fireEvent.input(slider, { target: { value: '6' } })
+    expect(slider.closest('label')).toHaveTextContent('6')
+    expect(setWeights).not.toHaveBeenCalled()
+    fireEvent.pointerUp(slider)
+    expect(setWeights).toHaveBeenCalledTimes(1)
+    expect(setWeights).toHaveBeenLastCalledWith({ ...meta.default_weights, travel_100m: 6 })
+    fireEvent.blur(slider) // the same value again is not a second commit
+    expect(setWeights).toHaveBeenCalledTimes(1)
+  })
+
+  it('commits a keyboard step on key-up', () => {
+    const { setWeights } = renderSidebar()
+    const slider = screen.getByRole('slider', { name: 'Idle wait' })
+    fireEvent.input(slider, { target: { value: '0.3' } })
+    fireEvent.keyUp(slider, { key: 'ArrowRight' })
+    expect(setWeights).toHaveBeenCalledWith({ ...meta.default_weights, wait_min: 0.3 })
+  })
+
   it('offers to restore engineers taken off shift', async () => {
     const { onRestoreAll } = renderSidebar({ offShiftCount: 2 })
     await userEvent.click(screen.getByRole('button', { name: 'Restore all 2 engineers' }))

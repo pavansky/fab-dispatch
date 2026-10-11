@@ -8,6 +8,8 @@ import threading
 import time
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from starlette.responses import HTMLResponse
 
 from ..algorithms import ALGORITHMS
 from ..auth import User, require
@@ -16,11 +18,13 @@ from ..config import get_settings
 from ..deps import all_stores, get_planning, get_repairs, get_store
 from ..http import etag_json
 from ..models import Weights
+from ..observability import docs_csp
 from ..version import APP_VERSION, COMMIT
 
 router = APIRouter(prefix="/api", tags=["system"])
 log = logging.getLogger("fab")
 HEALTH_CACHE_S = 10.0  # one check per instance per 10 s, however often /health is called
+GUEST_IDLE_DAYS = 30  # anonymous accounts with no sign-in and no shift activity for this long are deleted
 _health: dict = {}
 _health_lock = threading.Lock()
 
@@ -47,6 +51,26 @@ def index() -> dict:
         "health": "/api/health",
         "ui": "run `npm run dev` in frontend/ and open http://localhost:5173",
     }
+
+
+def _docs_page(html: HTMLResponse) -> HTMLResponse:
+    """A docs page with the policy that allows exactly what it loads (RequestContext leaves a CSP
+    a route set alone, and gives every other response the no-script API policy)."""
+    html.headers["Content-Security-Policy"] = docs_csp(html.body.decode())
+    return html
+
+
+@root.get("/api/docs", include_in_schema=False)
+def swagger_ui() -> HTMLResponse:
+    # No OAuth2 flow here (bearer tokens come from the app), so no redirect page is linked.
+    return _docs_page(
+        get_swagger_ui_html(openapi_url="/api/openapi.json", title="Fab Dispatch API", oauth2_redirect_url=None)
+    )
+
+
+@root.get("/api/redoc", include_in_schema=False)
+def redoc() -> HTMLResponse:
+    return _docs_page(get_redoc_html(openapi_url="/api/openapi.json", title="Fab Dispatch API"))
 
 
 @router.get("/livez", include_in_schema=False)
@@ -110,9 +134,15 @@ def prune(authorization: str | None = Header(None)) -> dict:
     if not secret or not hmac.compare_digest(authorization or "", f"Bearer {secret}"):
         raise HTTPException(401, "unauthorised")
     deleted: dict[str, int] = {}
-    for store in all_stores():
+    stores = all_stores()
+    for store in stores:
         for table, n in store.prune().items():
             deleted[table] = deleted.get(table, 0) + n
+    # Guest accounts live with the default database (Supabase); a guest active in any fab's
+    # database is kept. A no-op on SQLite and on a Postgres without an auth schema (Neon).
+    active = set().union(*(store.recent_actors(GUEST_IDLE_DAYS) for store in stores))
+    deleted["guest_accounts"] = stores[0].prune_guest_accounts(GUEST_IDLE_DAYS, keep=active)
+    log.info("prune: %s", ", ".join(f"{k}={v}" for k, v in sorted(deleted.items())))
     return {"deleted": deleted}
 
 

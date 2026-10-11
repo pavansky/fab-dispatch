@@ -6,120 +6,52 @@
   "message": "dispatcher@demo.local started the shift with 6 known jobs and 6 engineers.",
   "data": {},
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-05T17:43:54.780520+00:00",
+  "at": "2026-10-11T15:28:20.825787+00:00",
   "version": 1
  },
  {
   "id": 2,
   "kind": "replanned",
   "clock": 0.0,
-  "message": "Re-planned (shift start) with ALNS (adaptive large neighbourhood search): 6 newly assigned, 0 moved between engineers, 0 dropped, 0 unassigned.",
+  "message": "Re-planned (shift start) with ALNS (adaptive large neighbourhood search): 5 newly assigned, 0 moved between engineers, 0 dropped, 1 unassigned.",
   "data": {
    "moved": [],
    "newly_assigned": [
-    "J005",
-    "J006",
-    "J012",
-    "J013",
-    "J017",
-    "J018"
+    "J002",
+    "J004",
+    "J010",
+    "J014",
+    "J015"
    ],
    "dropped": [],
-   "runtime_ms": 2.91,
+   "runtime_ms": 12.86,
    "assignments": {
-    "J005": "E03",
-    "J006": "E01",
-    "J012": "E01",
-    "J013": "E03",
-    "J017": "E01",
-    "J018": "E05"
+    "J002": "E03",
+    "J004": "E03",
+    "J010": "E03",
+    "J014": "E04",
+    "J015": "E04"
    }
   },
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-05T17:43:54.783539+00:00",
+  "at": "2026-10-11T15:28:20.839148+00:00",
   "version": 1
  },
  {
   "id": 3,
-  "kind": "job_reported",
-  "clock": 1.0,
-  "message": "J016 reported: LIT-03B (bottleneck tool down).",
-  "data": {
-   "job_id": "J016",
-   "priority": 3
-  },
-  "actor": "system",
-  "at": "2026-10-05T17:43:54.786177+00:00",
-  "version": 2
- },
- {
-  "id": 4,
-  "kind": "replanned",
-  "clock": 1.0,
-  "message": "Re-planned (1 new job(s)) with ALNS (adaptive large neighbourhood search): 1 newly assigned, 0 moved between engineers, 0 dropped, 0 unassigned.",
-  "data": {
-   "moved": [],
-   "newly_assigned": [
-    "J016"
-   ],
-   "dropped": [],
-   "runtime_ms": 3.72,
-   "assignments": {
-    "J016": "E01"
-   }
-  },
-  "actor": "dispatcher@demo.local",
-  "at": "2026-10-05T17:43:54.790005+00:00",
-  "version": 2
- },
- {
-  "id": 5,
-  "kind": "job_reported",
-  "clock": 12.0,
-  "message": "J007 reported: DEP-01B (tool down).",
-  "data": {
-   "job_id": "J007",
-   "priority": 2
-  },
-  "actor": "system",
-  "at": "2026-10-05T17:43:54.790011+00:00",
-  "version": 2
- },
- {
-  "id": 6,
-  "kind": "replanned",
-  "clock": 12.0,
-  "message": "Re-planned (1 new job(s)) with ALNS (adaptive large neighbourhood search): 1 newly assigned, 0 moved between engineers, 0 dropped, 0 unassigned.",
-  "data": {
-   "moved": [],
-   "newly_assigned": [
-    "J007"
-   ],
-   "dropped": [],
-   "runtime_ms": 3.5,
-   "assignments": {
-    "J007": "E03"
-   }
-  },
-  "actor": "dispatcher@demo.local",
-  "at": "2026-10-05T17:43:54.793596+00:00",
-  "version": 2
- },
- {
-  "id": 7,
   "kind": "clock",
   "clock": 60.0,
   "message": "Clock at 60 min.",
   "data": {
    "done": 0,
-   "in_progress": 2,
-   "planned": 6,
-   "unassigned": 0,
-   "known": 8,
+   "in_progress": 1,
+   "planned": 4,
+   "unassigned": 1,
+   "known": 6,
    "total": 18
   },
   "actor": "dispatcher@demo.local",
-  "at": "2026-10-05T17:43:54.793606+00:00",
+  "at": "2026-10-11T15:28:20.848102+00:00",
   "version": 2
  }
 ]

@@ -1,17 +1,29 @@
 // One definition per metric, used by every view so labels, units and "better" never drift.
 export const METRICS = {
   coverage_pct: { label: 'Jobs covered', short: 'Jobs', unit: '%', better: 'max' },
-  critical_coverage_pct: { label: 'Bottleneck downs covered', short: 'Bottleneck', unit: '%', better: 'max' },
+  critical_coverage_pct: {
+    label: 'Bottleneck downs covered', short: 'Bottleneck', unit: '%', better: 'max',
+    // null from the API when the shift has no bottleneck downs: nothing to cover, so no rate.
+    absent: 'no bottleneck downs',
+  },
   priority_weighted_coverage_pct: { label: 'Priority-weighted coverage', unit: '%', better: 'max' },
   mean_response_min: {
     label: 'Response to tool-downs', short: 'Response', unit: 'min', better: 'min',
     help: 'Mean wait from report to start, over the tool-downs this plan serves. Unserved ones are not counted, so read it with coverage.',
+    absent: 'no tool-downs served',
   },
+  response_p95_min: {
+    label: 'Response to tool-downs, p95', short: 'Response p95', unit: 'min', better: 'min',
+    help: '95th percentile of the wait from report to start, over the tool-downs this plan serves.',
+    absent: 'no tool-downs served',
+  },
+  unserved_downs: { label: 'Tool-downs left unserved', short: 'Unserved downs', unit: '', better: 'min' },
   walk_m_per_job: { label: 'Walking per job', unit: 'm', better: 'min' },
   wait_min_total: { label: 'Idle wait, all engineers', unit: 'min', better: 'min' },
   overqualification_levels: { label: 'Over-qualification', unit: 'levels', better: 'min' },
   utilization_pct: { label: 'Engineer utilisation', unit: '%', better: 'max' },
   workload_std: { label: 'Workload spread (std)', unit: 'jobs', better: 'min' },
+  workload_minutes_std: { label: 'Workload spread (min)', short: 'Workload', unit: 'min', better: 'min', help: 'Standard deviation of busy minutes across engineers.' },
   objective: {
     label: 'Total cost (objective)', short: 'Cost', unit: 'pts', better: 'min',
     help: 'What every strategy minimises: operating cost plus the workload-balance term.',
@@ -39,15 +51,32 @@ export const ALGO_BLURB = {
 
 export const ALGO_KIND = { greedy: 'Constructive', hungarian: 'Assignment', regret: 'Constructive', alns: 'Metaheuristic', pyvrp: 'Metaheuristic' }
 
+/** A metric that is a number; null, undefined and NaN (not reported, or nothing to measure) are "absent". */
+export const hasMetric = (m, key) => Number.isFinite(m?.[key])
+
+/** What to show for a metric with no value: the metric's own reason, or "n/a". */
+export const absentText = (key) => METRICS[key]?.absent ?? 'n/a'
+
+/** The best value on `key` among results that have one; undefined when none does. */
 export function bestOf(results, key) {
-  const vals = results.map((r) => r.metrics[key])
+  const vals = results.map((r) => r.metrics[key]).filter(Number.isFinite)
+  if (!vals.length) return undefined
   return METRICS[key].better === 'max' ? Math.max(...vals) : Math.min(...vals)
 }
 
-/** Signed improvement of `value` over `base`: positive is always "better". */
+/** Signed improvement of `value` over `base`: positive is always "better"; NaN when either is absent. */
 export function improvement(key, value, base) {
+  if (!Number.isFinite(value) || !Number.isFinite(base)) return NaN
   const d = value - base
   return METRICS[key].better === 'max' ? d : -d
+}
+
+/**
+ * The workload-spread metric to show: minutes (`workload_minutes_std`) when every result
+ * reports it, else the older jobs-based `workload_std` (older API responses and fixtures).
+ */
+export function workloadKey(results) {
+  return results.length > 0 && results.every((r) => hasMetric(r.metrics, 'workload_minutes_std')) ? 'workload_minutes_std' : 'workload_std'
 }
 
 /**

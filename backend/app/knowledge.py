@@ -16,7 +16,15 @@ tool family. That gives:
 * the **likely root cause and fix** to brief the engineer with: the cause with the largest
   similarity-weighted share of the neighbours. ``cause_share`` is that share and
   ``confidence`` is the mean cosine similarity of the closest five neighbours (how close the
-  matches are). Neither is a calibrated probability.
+  matches are). Neither is a calibrated probability. ``match`` labels the confidence in words:
+  ``close`` (>= ``CLOSE_SIMILARITY``) or ``partial``.
+
+**Cold start.** A symptom that shares little with the history ("tool is down") still has
+nearest neighbours, but they are different faults. When the best neighbour scores below
+``MIN_SIMILARITY`` there is **no prediction**: the answer carries ``reason`` and the nearest
+few records as ``weak_matches``, labelled as such, so a caller can show them without
+presenting a guess as a forecast. On held-out generated repairs the best neighbour scores
+0.78 or more; vague text scores 0.5 or less.
 
 Runs with no key and no server by default: an exact cosine search in NumPy over a
 dependency-free hashed n-gram embedding. At 1,800 repairs per fab that is one ~1 ms matrix
@@ -62,6 +70,9 @@ HISTORY_SIZE = 1800
 HISTORY_SEED = 2026
 DIM = 512
 OBSERVATION_RATE = 0.6  # share of reports with an observation that points to the root cause
+MIN_SIMILARITY = 0.35  # best neighbour below this: no prediction, only weak matches
+CLOSE_SIMILARITY = 0.7  # mean similarity of the closest five at or above this: a close match
+WEAK_MATCHES = 3  # how many nearest records to show when there is no prediction
 
 
 def cause_observations(cause: FaultCause) -> tuple[str, str]:
@@ -308,8 +319,18 @@ class RepairIndex:
         only them (the history spans a larger pool than any one shift)."""
         # A neighbour with no shared feature (score 0) says nothing about this fault.
         hits = [(score, p) for score, p in self.backend.search(profile, family, symptom, k) if score > 0]
-        if not hits:
-            return {"neighbours": [], "prediction": None}
+        index = {"mode": self.mode, "embedder": self.embedder.name, "size": HISTORY_SIZE}
+        if not hits or hits[0][0] < MIN_SIMILARITY:
+            # Cold start: the nearest records are different faults, so a weighted mean of their
+            # times would be a guess dressed as a forecast. Show them only as weak matches.
+            return {
+                "prediction": None,
+                "reason": "no similar repair history",
+                "weak_matches": [self._record(score, p) for score, p in hits[:WEAK_MATCHES]],
+                "experienced_engineers": [],
+                "neighbours": [],
+                "index": index,
+            }
         weights = [max(score, 0.0) ** 2 for score, _ in hits]
         minutes = [p["minutes"] for _, p in hits]
         total = sum(weights) or 1.0
@@ -324,13 +345,15 @@ class RepairIndex:
             on_shift = set(roster)
             engineers = {e: n for e, n in engineers.items() if e in on_shift}
         top_cause = max(causes, key=causes.get)
+        confidence = round(statistics.fmean(score for score, _ in hits[:5]), 3)
         return {
             "prediction": {
                 "minutes": round(mean),
                 "p10": round(q[0]),
                 "p90": round(q[-1]),
                 # Mean cosine similarity of the closest five: how close the matches are.
-                "confidence": round(statistics.fmean(score for score, _ in hits[:5]), 3),
+                "confidence": confidence,
+                "match": "close" if confidence >= CLOSE_SIMILARITY else "partial",
                 "likely_cause": top_cause,
                 "cause_share": round(causes[top_cause] / total, 2),  # weighted share, not a probability
                 "neighbours": len(hits),
@@ -340,12 +363,13 @@ class RepairIndex:
                 ),
             },
             "experienced_engineers": sorted(engineers.items(), key=lambda kv: -kv[1])[:5],
-            "neighbours": [
-                {
-                    "score": round(score, 3),
-                    **{k: p[k] for k in ("id", "code", "symptom", "cause", "fix", "minutes", "engineer")},
-                }
-                for score, p in hits[:6]
-            ],
-            "index": {"mode": self.mode, "embedder": self.embedder.name, "size": HISTORY_SIZE},
+            "neighbours": [self._record(score, p) for score, p in hits[:6]],
+            "index": index,
+        }
+
+    @staticmethod
+    def _record(score: float, p: dict) -> dict:
+        return {
+            "score": round(score, 3),
+            **{k: p[k] for k in ("id", "code", "symptom", "cause", "fix", "minutes", "engineer")},
         }

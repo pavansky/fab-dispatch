@@ -72,7 +72,7 @@ def generate(
     for i in range(n_engineers):
         primary = constraint if i < n_constraint else others[(i - n_constraint) % len(others)]
         skills = {primary: rng.choice([2, 3, 3] if primary == constraint else [2, 2, 3])}
-        for extra in rng.sample([f for f in all_families if f != primary], k=rng.choice([1, 1, 2])):
+        for extra in rng.sample([f for f in all_families if f != primary], k=rng.choice(cfg.cross_training)):
             # Cross-training onto the constraint family is rare and shallow: level 1 is enough
             # for some of its PMs, never for a tool-down on it.
             skills[extra] = 1 if extra == constraint else rng.choice([1, 2])
@@ -96,8 +96,10 @@ def generate(
         x, y = _point_in(rng, profile, fam)
         tool = f"{profile.family(fam).prefix}-{rng.randint(1, 4):02d}{rng.choice('ABCD')}"
         if rng.random() < cfg.down_share:
-            # The constraint family and anything flagged as a bottleneck get the tightest SLA.
-            critical = fam == constraint or rng.random() < 0.25
+            # Priority 3 is reserved for tool-downs on the constraint (bottleneck) family, as the
+            # glossary and the "bottleneck downs covered" metric define it; every other tool-down
+            # is priority 2 with the wider response window.
+            critical = fam == constraint
             earliest = rng.randint(0, max(0, shift_len - 120))
             priority = 3 if critical else 2
             latest = earliest + (cfg.sla_critical if critical else cfg.sla_down)

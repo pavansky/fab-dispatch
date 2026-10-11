@@ -9,21 +9,25 @@ import { areasOf, familyAt, familyLabel, familyPrefix, isConstraint, setActiveFa
 import { GOALS, recommend } from './lib/analysis.js'
 import { durationsById, responseTargets, withDurations } from './lib/scenario.js'
 import { HelpContext, TOUR_KEY, parseHelpTarget } from './lib/help.js'
-import FloorPlan from './components/FloorPlan.jsx'
 import Inspector from './components/Inspector.jsx'
 import Overview from './components/Overview.jsx'
-import Schedule from './components/Schedule.jsx'
-import Workforce from './components/Workforce.jsx'
-import Benchmark from './components/Benchmark.jsx'
-import LiveShift from './components/LiveShift.jsx'
 import TopBar from './components/TopBar.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Tour from './components/Tour.jsx'
 
-// Help and the assistant load on first use, keeping Markdown rendering out of the main bundle.
+// Views other than the overview, help and the assistant load on first use: the sign-in page
+// and the first paint of the workspace need none of them (and Markdown stays out of the
+// entry chunk).
+const FloorPlan = lazy(() => import('./components/FloorPlan.jsx'))
+const Schedule = lazy(() => import('./components/Schedule.jsx'))
+const Workforce = lazy(() => import('./components/Workforce.jsx'))
+const Benchmark = lazy(() => import('./components/Benchmark.jsx'))
+const LiveShift = lazy(() => import('./components/LiveShift.jsx'))
 const HelpCenter = lazy(() => import('./components/HelpCenter.jsx'))
 const Assistant = lazy(() => import('./components/Assistant.jsx'))
 const About = lazy(() => import('./components/About.jsx'))
+
+const ViewLoading = () => <div className="card empty" role="status"><span className="solving"><span className="spinner" />Loading view…</span></div>
 
 const TABS = [['overview', 'Overview'], ['floor', 'Floor plan'], ['schedule', 'Schedule'], ['workforce', 'Workforce'], ['live', 'Live dispatch'], ['benchmark', 'Benchmark']]
 const FAB_KEY = 'fab-dispatch-fab'
@@ -203,7 +207,7 @@ function Workspace({ theme, setTheme }) {
     ...scenario, engineers: scenario.engineers.filter((e) => !offShift.has(e.id)),
   }), [scenario, offShift])
 
-  const { results, pending, errors: planErrors, cacheInfo, done, stale } = usePlans(effective, weights)
+  const { results, pending, errors: planErrors, rateLimited, cacheInfo, done, stale, retry: retryPlans } = usePlans(effective, weights)
   const busy = pending.size > 0
   // Until every strategy has answered for the inputs on screen, the pick is provisional (and says so).
   const reco = results.length ? recommend(results, goal, { complete: done, stale, waiting: ALGO_ORDER.filter((a) => pending.has(a)) }) : null
@@ -327,7 +331,12 @@ function Workspace({ theme, setTheme }) {
 
         <main className="content">
           {error && <div className="error-bar" role="alert">{error} <button className="btn ghost" onClick={() => setError(null)}>Dismiss</button></div>}
-          {Object.entries(planErrors).map(([a, msg]) => <div key={a} className="error-bar" role="alert">{ALGO_SHORT[a]}: {msg}</div>)}
+          {rateLimited.length > 0 && (
+            <div className="notice-bar" role="status">
+              The API is rate-limiting re-plans right now ({rateLimited.length === ALGO_ORDER.length ? 'every strategy' : rateLimited.map((a) => ALGO_SHORT[a]).join(', ')}). Give it a moment, then <button className="btn ghost" onClick={retryPlans}>Try again</button>
+            </div>
+          )}
+          {Object.entries(planErrors).filter(([a]) => !rateLimited.includes(a)).map(([a, msg]) => <div key={a} className="error-bar" role="alert">{ALGO_SHORT[a]}: {msg}</div>)}
           <nav className="nav" role="tablist" aria-label="Views" data-tour="tabs">
             {TABS.map(([k, label], i) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>
@@ -336,6 +345,7 @@ function Workspace({ theme, setTheme }) {
             ))}
           </nav>
 
+          <Suspense fallback={<ViewLoading />}>
           {tab === 'live' ? <LiveShift key={profile.id} scenario={effective} preset={applied?.preset} weights={weights} areas={areas} profile={profile} canDispatch={canDispatch} onError={setError} /> : results.length === 0 ? <div className="card empty"><span className="solving"><span className="spinner" />Solving the shift…</span></div> : (
             <>
               {tab === 'overview' && (
@@ -449,6 +459,7 @@ function Workspace({ theme, setTheme }) {
               {tab === 'benchmark' && <Benchmark profile={profile} weights={weights} size={applied ?? params} canDispatch={canDispatch} />}
             </>
           )}
+          </Suspense>
         </main>
       </div>
 

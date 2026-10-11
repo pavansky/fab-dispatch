@@ -72,15 +72,27 @@
  "presets": {
   "normal": {
    "label": "Normal shift",
-   "description": "Typical mix of PMs and tool-downs; staffing roughly matches load."
+   "description": "Typical mix of PMs and tool-downs; staffing roughly matches load.",
+   "sla_critical": 40,
+   "sla_down": 120
   },
   "photo_crunch": {
    "label": "Photo crunch",
-   "description": "Stepper problems pile up while few engineers are certified on photo."
+   "description": "Stepper problems pile up while few engineers are certified on photo.",
+   "sla_critical": 40,
+   "sla_down": 120
   },
   "excursion": {
    "label": "Excursion / surge",
-   "description": "Mostly unplanned downs with tight response targets."
+   "description": "Mostly unplanned downs with tight response targets.",
+   "sla_critical": 25,
+   "sla_down": 60
+  },
+  "overstaffed": {
+   "label": "Overstaffed",
+   "description": "More certified engineers than the work needs (a larger photo-certified share, broad cross-training); the question is cost, not coverage.",
+   "sla_critical": 60,
+   "sla_down": 150
   }
  }
 }

@@ -1,7 +1,9 @@
 // Live dispatch through the whole app: start, drive the clock, stream events, roles.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clock } from '../lib/format.js'
+import { setTokenProvider } from '../api.js'
+import { RECONNECT_MS } from '../lib/stream.js'
 import { errorBody, fixtures, json, liveRoutes, mockApi, workspaceRoutes } from './api.js'
 import { FakeEventSource, renderApp, signInAs } from './app.jsx'
 
@@ -12,7 +14,9 @@ const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 beforeEach(() => {
   FakeEventSource.instances = []
   vi.stubGlobal('EventSource', FakeEventSource)
+  RECONNECT_MS.first = 20 // reconnect fast in tests; the doubling and cap are tested on the values
 })
+afterEach(() => { RECONNECT_MS.first = 1000 })
 
 async function openLive(role = 'dispatcher', extra = {}) {
   const ctx = await signInAs(role, { ...workspaceRoutes(), ...liveRoutes(), ...extra })
@@ -46,16 +50,76 @@ describe('live dispatch', () => {
     expect(screen.getByRole('button', { name: 'Play' })).toBeEnabled()
   })
 
-  it('subscribes to the shift stream and shows each event in the log', async () => {
+  it('subscribes to the shift stream with a short-lived ticket and shows each event in the log', async () => {
     const ctx = await openLive()
     await startShift(ctx)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
     const es = FakeEventSource.latest()
-    expect(es.url).toBe(`/api/shifts/${id}/stream?access_token=demo-dispatcher`)
+    expect(ctx.api.find('POST', `/shifts/${id}/stream-ticket`)).toHaveLength(1)
+    expect(es.url).toBe(`/api/shifts/${id}/stream?ticket=ticket-1`)
+    expect(es.url).not.toContain('access_token') // the long-lived token stays out of URLs and logs
     await waitFor(() => expect(screen.getByText('live')).toBeInTheDocument())
     const event = shiftEvents.find((e) => e.kind === 'replanned')
     es.emit(event)
     expect(await within(screen.getByRole('region', { name: 'Dispatch log' })).findByText(new RegExp(`^${escape(event.message)}`))).toBeInTheDocument()
     await waitFor(() => expect(ctx.api.find('GET', `/shifts/${id}`).length).toBeGreaterThan(1)) // refetch on event
+  })
+
+  it('reopens a dropped stream with a new ticket, resuming after the last event, and backs off', async () => {
+    const live = liveRoutes()
+    const stamps = []
+    let failTickets = 0
+    const ctx = await openLive('dispatcher', {
+      [`POST /shifts/${id}/stream-ticket`]: (req) => {
+        stamps.push(Date.now())
+        return failTickets-- > 0 ? json(503, errorBody('unavailable', 'down')) : live[`POST /shifts/${id}/stream-ticket`](req)
+      },
+    })
+    await startShift(ctx)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    const first = FakeEventSource.latest()
+    await waitFor(() => expect(screen.getByText('live')).toBeInTheDocument())
+    first.emit({ ...shiftEvents[0], id: 7 })
+    first.onerror()
+    expect(first.closed).toBe(true) // EventSource's own retry would reuse the expired ticket
+    await waitFor(() => expect(screen.getByText('reconnecting')).toBeInTheDocument())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
+    const second = FakeEventSource.latest()
+    expect(second.url).toBe(`/api/shifts/${id}/stream?ticket=ticket-2&after=7`)
+    expect(stamps).toHaveLength(2)
+    await waitFor(() => expect(screen.getByText('live')).toBeInTheDocument())
+    // While no ticket can be had, the waits double: 20, 40, 80 ms here (1, 2, 4 s in the app).
+    failTickets = 2
+    second.onerror()
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(3), { timeout: 2000 })
+    expect(stamps).toHaveLength(5)
+    expect(stamps[3] - stamps[2]).toBeGreaterThanOrEqual(35)
+    expect(stamps[4] - stamps[3]).toBeGreaterThanOrEqual(70)
+    expect(FakeEventSource.latest().url).toBe(`/api/shifts/${id}/stream?ticket=ticket-3&after=7`)
+  })
+
+  it('falls back to the token in the query where the API has no tickets, read fresh at each connect', async () => {
+    const ctx = await openLive('dispatcher', { [`POST /shifts/${id}/stream-ticket`]: json(404, errorBody('not_found', 'no such route')) })
+    await startShift(ctx)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    expect(FakeEventSource.latest().url).toBe(`/api/shifts/${id}/stream?access_token=demo-dispatcher`)
+    setTokenProvider(() => 'rotated-token') // Supabase rotated the token while the stream was up
+    FakeEventSource.latest().onerror()
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
+    expect(FakeEventSource.latest().url).toBe(`/api/shifts/${id}/stream?access_token=rotated-token`)
+  })
+
+  it('keeps trying when no ticket can be had, instead of dying', async () => {
+    let fail = true
+    const ctx = await openLive('dispatcher', {
+      [`POST /shifts/${id}/stream-ticket`]: () => (fail ? json(503, errorBody('unavailable', 'down')) : { ticket: 'late', expires_in: 90 }),
+    })
+    await startShift(ctx)
+    await waitFor(() => expect(ctx.api.find('POST', `/shifts/${id}/stream-ticket`).length).toBeGreaterThan(1))
+    expect(FakeEventSource.instances).toHaveLength(0)
+    fail = false
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1), { timeout: 2000 })
+    expect(FakeEventSource.latest().url).toContain('ticket=late')
   })
 
   it('raises an alert when a bottleneck tool goes down', async () => {
@@ -74,7 +138,45 @@ describe('live dispatch', () => {
     const call = ctx.api.find('POST', `/shifts/${id}/advance`)[0]
     expect(call.body).toEqual({ minutes: 60 })
     expect(call.headers['Idempotency-Key']).toBeTruthy()
+    expect(call.headers['If-Match']).toBe(`"${shift.version}"`) // the version this view had seen
     expect(screen.getByText(/Clock driven by/)).toHaveTextContent('Clock driven by you')
+  })
+
+  it("refuses to write over someone else's change: shows the latest shift, says so, never retries", async () => {
+    const { events: _e, ...advanced } = shiftAdvanced
+    const { events: _c, ...base } = shift
+    let current = base // version 1 until someone else advances the clock behind this view's back
+    const ctx = await openLive('dispatcher', {
+      [`GET /shifts/${id}`]: () => json(200, current, { etag: `"${current.version}"` }),
+      [`POST /shifts/${id}/advance`]: ({ headers }) => {
+        if (headers['If-Match'] === `"${current.version}"` && current === advanced) return shiftAdvanced
+        current = advanced // another dispatcher's write won the race
+        return json(409, errorBody('conflict', `shift changed (now version ${advanced.version}); reload and retry`))
+      },
+    })
+    await startShift(ctx)
+    expect(screen.getByText('Shift clock').nextSibling).toHaveTextContent(clock(shift.state.clock))
+    const reads = ctx.api.find('GET', `/shifts/${id}`).length
+    await ctx.user.click(screen.getByRole('button', { name: '+1 h' }))
+    expect(await screen.findByText('Someone else changed this shift; showing the latest')).toBeInTheDocument()
+    await waitFor(() => expect(ctx.api.find('GET', `/shifts/${id}`).length).toBeGreaterThan(reads))
+    await waitFor(() => expect(screen.getByText('Shift clock').nextSibling).toHaveTextContent(clock(advanced.state.clock)))
+    expect(ctx.api.find('POST', `/shifts/${id}/advance`)).toHaveLength(1) // no blind retry
+    // The next write pins the version just shown.
+    await ctx.user.click(screen.getByRole('button', { name: '+1 h' }))
+    await waitFor(() => expect(ctx.api.find('POST', `/shifts/${id}/advance`)).toHaveLength(2))
+    expect(ctx.api.find('POST', `/shifts/${id}/advance`)[1].headers['If-Match']).toBe(`"${advanced.version}"`)
+  })
+
+  it('pins the version on reported jobs and releases too', async () => {
+    const ctx = await openLive()
+    await startShift(ctx)
+    await ctx.user.click(screen.getByRole('button', { name: 'Play' }))
+    await waitFor(() => expect(ctx.api.find('POST', `/shifts/${id}/advance`).length).toBeGreaterThan(0), { timeout: 2500 })
+    await waitFor(() => expect(screen.getByText(/Clock driven by/)).toHaveTextContent('you'))
+    await ctx.user.click(screen.getByRole('button', { name: 'Pause' }))
+    await waitFor(() => expect(ctx.api.find('POST', `/shifts/${id}/release`)).toHaveLength(1))
+    expect(ctx.api.find('POST', `/shifts/${id}/release`)[0].headers['If-Match']).toBe(`"${shiftAdvanced.version}"`)
   })
 
   it('shows a conflict as a notice, not an error page', async () => {
@@ -192,6 +294,7 @@ describe('live dispatch: actions', () => {
       expect(job.id).toMatch(/^L[0-9A-Z]{9}$/)
       expect(job).toMatchObject({ skill: 'etch', priority: 3, earliest: 0, latest: 45 })
       expect(ctx.api.find('POST', `/shifts/${id}/jobs`)[0].headers['Idempotency-Key']).toBeTruthy()
+      expect(ctx.api.find('POST', `/shifts/${id}/jobs`)[0].headers['If-Match']).toBe(`"${shift.version}"`)
     } finally {
       delete svg.createSVGPoint
       delete svg.getScreenCTM

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { authConfig, clearPlanCache, demoSignIn, getMe, setTokenProvider } from './api.js'
+import { authConfig, clearPlanCache, demoSignIn, getMe, setTokenProvider, setTokenRefresher } from './api.js'
 import { loadTurnstile } from './lib/captcha.js'
 import { LINKS } from './lib/links.js'
 
@@ -29,6 +29,17 @@ export function AuthProvider({ children }) {
   const signedIn = useRef(false)
   const supabase = useRef(null)
   setTokenProvider(() => token.current)
+  // A 401 from the API first tries to renew the Supabase session (the access token rotates
+  // every hour; a tab that slept through a rotation still holds the old one). Only when that
+  // fails does the API client raise auth:expired, which signs the user out below.
+  setTokenRefresher(async () => {
+    const client = supabase.current
+    if (!client) return null
+    const { data, error } = await client.auth.refreshSession()
+    const fresh = error ? null : data?.session?.access_token ?? null
+    if (fresh) token.current = fresh
+    return fresh
+  })
 
   const adopt = useCallback(async (accessToken) => {
     // Supabase announces the same session more than once (the stored session, then
@@ -87,7 +98,8 @@ export function AuthProvider({ children }) {
     return () => unsubscribe()
   }, [adopt])
 
-  // Any 401 from the API (expired or revoked session) signs the user out cleanly.
+  // A 401 the API could not cure by refreshing the session (revoked, or past the refresh
+  // token's life) signs the user out cleanly.
   useEffect(() => {
     const onExpired = () => { store.set(null); supabase.current?.auth.signOut(); adopt(null) }
     window.addEventListener('auth:expired', onExpired)

@@ -11,6 +11,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
+from .auth import stream_ticket_secret
 from .cache import ENGINE_VERSION
 from .config import get_settings
 from .help import load_articles
@@ -31,16 +32,17 @@ def create_app() -> FastAPI:
         description="Allocates equipment engineers to tool-downs and PMs in a semiconductor fab. "
         "Five strategies, from greedy to PyVRP, plus live re-dispatch and a grounded assistant. "
         f"Engine {ENGINE_VERSION}. Sign in at the app, then call the API with the session's bearer token.",
-        # Under /api so the same paths work locally and behind Vercel's /api rewrite.
-        docs_url="/api/docs",
-        redoc_url="/api/redoc",
+        # Under /api so the same paths work locally and behind Vercel's /api rewrite. The two
+        # docs pages are served by routes/system.py, which gives each its own Content-Security-Policy.
+        docs_url=None,
+        redoc_url=None,
         openapi_url="/api/openapi.json",
     )
     # The last middleware added is the outermost. CORS goes outside RequestContext, so even the
     # 500 that RequestContext answers for an unhandled error carries CORS headers (otherwise the
     # browser reports an opaque CORS failure instead of the error envelope).
     app.add_middleware(GZipMiddleware, minimum_size=1024)
-    app.add_middleware(RequestContext)
+    app.add_middleware(RequestContext, hsts=settings.env == "production")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -62,6 +64,7 @@ def create_app() -> FastAPI:
             413: "too_large",
             422: "invalid",
             429: "rate_limited",
+            503: "unavailable",
         }.get(exc.status_code, "error")
         return JSONResponse(
             error_body(code, str(exc.detail), request_id.get()),
@@ -90,6 +93,7 @@ def create_app() -> FastAPI:
     ):
         app.include_router(r)
     load_articles()  # broken help content (bad link, missing title) fails at startup, not in front of users
+    stream_ticket_secret(settings)  # warns at startup, not at the first stream, when tickets are per process
     log.info("fab-dispatch %s ready (env=%s)", ENGINE_VERSION, settings.env)
     return app
 

@@ -149,5 +149,7 @@ class AllocationResult(BaseModel):
     assignments: list[Assignment]
     unassigned: list[Unassigned]
     routes: list[Route]
-    metrics: dict[str, float]
+    metrics: dict[str, float | None] = Field(
+        description="null where a metric has no basis yet, e.g. critical_coverage_pct with no priority-3 work"
+    )
     solver: dict = Field(default_factory=dict, description="search statistics, e.g. iterations")

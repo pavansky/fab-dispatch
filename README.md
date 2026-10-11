@@ -17,7 +17,7 @@ greedy to a state-of-the-art vehicle-routing solver, compared live, with every d
 [![Docs](https://github.com/pavansky/fab-dispatch/actions/workflows/docs.yml/badge.svg?branch=main)](https://pavansky.github.io/fab-dispatch/)
 [![Uptime](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/pavansky/fab-dispatch/actions/workflows/uptime.yml)
 [![Release](https://img.shields.io/github/v/release/pavansky/fab-dispatch?color=020202)](CHANGELOG.md)
-[![Tests](https://img.shields.io/badge/tests-455-ef6f2e)](#testing)
+[![Tests](https://img.shields.io/badge/tests-606-ef6f2e)](#testing)
 [![License: MIT](https://img.shields.io/badge/license-MIT-020202)](LICENSE)
 
 [**Quick start**](#quick-start) · [**Review in 10 minutes**](https://pavansky.github.io/fab-dispatch/reviewers/) · [Requirements map](#requirements-map) · [Results](#results) ·
@@ -183,6 +183,11 @@ https://fab-dispatch.vercel.app runs the same build on Vercel with Supabase (Pos
 Press **?** in the app for help, **/** to ask the assistant, and open **About & support** in the
 user menu for the version, live status, docs and support links.
 
+The first request after an idle spell would otherwise wait for a serverless cold start and for the
+Neon database to wake, so a [GitHub Actions cron](.github/workflows/keep-warm.yml) pings the API
+every five minutes. That is what keeps the first load fast; it also means the database never scales
+to zero, and the app would feel slower without it.
+
 ## A 5-minute tour
 
 1. **Overview.** The five strategies solve the same shift in parallel. The top card names the
@@ -210,10 +215,11 @@ user menu for the version, live status, docs and support links.
 
 | Symptom | Fix |
 |---|---|
-| `npm run dev` fails with a syntax or engine error | Node is too old. Install Node 22 LTS. |
+| `Python 3.11–3.14 is required` (from `run.py`) | Install a supported Python, then run it explicitly, for example `python3.12 run.py`. |
+| `Node.js 20.19+ is required` (from `run.py`), or `npm run dev` fails with a syntax or engine error | Node is too old. Install Node 22 LTS from [nodejs.org](https://nodejs.org). |
 | `pip install` tries to compile numpy, scipy or pyvrp | Your Python is outside 3.11–3.14, or pip is old: `python -m pip install --upgrade pip` and retry. |
-| *Can't reach the API. Is the backend running?* | Start the API (step 2). The UI proxies `/api` to port 8000. |
-| `address already in use` on 8000 or 5173 | Another process holds the port. Stop it (`lsof -i :8000` on macOS/Linux), then restart. |
+| *Can't reach the API. Is the backend running?* | Start the API (step 2 of the manual steps), or check the terminal running `run.py`. The UI proxies `/api` to port 8000. |
+| `address already in use` on 8000 or 5173, or `Is port 8000 free?` from `run.py` | Another process holds the port. Stop it (`lsof -i :8000` on macOS/Linux), then restart. |
 | **Run benchmark** or **Start live shift** is disabled | You're signed in as a viewer. Use the avatar menu to sign out, then **Continue as Dispatcher**. |
 | You want a clean slate | Stop the API, delete `backend/data/`, start it again. |
 
@@ -234,18 +240,22 @@ user menu for the version, live status, docs and support links.
   Production behaviours included: one clock driver at a time, retry-safe actions (idempotency keys),
   presence, an audit trail, recent shifts to rejoin, offline handling.
 - **Every decision explained.** For any job you can see who was chosen, the runner-up, why other
-  engineers were rejected, the cost breakdown, and a **repair-history** prediction (Qdrant) of how
+  engineers were rejected, the cost breakdown, and a **repair-history** prediction (k-NN over past repairs, with an honest "no similar history" when the symptom is vague) of how
   long the fault will take and who has fixed it before.
 - **Help built in, and an assistant that cites its sources.** A searchable help center, contextual
   ⓘ links, a first-run tour and keyboard shortcuts. **Ask Dispatch** answers questions about the shift
-  on screen ("why is J006 unassigned?") and the app, from the help articles and the real plans,
-  always with sources. It says "I don't know" rather than guess: measured on an evaluation set in CI.
-  Runs locally with no key; an LLM can optionally reword answers, never add facts.
+  on screen ("why is J006 unassigned?", "how long will J006 take?") and the app, from the real plans,
+  the repair index and lexical retrieval over the help articles (hashed n-grams, no learned model),
+  always with sources. It says "I don't know" or "I can't do that" rather than guess: measured on an
+  evaluation set in CI, end to end. Runs locally with no key; an LLM can optionally reword answers,
+  and the rewrite is checked against the draft so it can't add facts.
 - **Works on a phone.** The controls become a drawer, the tabs scroll, the floor plan works by touch,
   and the light theme is the default.
-- **Tested at every layer.** 320 backend tests, 102 frontend component tests rendered against real API
-  responses, and 33 Playwright end-to-end tests that drive the real app on desktop and on a phone,
-  including WCAG 2.1 AA accessibility checks on every screen.
+- **Tested at every layer.** 411 backend tests, 167 frontend component tests rendered against real API
+  responses, and 28 Playwright end-to-end tests that drive the real app on desktop and on a phone,
+  including WCAG 2.1 AA accessibility checks on every screen. The study scripts behind the numbers
+  in [ANALYSIS.md](docs/ANALYSIS.md) are smoke-tested and coverage-counted too, and these counts
+  are checked by a test, not typed in.
 - **Engineered for change.** Versioned database migrations, CI with coverage, security audits and a
   Postgres matrix, a release pipeline that promotes UAT-tested commits to production, and
   post-deploy smoke tests.
@@ -279,10 +289,10 @@ flowchart LR
   AUTH -->|"POST /api/shifts/*"| LIVE["Live dispatch<br/>lease · idempotency · audit"]
   LIVE --> ENG
   UI -.->|SSE stream| LIVE
-  AUTH -->|POST /api/repairs/*| KN["Repair history<br/>k-NN on Qdrant, per fab"]
+  AUTH -->|POST /api/repairs/*| KN["Repair history<br/>exact k-NN in NumPy, per fab<br/>(Qdrant optional)"]
   AUTH -->|POST /api/assistant/ask| AS["Assistant<br/>intents → tools → cited answer"]
   AS --> PS
-  AS --> HI["Help index<br/>hybrid search on Qdrant"]
+  AS --> HI["Help index<br/>lexical retrieval over hashed n-grams"]
   HELP[("Help articles<br/>Markdown")] --> HI
   PROF[("Fab profiles<br/>JSON")] --> ENG & KN
   PS & LIVE --> DB[("SQLite locally<br/>Postgres / Supabase in prod<br/>versioned migrations")]
@@ -303,16 +313,19 @@ comparison fair. Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Testing
 
-Three layers, all run in CI on every pull request:
+Three layers, all run in CI on every pull request (the counts below are checked by
+`tests/test_release.py` against the suites, so they cannot go stale):
 
 | Layer | Tool | Count | What it proves |
 |---|---|---|---|
-| Backend | pytest | **320** (11 need Postgres) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency |
-| Frontend components | Vitest + Testing Library | **102** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, account deletion, the crash screen, against **real API responses** |
-| End-to-end | Playwright | **33** (28 desktop, 5 phone) | The real API and UI together in Chromium: two browsers on one live shift, and axe-core WCAG 2.1 AA checks on every screen and panel |
+| Backend | pytest | **411** (11 need Postgres; 5 are slow and run on pushes to `main`) | Constraints, algorithms, optimality, API, auth, live dispatch, store and security, help, assistant quality and feedback, release consistency, the study scripts behind ANALYSIS.md |
+| Frontend components | Vitest + Testing Library | **167** | Every view and flow, sign-in paths, help, the assistant and its feedback, About & support, account deletion, the crash screen, against **real API responses** |
+| End-to-end | Playwright | **28** (23 desktop, 5 phone) | The real API and UI together in Chromium: two browsers on one live shift, and axe-core WCAG 2.1 AA checks on every screen and panel |
 
-Coverage: **94%** of the API (with Postgres, as CI measures it) and **88%** of the UI. CI fails below
-90% for the API, or below the UI floors in `frontend/vite.config.js`.
+CI enforces coverage floors rather than the README quoting a figure: **92%** over the API and
+its study scripts together (`--cov=app --cov=scripts`, [ci.yml](.github/workflows/ci.yml)), and
+85% lines / 80% statements / 75% functions / 70% branches for the UI
+([vite.config.js](frontend/vite.config.js)). The measured numbers are in every CI run's log.
 
 ```bash
 # Backend (from backend/, with the virtualenv active)
@@ -329,12 +342,22 @@ npm run test:e2e
 
 `make check` runs everything CI runs: lint, format, all three layers with coverage floors, dependency
 audits and the frontend build. To include the Postgres tests locally, point `FAB_TEST_PG_URL` at any
-Postgres database. To reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.md), run
+Postgres database. `pytest -m slow` (or `make slow`) runs the slow tests: the full-size optimality
+proof of every preset and the search solvers at the shipped budgets, a few minutes in all. To
+reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.md), run
 `python -m scripts.benchmark --seeds 20` from `backend/` (a few minutes).
 
 **What the tests cover**
-- **Hard constraints** re-derived from scratch for every strategy, on every preset of **every fab**.
-- **Optimality:** heuristics checked against the exact MILP optimum, and never allowed to beat it.
+- **Hard constraints** re-derived from scratch for every strategy, on every preset of **every fab**,
+  and for the exact solver whose plans every optimality claim is measured against.
+- **Optimality:** heuristics checked against the exact MILP optimum, and never allowed to beat it,
+  at full shift size for every preset (the normal preset on every run, the others on pushes to `main`).
+- **The evidence base:** every study script behind ANALYSIS.md (benchmark, scale, certified bounds,
+  the three industrial-AI studies) runs end to end at a tiny size in the suite, with its tables
+  checked for the expected keys and no heuristic beating a proven optimum.
+- **Shipped budgets:** the suites run ALNS and PyVRP at a fraction of the shipped iteration budgets to
+  stay fast; one slow test runs them at the real budgets on a full shift and checks feasibility,
+  determinism and that more search never costs more.
 - **Fab 1 golden test:** converting the hard-coded fab into a profile reproduces its scenarios byte for byte.
 - **Auth:** 401 without a token, forged and expired tokens rejected, 403 for viewers on dispatcher
   actions (in the API and in the browser), 404 across fabs, demo mode refused in production.
@@ -345,9 +368,11 @@ Postgres database. To reproduce every table in [docs/ANALYSIS.md](docs/ANALYSIS.
   from those fixtures, so the UI tests can't pass against stale data (`make fixtures` refreshes them).
 - **Phone layout:** the drawer, touch selection, no sideways scrolling on any view, and the user menu
   staying reachable.
-- **Assistant quality:** an evaluation set of real questions must cite the right article (≥ 90%; 100%
-  today), and every off-topic question must get "I don't know". Answers about a job match the plans
-  exactly. The optional LLM is tested to fall back to the grounded answer on any failure.
+- **Assistant quality:** an evaluation set of real questions, keyword phrasings and paraphrases, runs
+  end to end and must cite the right article (≥ 90%; 93% today), and every off-topic question, with
+  or without app vocabulary, must be declined. Answers about a job match the plans exactly. The
+  optional LLM is tested to fall back to the grounded answer on any failure and on any rewrite that
+  adds an id, a number or a strategy the draft didn't have.
 - **Every end-to-end test fails on any browser console error.**
 
 ## Production readiness
@@ -356,12 +381,12 @@ What a production AI application needs, and where to see it here.
 
 | Area | In place |
 |---|---|
-| **Access** | Supabase Auth (passwordless email code or link), one-click guest access, `viewer` / `dispatcher` roles, per-user fab access, Cloudflare Turnstile CAPTCHA |
-| **Data security** | Row-level security on every app table (closed to the public API), strict CSP, HSTS, rate limits, request size limits, secrets only in the platform |
+| **Access** | Supabase Auth (passwordless email code or link), `viewer` / `dispatcher` roles, per-user fab access, Cloudflare Turnstile CAPTCHA. Named users start as viewers (`FAB_DEFAULT_ROLE`) unless an admin or `FAB_DISPATCHER_EMAILS` says otherwise. On the hosted demo, one-click guests are **dispatchers by configuration** (`FAB_GUEST_ROLE=dispatcher`): they can start live shifts, drive the clock, report tool-downs and call engineers off, but only on shifts they started themselves; a real fab sets `none` or `viewer` |
+| **Data security** | App tables closed to Supabase's public API (RLS on with no policies, public grants revoked); tenant isolation by fab scoping in the API and a database per fab, not by RLS. CSP, HSTS and a no-script CSP on the API, rate limits in two layers (per instance + shared counter for signed-in users), request size limits, secrets only in the platform |
 | **Reliability** | Versioned migrations under a lock, optimistic concurrency, idempotent live actions, a clock lease, an SSE stream that resumes, cached plans |
 | **Operations** | Health and liveness endpoints, request ids, structured logs, daily data retention, post-deploy smoke tests, an [uptime check every 30 minutes](.github/workflows/uptime.yml) that opens an incident issue |
-| **Delivery** | CI on every PR (lint, 3 test layers, coverage floors, audits, accessibility, images), branch protection, tagged releases promoted UAT → production, Dependabot |
-| **AI quality** | A grounded assistant with sources and honest refusals, an [evaluation set](backend/tests/eval/assistant_eval.json) in CI (42/42), 👍/👎 feedback with stats, an [AI transparency page](https://pavansky.github.io/fab-dispatch/ai/), an optional LLM that can only reword |
+| **Delivery** | CI on every PR (lint, 3 test layers, coverage floors, audits, accessibility, images), branch protection, actions pinned to commits, tagged releases that wait for a green UAT deployment and smoke run of that commit before promoting to production, Dependabot (pip, npm, actions, Docker) |
+| **AI quality** | A grounded assistant with sources and honest refusals (lexical retrieval over hashed n-grams, no learned model), an [evaluation set](backend/tests/eval/assistant_eval.json) in CI run end to end (62/67 answerable cases cited correctly, 26/26 off-topic declined), 👍/👎 feedback with stats and an export to new evaluation cases, an [AI transparency page](https://pavansky.github.io/fab-dispatch/ai/), an optional LLM that can only reword and is checked against the draft |
 | **Experience** | Light/dark themes, phone layouts, keyboard shortcuts, a first-run tour, contextual help, WCAG 2.1 AA checks, a crash screen with a prefilled report, link previews |
 | **Documentation** | [Docs site](https://pavansky.github.io/fab-dispatch/) (guide, architecture, decisions, operations), [interactive API reference](https://fab-dispatch.vercel.app/api/docs), in-app help center |
 | **Support** | In-app **About & support**, [Discussions](https://github.com/pavansky/fab-dispatch/discussions), issue templates, a [security policy](SECURITY.md), a [privacy page](https://pavansky.github.io/fab-dispatch/privacy/) |
@@ -374,7 +399,11 @@ What a production AI application needs, and where to see it here.
 - **Roles:** `viewer` can plan, explore and watch live shifts. `dispatcher` can also drive the clock,
   report tool-downs, take engineers off shift and run benchmarks.
 - **Fab access** comes from each user's Supabase `app_metadata` (admin-controlled). Requests for a fab
-  outside a user's list return 404, so one customer can't discover another's.
+  outside a user's list return 404, so one customer can't discover another's. That scoping, in the
+  API, is what isolates tenants: the database's row-level security only closes the tables to
+  Supabase's public API (the app connects as table owner, so no policy filters its queries).
+- **Guests** (anonymous sign-in) get `FAB_GUEST_ROLE`; where that is `dispatcher`, as on the hosted
+  demo, a guest can change only the live shifts it started. Named dispatchers share every shift.
 - **A database per fab:** `FAB_TENANT_DATABASES` puts each fab's shifts, events, assignments and
   cached plans in its own database. CI starts one Postgres per fab and checks, by querying each
   database directly, that no fab's data appears anywhere else
@@ -411,11 +440,11 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
 | `FAB_DISPATCHER_EMAILS`, `FAB_DEFAULT_ROLE`, `FAB_DEFAULT_FABS` | `[]`, `viewer`, `["*"]` | Bootstrap dispatchers, least-privilege default, default fab access |
 | `FAB_DATABASE_URL` | `sqlite:///./data/fab.db` | Postgres in production. `POSTGRES_URL` from Vercel's Supabase integration is also accepted |
 | `FAB_PROFILES_DIR`, `FAB_DEFAULT_FAB` | bundled, `fab1-300mm-logic` | Where fab profiles live; the fab shown first |
-| `FAB_QDRANT_URL`, `FAB_QDRANT_API_KEY` | unset (in-memory index) | Use a Qdrant server or Qdrant Cloud |
+| `FAB_QDRANT_URL`, `FAB_QDRANT_API_KEY` | unset (exact NumPy search) | Use a Qdrant server or Qdrant Cloud for repair history |
 | `FAB_ALNS_ITERATIONS` / `FAB_PYVRP_ITERATIONS` | `300` / `1000` | Search budgets, sized from the measured quality curve |
 | `FAB_TURNSTILE_SITE_KEY` | unset | Cloudflare Turnstile site key, when CAPTCHA protection is on in Supabase Auth |
 | `FAB_GUEST_ROLE` | `viewer` | Role for one-click guest sign-ins (Supabase anonymous users), or `none` to refuse guests |
-| `FAB_ASSISTANT_LLM` | `none` | Optional model to reword assistant answers: `anthropic` (`ANTHROPIC_API_KEY`) or `ollama` (local) |
+| `FAB_ASSISTANT_LLM` | `none` | Optional model to reword assistant answers: `anthropic` (`ANTHROPIC_API_KEY`, `claude-haiku-5-5` by default) or `ollama` (local) |
 | `CRON_SECRET` | unset | Protects the daily data-retention endpoint |
 
 ## Delivery: dev → UAT → production
@@ -433,9 +462,12 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
   Playwright end-to-end on desktop and phone with WCAG audits, `pip-audit` + `npm audit`,
   **dependency review** (no vulnerable or GPL-family additions), the **full Docker stack started and
   signed into**, **Trivy** image scans, **actionlint**, and Conventional Commits.
-- **Release:** pushing a tag re-runs CI on that exact commit, requires it to be on `main` (UAT-tested),
-  publishes **signed images to GHCR** with an SBOM and build provenance, fast-forwards `production`,
-  **waits until production serves the new version**, then publishes release notes from the changelog.
+- **Release:** pushing a tag requires the commit to be on `main` before anything is published,
+  re-runs CI on that exact commit, publishes **images to GHCR with an SBOM and a GitHub
+  build-provenance attestation** (verifiable with `gh attestation verify`; not cosign-signed), **waits
+  for a successful UAT deployment and a passing smoke run of that commit** (up to 15 minutes),
+  fast-forwards `production`, **waits until production serves the new version**, then publishes
+  release notes from the changelog.
 - **Smoke tests** after every deployment: healthy, schema current, real auth (never demo).
 - **Rollback:** promote the previous deployment in Vercel; migrations are additive so it keeps working.
 
@@ -456,14 +488,15 @@ backend/
     algorithms/            greedy · hungarian · regret · alns · pyvrp_ils · exact
     engine.py              run a strategy -> assignments, explanations, metrics
     live.py                rolling-horizon live dispatch, clock lease
-    knowledge.py           repair history and Qdrant index, per fab
+    knowledge.py           repair history and its k-NN index (NumPy; Qdrant optional), per fab
     help/                  help center articles (Markdown) and their validation
     assistant/             grounded assistant: retrieval, intents and tools, optional LLM
     store.py               SQLite / Postgres repository + versioned migrations
     routes/                system · auth · fabs · planning · live (SSE) · repairs
   scripts/benchmark.py     reproduces every table in docs/ANALYSIS.md
+  scripts/                 scale, certified-bound, duration, predictive and learned-policy studies (all smoke-tested)
   scripts/export_ui_fixtures.py   real API responses for the UI tests
-  tests/                   320 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval)
+  tests/                   411 tests (incl. golden fab fingerprints, UI fixture contract, assistant eval, the scripts)
 frontend/src/
   App.jsx auth.jsx api.js  workspace, sign-in, API client
   lib/                     fab context, recommendation logic, statistics, progressive planning
@@ -516,6 +549,12 @@ More in [SUPPORT.md](SUPPORT.md) and the [support guide](https://pavansky.github
 - **Deterministic durations.** The repair-history range (p10–p90) is shown but not yet planned against;
   buffering to p80 would make schedules more robust.
 - **One engineer per job; no parts availability.** Both are natural extensions of the constraint engine.
+  The full list of what the model leaves out (and what each omission costs) is in
+  [ANALYSIS.md](docs/ANALYSIS.md), *What the model does not capture*.
+- **The full-size optimality proof does not fit the hosted app.** Proving a 14 × 45 shift optimal takes
+  up to about two minutes; the hosted API function is capped at 60 s (`vercel.json`), so the live app's
+  *Measure gaps* only proves small shifts (4 × 12, at most 6 × 16). The full-size gaps come from
+  `scripts/benchmark.py --only gaps-full` and are in [ANALYSIS.md](docs/ANALYSIS.md).
 - **Enterprise SSO** (SAML/OIDC via Supabase) and **audit export** to a fab's SIEM are configuration
   and integration work, not redesign.
 

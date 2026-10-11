@@ -1,5 +1,5 @@
 {
- "answer": "Turn on **Tap floor to report a bottleneck down** and click inside a tool area. The job enters the\nshift with a 45-minute response window, the plan re-optimises, and everyone gets an alert.",
+ "answer": "Turn on **Tap floor to report a bottleneck down** and click inside a tool area. The job enters the\nshift with the preset's bottleneck response window (45 minutes in Fab 1's normal shift, 40 in\nFab 2's), the plan re-optimises, and everyone gets an alert.",
  "intent": "docs",
  "citations": [
   {
@@ -18,5 +18,6 @@
  ],
  "suggestions": [],
  "grounded": true,
- "provider": "local"
+ "provider": "local",
+ "fallback_reason": null
 }

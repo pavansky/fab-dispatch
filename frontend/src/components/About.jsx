@@ -1,18 +1,26 @@
 import { useEffect, useState } from 'react'
-import { getHealth, getMeta } from '../api.js'
+import { assistantStats, getHealth, getMeta } from '../api.js'
+import { useAuth } from '../auth.jsx'
 import { LINKS, reportProblemUrl } from '../lib/links.js'
+import { fmt, plural } from '../lib/format.js'
 
 const ext = { target: '_blank', rel: 'noopener noreferrer' }
 const STACK = ['React 19', 'FastAPI', 'PyVRP', 'SciPy (HiGHS)', 'Qdrant', 'Supabase', 'Vercel']
 
 /** Version, live status, documentation and every way to get help, in one place. */
 export default function About({ onClose, onHelp }) {
+  const { canDispatch } = useAuth() ?? {}
   const [health, setHealth] = useState(null)
   const [meta, setMeta] = useState(null)
+  const [stats, setStats] = useState(null) // assistant helpful rate; dispatchers only
   useEffect(() => {
     getHealth().then(setHealth).catch(() => setHealth({ status: 'unreachable' }))
     getMeta().then(setMeta).catch(() => {})
   }, [])
+  useEffect(() => {
+    if (!canDispatch) return
+    assistantStats().then(setStats).catch(() => setStats({ error: true }))
+  }, [canDispatch])
   useEffect(() => {
     const esc = (e) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', esc)
@@ -61,6 +69,14 @@ export default function About({ onClose, onHelp }) {
               <li><a href={LINKS.terms} {...ext}><b>Terms of use ↗</b><span className="help-snippet">A demo with synthetic data, provided as is.</span></a></li>
               <li><a href={LINKS.aiTransparency} {...ext}><b>How the assistant works ↗</b><span className="help-snippet">Sources, evaluation, limits.</span></a></li>
             </ul>
+            {canDispatch && (
+              <p className="help assistant-stats" data-testid="assistant-stats">
+                {!stats ? 'Checking how the assistant is doing…'
+                  : stats.error ? "Couldn't load the assistant's helpful rate right now."
+                  : stats.total === 0 || stats.helpful_rate === null ? `No assistant answers rated in the last ${plural(stats.days, 'day')} yet.`
+                  : `Assistant answers rated helpful: ${fmt(Math.round(stats.helpful_rate * 100))}% of ${plural(stats.total, 'rating')} in the last ${plural(stats.days, 'day')}.`}
+              </p>
+            )}
           </section>
 
           <p className="help">Built with {STACK.join(' · ')}. <a href={LINKS.source} {...ext}>Source on GitHub ↗</a> · <a href={LINKS.license} {...ext}>MIT License ↗</a></p>
