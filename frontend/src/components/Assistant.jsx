@@ -97,6 +97,7 @@ export default function Assistant({ messages, setMessages, context, suggestions,
               </div>
             )}
             {m.provider && m.provider !== 'local' && <p className="help" style={{ margin: '6px 0 0' }}>Worded by {m.provider}; facts from the sources above.</p>}
+            {m.fallback_reason && <p className="help" style={{ margin: '6px 0 0' }}>Shown as drafted from the sources; the reworded version was not used ({m.fallback_reason}).</p>}
             {!m.error && m.question && (
               <div className="msg-feedback" aria-label="Rate this answer">
                 {m.feedback === 'sent' ? <span className="muted">Thanks for the feedback.</span>

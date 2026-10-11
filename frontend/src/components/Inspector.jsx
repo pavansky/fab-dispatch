@@ -91,7 +91,7 @@ function EngineerView({ eng, result, scenario, offShift, onToggleEngineer, onSel
             return (
               <li key={s.job_id} onClick={() => onSelect({ type: 'job', id: s.job_id })}>
                 <span className="n">{i + 1}</span>
-                <span><b>{s.job_id}</b> <span className="muted">{j.tool}</span> <span className={`badge p${j.priority}`}>{PRIORITY[j.priority].label}</span></span>
+                <span><button type="button" className="row-link" aria-label={`Inspect ${s.job_id}`}><b>{s.job_id}</b></button> <span className="muted">{j.tool}</span> <span className={`badge p${j.priority}`}>{PRIORITY[j.priority].label}</span></span>
                 <span className="num muted">{clock(s.start)}</span>
               </li>
             )
