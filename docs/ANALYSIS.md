@@ -215,7 +215,7 @@ that optimum within 0.49% in 7 s (versus 83 s for the full proof), and its gaps 
 | 20 × 65 (proven, old code) | 1 shift | 409,000 | exact | exact | 3.9% | 6.3% |
 | 30 × 100 (certified, old code) | **1 shift** | 8.3 million | 1828.0 | 1844.3 (within 0.89%) | 7.5–8.4% | 14.4–15.4% |
 
-With the current code, 20 × 65 on three seeds (`python -m scripts.certified_bound 20 65 out/cg_20x65
+With the current code, 20 × 65 on three seeds (`python -m scripts.certified_bound 20 65 0 out/cg_20x65
 --seeds 3`; 392,000–414,000 routes per shift, 37 s to enumerate, 2 s of column generation and
 10–36 s of integer search each on the 4-core container):
 
