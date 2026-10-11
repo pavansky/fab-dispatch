@@ -41,7 +41,7 @@ import random
 import re
 import statistics
 import threading
-from dataclasses import dataclass
+from dataclasses import astuple, dataclass
 
 import numpy as np
 
@@ -141,6 +141,15 @@ def synthetic_history(profile: FabProfile, n: int = HISTORY_SIZE, seed: int = HI
     return out
 
 
+def history_version(history: list[Repair], embedder: str) -> str:
+    """Content hash of a generated history and the embedding it is indexed with: an edited
+    fault catalogue (or a new embedder) gets a new version, so a stored index is rebuilt."""
+    h = hashlib.sha256(f"{embedder}|{DIM}".encode())
+    for r in history:
+        h.update(repr(astuple(r)).encode())
+    return h.hexdigest()[:12]
+
+
 class HashEmbedder:
     """Dependency-free text embedding: hashed word and character-trigram features, L2
     normalised. Captures lexical similarity, which suits short technical symptom text.
@@ -195,7 +204,11 @@ class _ExactIndex:
 
 
 class _QdrantIndex:
-    """One Qdrant collection per fab (``repairs_<fab id>``), built lazily on first use."""
+    """One Qdrant collection per fab and history version (``repairs_<fab id>_<version>``),
+    built lazily on first use. The version is a content hash of the generated history, so
+    editing a fab's fault catalogue builds a fresh collection instead of reusing a stale one
+    that happens to have the same number of points. Older versions are left in place (a
+    process still running the old catalogue may be reading them); drop them by hand."""
 
     def __init__(self, settings: Settings, embedder: HashEmbedder):
         from qdrant_client import QdrantClient  # lazy: only loaded when a Qdrant mode is configured
@@ -215,29 +228,29 @@ class _QdrantIndex:
                 self.client = QdrantClient(":memory:")
                 self.mode = "qdrant-memory"
         self.embedder = embedder
-        self._ready: set[str] = set()
+        self._ready: dict[str, str] = {}  # fab id -> collection name
         self._lock = threading.Lock()
 
     @staticmethod
-    def collection(fab_id: str) -> str:
-        return "repairs_" + fab_id.replace("-", "_")
+    def collection(fab_id: str, version: str) -> str:
+        return f"repairs_{fab_id.replace('-', '_')}_{version}"
 
     def ensure(self, profile: FabProfile) -> str:
-        """Build this fab's index once (idempotent; skipped if a matching collection exists)."""
-        name = self.collection(profile.id)
-        if name in self._ready:
-            return name
+        """Build this fab's index once (idempotent; skipped if this history version is stored)."""
+        if profile.id in self._ready:
+            return self._ready[profile.id]
         with self._lock:
-            if name in self._ready:
-                return name
+            if profile.id in self._ready:
+                return self._ready[profile.id]
             from qdrant_client import models
 
             history = synthetic_history(profile)
+            name = self.collection(profile.id, history_version(history, self.embedder.name))
             if self.client.collection_exists(name):
-                if self.client.count(name).count == len(history):
-                    self._ready.add(name)
+                if self.client.count(name).count == len(history):  # a complete build of this version
+                    self._ready[profile.id] = name
                     return name
-                self.client.delete_collection(name)
+                self.client.delete_collection(name)  # an interrupted build
             self.client.create_collection(
                 name, vectors_config=models.VectorParams(size=DIM, distance=models.Distance.COSINE)
             )
@@ -248,7 +261,7 @@ class _QdrantIndex:
             ]
             for i in range(0, len(batch), 256):
                 self.client.upsert(name, points=batch[i : i + 256], wait=True)
-            self._ready.add(name)
+            self._ready[profile.id] = name
             return name
 
     def search(self, profile: FabProfile, family: str, symptom: str, k: int) -> list[tuple[float, dict]]:

@@ -11,6 +11,7 @@ from app.knowledge import (
     cause_observations,
     draw_fault,
     fault_symptom,
+    history_version,
     synthetic_history,
 )
 from app.main import app
@@ -87,6 +88,16 @@ def test_retrieval_recovers_the_cause_better_than_chance():
     assert 0.65 < right / len(test) < 0.9
 
 
+def test_history_version_changes_with_the_catalogue():
+    profile = get_profile("fab1-300mm-logic")
+    history = synthetic_history(profile, 200)
+    assert history_version(history, "e") == history_version(synthetic_history(profile, 200), "e")
+    edited = profile.model_copy(deep=True)
+    edited.families[0].faults[next(iter(edited.families[0].faults))].causes[0].mean_min += 30
+    assert history_version(synthetic_history(edited, 200), "e") != history_version(history, "e")
+    assert history_version(history, "other-embedder") != history_version(history, "e")
+
+
 def test_embedder_is_normalised_and_lexically_sensible():
     e = HashEmbedder()
     v = e.embed("RF reflected power high")
@@ -135,6 +146,32 @@ def test_locked_disk_index_falls_back_to_memory(tmp_path):
     from app.fabs import get_profile
 
     assert second.similar(get_profile("fab1-300mm-logic"), "etch", "RF reflected power high")["prediction"]
+
+
+def test_stored_index_is_rebuilt_when_the_catalogue_changes(tmp_path):
+    """Same fab, same number of repairs, different catalogue: a new collection, not the stale one."""
+    from app.config import Settings
+    from app.knowledge import RepairIndex
+
+    s = Settings(env="local", qdrant_path=str(tmp_path / "q"))
+    profile = get_profile("fab1-300mm-logic")
+    first = RepairIndex(s)
+    name = first.backend.ensure(profile)
+    first.backend.client.close()
+
+    again = RepairIndex(s)
+    assert again.mode == "qdrant-disk"
+    assert again.backend.ensure(profile) == name  # unchanged catalogue: the stored index is reused
+    again.backend.client.close()
+
+    edited = profile.model_copy(deep=True)
+    edited.family("etch").faults["RF-REFL"].causes[0].mean_min += 60
+    rebuilt = RepairIndex(s)
+    new_name = rebuilt.backend.ensure(edited)
+    assert new_name != name and rebuilt.backend.client.count(new_name).count == len(synthetic_history(edited))
+    ids = [p["id"] for _, p in rebuilt.backend.search(edited, "etch", "RF reflected power high", 50)]
+    by_id = {r.id: r for r in synthetic_history(edited)}
+    assert all(by_id[i].family == "etch" for i in ids)
 
 
 def test_exact_search_is_the_default_and_agrees_with_qdrant(tmp_path):
