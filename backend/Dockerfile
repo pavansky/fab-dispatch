@@ -24,4 +24,7 @@ ENV FAB_ENV=production FAB_LOG_JSON=true
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --retries=5 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/livez').status==200 else 1)"
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers", "--forwarded-allow-ips", "*"]
+# X-Forwarded-* headers are trusted only from FORWARDED_ALLOW_IPS (uvicorn reads the variable;
+# default 127.0.0.1). Set it to "*" only where a reverse proxy is the sole thing that can reach the
+# container, as docker-compose does with nginx in front.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers"]
