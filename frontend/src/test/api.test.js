@@ -53,6 +53,30 @@ describe('API client', () => {
     expect(api.calls[0].body).toEqual({ minutes: 30 })
   })
 
+  it('retries a live action on a dropped connection with the same idempotency key', async () => {
+    const api = mockApi({ 'POST /shifts/s1/advance': { ok: true } })
+    const real = api.fetchMock.getMockImplementation()
+    api.fetchMock.mockImplementationOnce(() => Promise.reject(new TypeError('Failed to fetch'))).mockImplementation(real)
+    setTokenProvider(() => 't')
+    await expect(advanceShift('s1', 30)).resolves.toEqual({ ok: true })
+    expect(api.fetchMock).toHaveBeenCalledTimes(2)
+    const keys = api.fetchMock.mock.calls.map(([, init]) => init.headers['Idempotency-Key'])
+    expect(keys[0]).toBeTruthy()
+    expect(keys[1]).toBe(keys[0])
+  })
+
+  it('retries a gateway failure on a live action, but never a plain read', async () => {
+    let n = 0
+    const api = mockApi({
+      'POST /shifts/s1/jobs': () => (++n === 1 ? json(503, errorBody('unavailable', 'try again')) : { ok: true }),
+      'GET /meta': json(503, errorBody('unavailable', 'try again')),
+    })
+    await expect(reportJob('s1', { id: 'L1' })).resolves.toEqual({ ok: true })
+    expect(api.find('POST', '/shifts/s1/jobs')).toHaveLength(2)
+    await expect(getMeta()).rejects.toMatchObject({ status: 503 })
+    expect(api.find('GET', '/meta')).toHaveLength(1)
+  })
+
   it('serves a repeated plan request from the browser cache', async () => {
     const api = mockApi({ 'POST /plan': fixtures.plans.greedy })
     const scenario = { ...fixtures.scenario, id: 'cache-test' }
