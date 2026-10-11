@@ -137,7 +137,7 @@ def allocate_many(
 def benchmark(
     req: BenchmarkRequest,
     user: User = Depends(require("dispatcher")),
-    _rl: None = Depends(rate_limit("benchmark", 20, 6)),
+    _rl: None = Depends(rate_limit("benchmark", 20, 6, fail_closed=True)),
 ) -> dict:
     """All strategies over many seeded shifts of one preset. Each request is capped at
     ``seeds x n_jobs <= 1000`` (BENCHMARK_MAX_JOB_RUNS), which keeps the slowest admitted case
@@ -162,7 +162,9 @@ def benchmark(
 
 @router.post("/optimality-gap")
 def optimality_gap(
-    req: GapRequest, user: User = Depends(require("dispatcher")), _rl: None = Depends(rate_limit("benchmark", 20, 6))
+    req: GapRequest,
+    user: User = Depends(require("dispatcher")),
+    _rl: None = Depends(rate_limit("benchmark", 20, 6, fail_closed=True)),
 ) -> dict:
     """Exact optimum (route enumeration + MILP) vs every heuristic, on small shifts."""
     from ..algorithms.exact import TooLarge, run_exact  # SciPy's MILP: loaded only for this endpoint

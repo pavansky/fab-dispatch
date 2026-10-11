@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
             413: "too_large",
             422: "invalid",
             429: "rate_limited",
+            503: "unavailable",
         }.get(exc.status_code, "error")
         return JSONResponse(
             error_body(code, str(exc.detail), request_id.get()),

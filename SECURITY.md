@@ -7,7 +7,7 @@ dispatcher actions) and user email addresses; no financial data. Engineer names 
 
 | Threat | Mitigation |
 |---|---|
-| Oversized or expensive requests (DoS) | Pydantic limits on every input (≤ 60 engineers, ≤ 200 jobs, ≤ 30 benchmark seeds, ≤ 500-char symptoms). Per-client token-bucket rate limits on `/plan`, `/benchmark`, `/optimality-gap`, live writes and repair search. Solver iteration and time caps. Explicit 413 for oversized scenarios. |
+| Oversized or expensive requests (DoS) | Pydantic limits on every input (≤ 60 engineers, ≤ 200 jobs, ≤ 30 benchmark seeds, ≤ 500-char symptoms). Rate limits in two layers on `/plan`, `/benchmark`, `/optimality-gap`, live writes, the live stream (plus at most 4 open streams per user per instance), repair search, help search and the assistant: a token bucket per instance, then for signed-in users a per-minute counter in the database that holds across instances. Unauthenticated endpoints get the in-memory bucket only (no database write per request). When the shared counter is unreachable, cheap endpoints fail open and the expensive ones (`/benchmark`, `/optimality-gap`, `POST /shifts`, an LLM-backed assistant answer) fail closed with 503 + `Retry-After`. Solver iteration and time caps. Explicit 413 for oversized scenarios. |
 | SQL injection | Parameterised queries only (sqlite3 and psycopg placeholders). No string-built SQL from input. |
 | Lost updates between dispatchers | Optimistic versioning on live shifts. `If-Match` gives 409 instead of a silent overwrite. |
 | Information leakage | One error envelope with no stack traces. Public `/api/health` reports only status, db_ok, schema_ok, version and environment name. |
@@ -33,8 +33,9 @@ dispatcher actions) and user email addresses; no financial data. Engineer names 
   is configuration, not code.
 - **Audit export.** Every live event records its actor and time (`shift_events`); exporting it to the
   customer's SIEM is a natural next step.
-- **Edge rate limiting.** In-process limits are per instance; a WAF or edge rules should own this in
-  production.
+- **Edge rate limiting.** The API's limits are a token bucket per instance plus, for signed-in users,
+  a per-minute counter shared through the database (see the DoS row). Unauthenticated traffic is
+  limited per instance only; a WAF or edge rules should own that in production.
 
 ## Reporting
 

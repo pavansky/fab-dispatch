@@ -225,10 +225,15 @@ in one transaction means the read model can never disagree with the truth.
 
 ### D30. Rate limits in two layers
 **Decision.** An in-memory token bucket per instance absorbs bursts with no I/O; a per-minute counter
-in the database enforces the quota across instances. If the database is unreachable, requests pass.
+in the database enforces the quota across instances. If the database is unreachable, cheap requests
+pass; the expensive endpoints (benchmarks, the optimality gap, starting a shift, an LLM-backed
+answer) refuse with 503 and `Retry-After` instead. Unauthenticated endpoints use the in-memory
+bucket only.
 **Why.** On serverless every instance counts alone, so an in-memory limit alone barely limits. The
-shared counter costs one upsert, only on the endpoints that need it. Failing open keeps a database
-blip from taking the whole API down with it.
+shared counter costs one upsert, only for signed-in callers on the endpoints that need it (a request
+that cost nothing to authenticate must not cost a database write). Failing open keeps a database
+blip from taking the whole API down with it, but only where a flood would be cheap; where it
+wouldn't be, the limiter is the thing that must hold.
 
 ### D31. An ingestion API for equipment systems
 **Decision.** `POST /api/ingest/tool-downs`, authenticated by a per-fab token stored as a SHA-256

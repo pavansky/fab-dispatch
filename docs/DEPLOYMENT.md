@@ -65,8 +65,13 @@ receives the original `/api/...` path, so routes need no changes.
 - **SSE** responses close after 25 s and browsers reconnect with `Last-Event-ID`. This stays well under
   the function duration limit (`maxDuration: 60`).
 - **Benchmark** requests are per preset, so each finishes in well under a minute.
-- **Rate limits** are per instance (in memory): a guard against runaway clients, not a quota system.
-  Use Vercel's firewall for edge rate limiting.
+- **Rate limits** have two layers. A token bucket per instance (in memory) absorbs bursts; for
+  signed-in users a per-minute counter in the default database then holds the quota across every
+  instance. Unauthenticated endpoints (`/api/help/search`, ingestion) use the in-memory bucket only,
+  so they never cost a database write. If the counter can't be reached, cheap endpoints let the
+  request through; expensive ones (`/benchmark`, `/optimality-gap`, `POST /shifts`, the assistant
+  when a paid model is on) answer 503 with `Retry-After`. Vercel's firewall is still the place for
+  edge rate limiting of unauthenticated traffic.
 - **Bundle**: the runtime requirements install to about 320 MB (measured; SciPy and gRPC are the largest),
   under Vercel's 500 MB Python limit.
 

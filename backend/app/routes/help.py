@@ -90,7 +90,8 @@ def assistant_stats(days: int = Query(30, ge=1, le=180), _user: User = Depends(r
 def ask(
     req: AskRequest,
     user: User = Depends(require("viewer")),
-    _rl: None = Depends(rate_limit("assistant", 30, 10)),
+    # With a model behind it an answer costs real money, so the limiter must not fail open there.
+    _rl: None = Depends(rate_limit("assistant", 30, 10, fail_closed=lambda: get_settings().assistant_llm != "none")),
 ) -> Answer:
     ctx = req.context
     if ctx.scenario is not None:

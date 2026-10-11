@@ -209,7 +209,9 @@ def _mutate(
 
 @router.post("")
 def create_shift(
-    req: CreateShift, user: User = Depends(require("dispatcher")), _rl: None = Depends(rate_limit("shift", 30, 10))
+    req: CreateShift,
+    user: User = Depends(require("dispatcher")),
+    _rl: None = Depends(rate_limit("shift", 30, 10, fail_closed=True)),
 ) -> dict:
     if req.algorithm not in ALGORITHMS:
         raise HTTPException(422, f"unknown algorithm {req.algorithm!r}")
