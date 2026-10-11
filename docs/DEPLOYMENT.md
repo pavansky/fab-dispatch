@@ -26,7 +26,7 @@ and `latest`. Check where one came from with
 | `postgres` | postgres:16-alpine | volume `pgdata`, healthcheck |
 | `qdrant` | qdrant/qdrant:v1.19.0 | volume `qdrant` |
 | `api` | `backend/Dockerfile` | python:3.12-slim, non-root, 2 uvicorn workers, JSON logs, healthcheck on `/api/livez` |
-| `web` | `frontend/Dockerfile` | nginx serving the Vite build. Proxies `/api` with SSE buffering off and caches hashed assets for a year |
+| `web` | `frontend/Dockerfile` | unprivileged nginx (`nginxinc/nginx-unprivileged`, port 8080, healthcheck) serving the Vite build. Proxies `/api` with SSE buffering off, caches hashed assets for a year and sends the security headers from every location |
 
 ## 3. Vercel + Supabase (+ Qdrant Cloud, optional)
 

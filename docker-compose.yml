@@ -32,7 +32,7 @@ services:
   web:
     build: ./frontend
     image: fab-dispatch-ui:local
-    ports: ["8080:80"]
+    ports: ["8080:8080"]  # nginx runs unprivileged on 8080
     depends_on:
       api: { condition: service_healthy }
 

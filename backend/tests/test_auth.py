@@ -209,6 +209,22 @@ def test_auth_config_shares_the_public_captcha_site_key_only(monkeypatch):
     assert auth_routes.auth_config()["captcha_site_key"] == "0x4AAAAAAA-site"
 
 
+def _nginx_location_blocks(conf: str) -> list[tuple[str, str]]:
+    """(location line, body) for every location block, by brace counting (nested blocks included)."""
+    import re
+
+    blocks = []
+    for m in re.finditer(r"^\s*location\s+[^{]+\{", conf, re.M):
+        depth, i = 0, m.end() - 1
+        while i < len(conf):
+            depth += {"{": 1, "}": -1}.get(conf[i], 0)
+            if depth == 0:
+                break
+            i += 1
+        blocks.append((m.group().strip(), conf[m.end() : i]))
+    return blocks
+
+
 def test_the_content_security_policy_is_identical_everywhere_it_is_served():
     """Vercel, nginx and the Vite preview each send the CSP; a drift would only show up in one of them."""
     import json
@@ -218,7 +234,40 @@ def test_the_content_security_policy_is_identical_everywhere_it_is_served():
     root = Path(__file__).resolve().parents[2]
     rules = json.loads((root / "vercel.json").read_text())["services"]["web"]["headers"]
     from_vercel = next(h["value"] for r in rules for h in r["headers"] if h["key"] == "Content-Security-Policy")
-    from_nginx = re.search(r'Content-Security-Policy "([^"]+)"', (root / "frontend/nginx.conf").read_text()).group(1)
+    snippet = (root / "frontend/security-headers.conf").read_text()
+    from_nginx = re.search(r'Content-Security-Policy "([^"]+)"', snippet).group(1)
     from_vite = re.search(r'const CSP = "([^"]+)"', (root / "frontend/vite.config.js").read_text()).group(1)
     assert from_vercel == from_nginx == from_vite
     assert "https://challenges.cloudflare.com" in from_vercel  # Turnstile CAPTCHA script and frame
+
+
+def test_nginx_sends_the_security_headers_from_every_location_that_adds_a_header():
+    """nginx's add_header isn't inherited by a location that sets its own (Cache-Control on index.html
+    and the hashed assets), so the security headers must be included again in each such block."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    conf = (root / "frontend/nginx.conf").read_text()
+    snippet = (root / "frontend/security-headers.conf").read_text()
+    include = "include /etc/nginx/snippets/security-headers.conf;"
+    for header in (
+        "Content-Security-Policy",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "Permissions-Policy",
+        "X-Frame-Options",
+    ):
+        assert re.search(rf"^add_header {header} .*always;$", snippet, re.M), header
+    locations = _nginx_location_blocks(conf)
+    assert len(locations) >= 3
+    server_level = re.sub(r"location\s+[^{]+\{.*?\n\s*\}", "", conf, flags=re.S)
+    assert include in server_level  # every location without add_header inherits from here
+    for line, body in locations:
+        if "add_header" in body:
+            assert include in body, f"{line} sets add_header but drops the security headers"
+        assert "Content-Security-Policy" not in body, f"{line}: use the snippet, not a copy of the CSP"
+    assert "listen 8080;" in conf  # nginx runs unprivileged (nginxinc/nginx-unprivileged)
+    dockerfile = (root / "frontend/Dockerfile").read_text()
+    assert "nginxinc/nginx-unprivileged" in dockerfile and "HEALTHCHECK" in dockerfile
+    assert "EXPOSE 8080" in dockerfile and 'ports: ["8080:8080"]' in (root / "docker-compose.yml").read_text()
