@@ -7,8 +7,9 @@ export function clock(min) {
   return `${String(h).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
+/** A number for display; a missing one (null, undefined, NaN) reads "n/a", never "NaN". */
 export function fmt(v, digits = 1) {
-  if (v === null || v === undefined || Number.isNaN(v)) return '–'
+  if (v === null || v === undefined || typeof v !== 'number' || Number.isNaN(v)) return 'n/a'
   if (Number.isInteger(v)) return v.toLocaleString()
   return v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { optimalityGap, runBenchmark } from '../api.js'
 import { bootstrapMeanCI, mean } from '../lib/stats.js'
-import { ALGO_ORDER, ALGO_SHORT, METRICS } from '../lib/metrics.js'
+import { ALGO_ORDER, ALGO_SHORT, METRICS, absentText, workloadKey } from '../lib/metrics.js'
 import { fmt, listOf, ms, plural } from '../lib/format.js'
 import { speedup } from '../lib/analysis.js'
 import { FEW_SEEDS, analyseBenchmark, estimateSeconds } from '../lib/benchmark.js'
@@ -10,7 +10,7 @@ import FrontierChart from './FrontierChart.jsx'
 import InfoLink from './InfoLink.jsx'
 
 const cellMean = (xs) => { const f = xs.filter(Number.isFinite); return f.length ? mean(f) : NaN }
-const COLS = ['coverage_pct', 'critical_coverage_pct', 'mean_response_min', 'wait_min_total', 'workload_std', 'objective', 'runtime_ms']
+const cols = (runs) => ['coverage_pct', 'critical_coverage_pct', 'mean_response_min', 'wait_min_total', workloadKey(runs), 'objective', 'runtime_ms']
 
 function Strip({ runs, metric, min, max }) {
   const { tip, show, hide } = useTooltip()
@@ -111,6 +111,7 @@ export default function Benchmark({ profile, weights, size, canDispatch }) {
   // Verdicts for every preset at once: the Holm adjustment spans the whole run.
   const analysis = data ? analyseBenchmark(data.runs, presets) : null
   const holmNote = analysis && analysis.comparisons > 1 ? `, Holm-adjusted across ${analysis.comparisons} comparisons` : ''
+  const COLS = cols(data?.runs ?? [])
   const VERDICT = {
     lowest: <span className="sig">Lowest cost</span>,
     notsig: <span className="tied">Not significantly different (CI ∋ 0)</span>,
@@ -200,7 +201,7 @@ export default function Benchmark({ profile, weights, size, canDispatch }) {
                       return (
                         <tr key={a} style={{ cursor: 'default' }}>
                           <td><span className="cell-eng"><span className={`swatch ${a === value ? 'is-reco' : ''}`} />{ALGO_SHORT[a]}</span></td>
-                          {COLS.map((k) => <td key={k} className="r num">{fmt(cellMean(series(a, k)))}</td>)}
+                          {COLS.map((k) => { const v = cellMean(series(a, k)); return <td key={k} className="r num">{Number.isFinite(v) ? fmt(v) : <span className="muted">{absentText(k)}</span>}</td> })}
                           <td className="r num">{ci && ci.n >= 2 ? `${ci.mean >= 0 ? '+' : ''}${fmt(ci.mean)} [${fmt(ci.lo)}, ${fmt(ci.hi)}]` : ci && ci.n === 1 ? `${ci.mean >= 0 ? '+' : ''}${fmt(ci.mean)} (1 shift)` : '—'}</td>
                           <td>{VERDICT[verdict]}</td>
                         </tr>

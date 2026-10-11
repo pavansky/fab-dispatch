@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ALGO_BLURB, ALGO_KIND, ALGO_ORDER, ALGO_SHORT, METRICS, improvement, presentKeys } from '../lib/metrics.js'
+import { ALGO_BLURB, ALGO_KIND, ALGO_ORDER, ALGO_SHORT, METRICS, absentText, hasMetric, improvement, presentKeys, workloadKey } from '../lib/metrics.js'
 import { GOALS, costSplitText, disagreements, insights, paretoFront } from '../lib/analysis.js'
 import FrontierChart from './FrontierChart.jsx'
 import { PRIORITY, fmt, listOf } from '../lib/format.js'
@@ -7,10 +7,14 @@ import MetricBars from './MetricBars.jsx'
 import InfoLink from './InfoLink.jsx'
 
 const KPI_KEYS = ['coverage_pct', 'critical_coverage_pct', 'mean_response_min', 'objective']
-const BAR_KEYS = ['coverage_pct', 'critical_coverage_pct', 'priority_weighted_coverage_pct', 'mean_response_min', 'walk_m_per_job', 'wait_min_total', 'overqualification_levels', 'workload_std', 'utilization_pct', 'objective']
+// Workload spread is in minutes when the API reports it, else the older jobs-based spread.
+const barKeys = (results) => ['coverage_pct', 'critical_coverage_pct', 'priority_weighted_coverage_pct', 'mean_response_min',
+  ...presentKeys(results, ['response_p95_min', 'unserved_downs']),
+  'walk_m_per_job', 'wait_min_total', 'overqualification_levels', workloadKey(results), 'utilization_pct', 'objective']
 
 function Delta({ k, value, base }) {
   if (base === undefined) return <span className="delta flat">baseline</span>
+  if (!Number.isFinite(value) || !Number.isFinite(base)) return <span className="delta flat">{Number.isFinite(value) ? 'n/a for Greedy' : absentText(k)}</span>
   const gain = improvement(k, value, base)
   if (Math.abs(gain) < 0.05) return <span className="delta flat">= Greedy</span>
   const up = value > base
@@ -100,7 +104,7 @@ export default function Overview({ results, pending, reco, scenario, weights, go
                 {KPI_KEYS.map((k) => (
                   <div key={k} className="kpi">
                     <div className="label" title={METRICS[k].label}>{METRICS[k].short ?? METRICS[k].label}</div>
-                    <div className="value">{fmt(r.metrics[k])}<small>{METRICS[k].unit}</small></div>
+                    <div className="value">{hasMetric(r.metrics, k) ? <>{fmt(r.metrics[k])}<small>{METRICS[k].unit}</small></> : <span className="muted" style={{ fontSize: '0.7em' }}>{absentText(k)}</span>}</div>
                     {key === 'greedy' ? <span className="delta flat">baseline</span> : <Delta k={k} value={r.metrics[k]} base={greedy?.metrics[k]} />}
                   </div>
                 ))}
@@ -155,7 +159,7 @@ export default function Overview({ results, pending, reco, scenario, weights, go
         <div className="card-h"><div><h2><span className="section-no">04</span>Metric comparison</h2><p>Same shift, same constraints, same cost function. Only the decision strategy differs.</p></div></div>
         <div className="card-b">
           <MetricBars results={results} onPick={onPickAlgo} highlight={reco.winner.algorithm}
-            keys={[...BAR_KEYS, ...presentKeys(results, ['operating_cost', 'workload_cost']), 'runtime_ms']} />
+            keys={[...barKeys(results), ...presentKeys(results, ['operating_cost', 'workload_cost']), 'runtime_ms']} />
         </div>
       </section>
     </>
