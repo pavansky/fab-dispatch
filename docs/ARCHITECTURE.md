@@ -18,7 +18,7 @@ flowchart LR
     PL[Planner<br/>constraints + cost]
     ALG[algorithms<br/>greedy · hungarian · regret · alns · pyvrp · exact]
     LIVE[live.py<br/>rolling horizon]
-    KN[knowledge.py<br/>RepairIndex: exact k-NN]
+    KN[knowledge.py<br/>RepairIndex: exact k-NN<br/>hashed n-grams, NumPy]
   end
   DB[(SQLite / Postgres<br/>shifts · shift_events · assignments<br/>plan_cache · rate_limits)]
   Q[(Qdrant server<br/>optional, at scale)]
@@ -52,7 +52,7 @@ flowchart LR
 
 - **Fab profiles** hold everything site-specific: floor, tool families with bay areas, tool-ID
   prefixes, fault catalogues, shift pattern and planning presets. They are validated at startup. The
-  generator, repair history (one Qdrant collection per fab), API and UI all read them, so onboarding
+  generator, repair history (one index per fab), API and UI all read them, so onboarding
   a fab is a JSON file ([ONBOARDING_A_FAB.md](ONBOARDING_A_FAB.md)).
 - **Data: a database per fab.** `FAB_TENANT_DATABASES` maps a fab to its own database. Everything
   operational for that fab (shifts, events, assignments, replays, cached plans) is written and read
@@ -150,23 +150,34 @@ sequenceDiagram
   token (only its SHA-256 is configured) and a required `Idempotency-Key`, since integrations deliver
   at least once. The fault joins the fab's live shift and is re-planned like any other.
 
-## 6. Repair history (Qdrant)
+## 6. Repair history (k-NN over hashed n-grams; Qdrant optional)
 
 `knowledge.py` holds a seeded catalogue of fault codes per tool family. Each code has root causes with
 their own repair-time distributions, giving 1,800 past repairs. Each repair's symptom is embedded
-(hashed word and character-trigram features, 512-d, L2-normalised: no model download) and indexed in
-Qdrant with the family as payload.
+(hashed word, word-pair and character-trigram features, 512-d, L2-normalised: a lexical vector, no
+learned model and no download) and indexed per fab with the family as payload.
 
 For a new tool-down: filter by family, take the top 12 neighbours by cosine similarity, then predict
 duration as a similarity²-weighted mean with a p10–p90 range. The likely root cause comes from a
-weighted vote, and the most frequent fixers are listed. This is k-NN regression, so every prediction
-can be traced back to the neighbours that produced it.
+weighted vote, and the most frequent fixers on the shift's roster are listed. This is k-NN
+regression, so every prediction can be traced back to the neighbours that produced it. When the best
+neighbour scores below 0.35 (vague text such as "tool is down") there is no prediction: the response
+says `no similar repair history` and shows the nearest records only as labelled `weak_matches`, and
+`/predict-durations` leaves the job at its standard estimate (`skipped`). A prediction carries a
+`match` label (`close` / `partial`) with its mean similarity.
 
-Search is **exact** by default: the vectors are normalised, so cosine similarity is one NumPy matrix
-product. At 1,800 repairs per fab that's ~0.1 ms per query and an 80 ms build on first use, with no
-vector database to run. Ties break by repair id, so answers are reproducible. Real history grows into
-the millions; `FAB_QDRANT_URL` moves the same interface onto a Qdrant server with approximate (HNSW)
-search, and `FAB_QDRANT_PATH` keeps an embedded on-disk Qdrant for experiments.
+Search is **exact** by default and in production: the vectors are normalised, so cosine similarity is
+one NumPy matrix product. At 1,800 repairs per fab that's ~0.1 ms per query and an 80 ms build on
+first use, with no vector database to run (`FAB_QDRANT_URL` is unset). Ties break by repair id, so
+answers are reproducible. Real history grows into the millions; `FAB_QDRANT_URL` moves the same
+interface onto a Qdrant server with approximate (HNSW) search, and `FAB_QDRANT_PATH` keeps an
+embedded on-disk Qdrant for experiments.
+
+**The assistant** (`app/assistant/`) reuses the same hashed embedder for the help center: each
+section, or glossary term, is one point in qdrant-client's in-memory mode; a query fetches every
+point and re-scores it in Python with IDF-weighted keyword, heading and body matches. That is lexical
+retrieval, not semantic search; [ai.md](ai.md) states what it is, how it is evaluated, what the optional
+LLM sees, and the thresholds.
 
 ## 7. Configuration and migrations
 
@@ -203,7 +214,7 @@ Full solver numbers are in [ANALYSIS.md](ANALYSIS.md).
 | `app/algorithms/*` | the six solvers |
 | `app/engine.py` | run a solver, then build assignments, explanations and metrics |
 | `app/live.py` | live shift state machine |
-| `app/knowledge.py` | repair history, embedder, Qdrant index |
+| `app/knowledge.py` | repair history, hashed embedder, exact k-NN index (Qdrant optional) |
 | `app/services.py`, `app/cache.py` | plan cache |
 | `app/store.py` | `Store` interface with SQLite and Postgres implementations |
 | `app/routes/*` | HTTP surface |

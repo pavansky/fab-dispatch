@@ -178,13 +178,14 @@ keeps the UI accessible: the floor plan's jobs became real buttons because the t
 
 ### D24. A grounded assistant: retrieval and tools first, an LLM only to reword
 **Decision.** The assistant classifies the question, then answers only from tools: retrieval over the
-help articles (hybrid: vectors in Qdrant plus keyword, heading and section-text matches) and the
+help articles (lexical: hashed n-gram vectors plus keyword, heading and section-text matches) and the
 planning service for the shift on screen. Every answer carries citations and actions. Below a
 measured retrieval score it says "I don't know". An LLM is optional and only rewords the grounded
 answer; citations and actions never come from it.
 **Why.** A dispatcher acts on these answers, so a confident wrong one is worse than none. Grounding
-makes answers checkable and identical to what the screen shows; the refusal threshold sits between
-on-topic (≥ 0.6) and off-topic (≤ 0.36) scores on an evaluation set that runs in CI. It also meets
+makes answers checkable and identical to what the screen shows; the refusal threshold (0.5) is set on
+an evaluation set that runs in CI end to end (keyword phrasings, paraphrases and off-topic questions,
+figures in [ai.md](ai.md)), and tasks the app doesn't do are refused by rule. It also meets
 the brief's no-keys rule, and makes the LLM a swappable enhancement, not a dependency.
 
 ### D25. One-click guest access for the public demo
