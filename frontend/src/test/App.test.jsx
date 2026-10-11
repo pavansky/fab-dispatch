@@ -8,6 +8,9 @@ import { errorBody, fixtures, json, mockApi, workspaceRoutes } from './api.js'
 import { renderApp, signInAs } from './app.jsx'
 
 const results = ALGO_ORDER.map((a) => fixtures.plans[a])
+// A job Greedy leaves unassigned that another strategy serves (the fixtures decide which).
+const stranded = fixtures.plans.greedy.unassigned.map((u) => u.job_id)
+  .find((id) => ALGO_ORDER.some((a) => fixtures.plans[a].assignments.some((x) => x.job_id === id)))
 
 describe('sign-in', () => {
   it('offers one-click demo roles in local mode', async () => {
@@ -86,8 +89,8 @@ describe('planning workspace', () => {
   it('renders findings as elements, so markup in the data is shown, not interpreted', async () => {
     const routes = workspaceRoutes()
     const hostile = '<img src=x onerror="window.pwned=1">'
-    // J006 is the job Greedy strands and others serve, so its id is quoted in a finding.
-    const rename = (x) => JSON.parse(JSON.stringify(x).replaceAll('J006', hostile.replaceAll('"', '\\"')))
+    // The job Greedy strands and others serve is quoted by id in a finding.
+    const rename = (x) => JSON.parse(JSON.stringify(x).replaceAll(stranded, hostile.replaceAll('"', '\\"')))
     routes['POST /scenario'] = rename(fixtures.scenario)
     routes['POST /plan'] = ({ body }) => rename(fixtures.plans[body.algorithm])
     await signInAs('dispatcher', routes)
@@ -133,11 +136,11 @@ describe('planning workspace', () => {
   it('explains a job picked on the floor plan, per strategy', async () => {
     const { user } = await signInAs('dispatcher')
     await user.click(screen.getByRole('tab', { name: /Floor plan/ }))
-    await user.click(await screen.findByRole('button', { name: /^J006,/ }))
+    await user.click(await screen.findByRole('button', { name: new RegExp(`^${stranded},`) }))
     const inspector = await screen.findByRole('complementary', { name: 'Inspector' })
-    expect(within(inspector).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
-    expect(within(inspector).getByText('Unassigned')).toBeInTheDocument() // Greedy leaves it
-    expect(new URL(location.href).searchParams.get('job')).toBe('J006')
+    expect(within(inspector).getByRole('heading', { level: 3 })).toHaveTextContent(stranded)
+    expect(within(inspector).getAllByText('Unassigned').length).toBeGreaterThan(0) // Greedy leaves it
+    expect(new URL(location.href).searchParams.get('job')).toBe(stranded)
   })
 
   it('starts in the light theme and remembers a change', async () => {

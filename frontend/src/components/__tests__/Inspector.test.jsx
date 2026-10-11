@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Inspector from '../Inspector.jsx'
 import { setActiveFab } from '../../lib/fab.js'
 import { ALGO_ORDER } from '../../lib/metrics.js'
+import { REJECTION_LABEL } from '../../lib/format.js'
 import { fixtures, mockApi } from '../../test/api.js'
 
 const { scenario, plans, fab1 } = fixtures
@@ -47,12 +48,43 @@ describe('Inspector', () => {
   })
 
   it('says why a strategy left the job unserved, with counted rejection reasons', () => {
-    renderInspector({ type: 'job', id: 'J006' })
-    const greedy = plans.greedy.unassigned.find((u) => u.job_id === 'J006')
-    const block = screen.getByText(greedy.reason).closest('.decision')
+    const greedy = plans.greedy.unassigned[0] // whichever job the fixture's Greedy plan strands
+    renderInspector({ type: 'job', id: greedy.job_id })
+    const block = screen.getAllByText(greedy.reason).map((el) => el.closest('.decision')).find((b) => within(b).queryByText('Greedy'))
     expect(within(block).getByText('Unassigned')).toBeInTheDocument()
-    expect(within(block).getByText(`${greedy.rejections.skill_missing}× not certified`)).toBeInTheDocument()
-    expect(within(block).getByText(`${greedy.rejections.at_capacity}× at max jobs`)).toBeInTheDocument()
+    expect(Object.keys(greedy.rejections).length).toBeGreaterThan(0)
+    for (const [k, n] of Object.entries(greedy.rejections)) expect(within(block).getByText(`${n}× ${REJECTION_LABEL[k]}`)).toBeInTheDocument()
+  })
+
+  it('shows a null duration prediction as its reason plus weak matches, labelled weak', async () => {
+    mockApi({ 'POST /repairs/similar': {
+      prediction: null, reason: 'no similar repair history', experienced_engineers: [], neighbours: [],
+      weak_matches: [{ score: 0.21, id: 'r-1', code: 'MET-02', symptom: 'stage drift after warm-up', cause: 'encoder', fix: 'replaced encoder', minutes: 95, engineer: 'E09' }],
+      index: { mode: 'exact', embedder: 'hashed-ngram', size: 1800 },
+    } })
+    const job = scenario.jobs.find((j) => j.kind === 'down' && j.symptom)
+    renderInspector({ type: 'job', id: job.id })
+    expect(await screen.findByText('No prediction')).toBeInTheDocument()
+    expect(screen.getByText(/no similar repair history; the planner's \d+ min estimate stands/)).toBeInTheDocument()
+    const weak = screen.getByRole('list', { name: 'Weak matches' })
+    expect(within(weak).getByText('21% weak')).toBeInTheDocument()
+    expect(within(weak).getByText('stage drift after warm-up: replaced encoder')).toBeInTheDocument()
+    expect(screen.queryByText(/predicted \(p10/)).not.toBeInTheDocument()
+    expect(screen.getByText(/1,800 past repairs · exact search · hashed-ngram/)).toBeInTheDocument()
+  })
+
+  it('shows a prediction against the planned duration when the history is close enough', async () => {
+    mockApi({ 'POST /repairs/similar': {
+      prediction: { minutes: 95, p10: 70, p90: 130, likely_cause: 'encoder', cause_share: 0.6 }, experienced_engineers: [['E09', 3]],
+      neighbours: [{ score: 0.9, id: 'r-1', symptom: 'calibration out', cause: 'encoder', fix: 'requalified', minutes: 95, engineer: 'E09' }],
+      index: { mode: 'exact', embedder: 'hashed-ngram', size: 1800 },
+    } })
+    const job = scenario.jobs.find((j) => j.kind === 'down' && j.symptom)
+    renderInspector({ type: 'job', id: job.id })
+    expect(await screen.findByText('95 min')).toBeInTheDocument()
+    expect(screen.getByText(`predicted (p10–p90 70–130) vs ${job.duration} min planned`)).toBeInTheDocument()
+    expect(screen.getByText(/Fixed this before: E09 \(3×\)/)).toBeInTheDocument()
+    expect(screen.queryByText('No prediction')).not.toBeInTheDocument()
   })
 
   it('jumps from a decision to the engineer who got the job', async () => {

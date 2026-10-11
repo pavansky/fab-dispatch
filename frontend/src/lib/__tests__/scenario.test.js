@@ -14,7 +14,11 @@ describe('responseTargets', () => {
       { priority: 3, earliest: 10, latest: 50 }, { priority: 3, earliest: 0, latest: 40 }, { priority: 3, earliest: 5, latest: 50 },
       { priority: 2, earliest: 0, latest: 150 },
     ]
-    expect(responseTargets(fab1, 'normal', { jobs })).toEqual({ 3: 40, 2: 150, 1: 240 })
+    const noSla = { presets: { normal: { label: 'Normal shift' } } } // a profile that states no targets
+    expect(responseTargets(noSla, 'normal', { jobs })).toEqual({ 3: 40, 2: 150, 1: 240 })
+    // The fab profile's own targets come first, whatever the shift's windows say.
+    const { sla_critical, sla_down } = fab1.presets.normal
+    expect(responseTargets(fab1, 'normal', { jobs })).toEqual({ 3: sla_critical, 2: sla_down, 1: 240 })
   })
   it('uses the generic defaults when neither says', () => {
     expect(responseTargets(null, undefined, { jobs: [] })).toEqual({ 3: 45, 2: 120, 1: 240 })

@@ -133,8 +133,18 @@ describe('assistant', () => {
   it('says plainly when it does not know, and offers other questions', async () => {
     const { user, panel } = await openAssistant()
     await user.type(within(panel).getByRole('textbox', { name: 'Your question' }), 'Tell me a joke{Enter}')
-    expect(await within(panel).findByText(/^I don't know that one/)).toBeInTheDocument()
+    // The assistant's own refusal, as the API words it: no sources, no actions, other questions offered.
+    expect(await within(panel).findByText(fixtures.askUnknown.answer)).toBeInTheDocument()
+    expect(fixtures.askUnknown).toMatchObject({ intent: 'unknown', citations: [], actions: [] })
     expect(within(within(panel).getByLabelText('Suggested questions')).getAllByRole('button').length).toBeGreaterThan(0)
+  })
+
+  it('says when the reworded answer was not used and the grounded draft is shown', async () => {
+    const { user, panel } = await openAssistant('dispatcher', {
+      ...workspaceRoutes(), 'POST /assistant/ask': { ...fixtures.askDocs, provider: 'local', fallback_reason: 'rewrite named a job not in the draft' },
+    })
+    await user.type(within(panel).getByRole('textbox', { name: 'Your question' }), 'How do I take an engineer off shift?{Enter}')
+    expect(await within(panel).findByText(/the reworded version was not used \(rewrite named a job not in the draft\)/)).toBeInTheDocument()
   })
 
   it('shows an error in the conversation when the service fails', async () => {
@@ -148,7 +158,7 @@ describe('assistant', () => {
   it('keeps the conversation when closed and reopened, and can clear it', async () => {
     const { user, panel } = await openAssistant()
     await user.type(within(panel).getByRole('textbox', { name: 'Your question' }), 'Tell me a joke{Enter}')
-    await within(panel).findByText(/^I don't know/)
+    await within(panel).findByText(fixtures.askUnknown.answer)
     await user.click(within(panel).getByRole('button', { name: 'Close assistant' }))
     await user.click(screen.getByRole('button', { name: 'Ask the assistant' }))
     const again = await screen.findByRole('dialog', { name: 'Assistant' })

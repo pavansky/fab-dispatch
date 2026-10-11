@@ -13,8 +13,9 @@ import { setActiveFab } from '../../lib/fab.js'
 import { fixtures, mockApi } from '../../test/api.js'
 
 const { scenario, plans, fab1, meta } = fixtures
-// The fixture plans predate the new keys: no workload_minutes_std, response_p95_min, unserved_downs.
-const oldKeys = ALGO_ORDER.map((a) => plans[a])
+// Plans from an older API: none of workload_minutes_std, response_p95_min, unserved_downs, critical_jobs.
+const NEW_KEYS = ['workload_minutes_std', 'response_p95_min', 'unserved_downs', 'critical_jobs']
+const oldKeys = ALGO_ORDER.map((a) => ({ ...plans[a], metrics: Object.fromEntries(Object.entries(plans[a].metrics).filter(([k]) => !NEW_KEYS.includes(k))) }))
 // A shift without bottleneck downs: critical_coverage_pct is null, and the new keys are present.
 const noDowns = ALGO_ORDER.map((a, i) => ({
   ...plans[a],

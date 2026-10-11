@@ -125,8 +125,9 @@ describe('live dispatch', () => {
   it('raises an alert when a bottleneck tool goes down', async () => {
     const ctx = await openLive()
     await startShift(ctx)
-    const down = shiftEvents.find((e) => e.kind === 'job_reported')
-    FakeEventSource.latest().emit({ ...down, data: { ...down.data, priority: 3 } })
+    // What the API streams when a dispatcher reports a priority-3 down (the fixture shift has none).
+    const down = { id: 99, kind: 'job_reported', clock: 30, message: 'dispatcher@demo.local reported LIVE01 (ETC-LIVE) down.', data: { job_id: 'LIVE01', priority: 3 }, actor: 'dispatcher@demo.local', version: 2 }
+    FakeEventSource.latest().emit(down)
     expect(await screen.findByText(`Bottleneck down: ${down.message}`)).toBeInTheDocument()
   })
 
@@ -264,12 +265,18 @@ describe('live dispatch: leaving and sharing', () => {
 
 describe('live dispatch: actions', () => {
   it("says why a bottleneck down is unassigned, from the plan's own reason", async () => {
-    const down = shift.state.scenario.jobs.find((j) => j.priority === 3)
+    // The live state embeds released jobs only; a reported bottleneck down joins both lists.
+    const down = { ...fixtures.scenario.jobs.find((j) => j.priority === 3), earliest: 0, latest: 45 }
     const reason = '2 qualified engineer(s), but none can arrive before 07:45.'
     const { events: _e, ...base } = shift
     const view = {
       ...base,
-      state: { ...base.state, released: [...base.state.released, down.id], plan: { ...base.state.plan, unassigned: [{ job_id: down.id, reason, rejections: {} }] } },
+      state: {
+        ...base.state,
+        scenario: { ...base.state.scenario, jobs: [...base.state.scenario.jobs, down] },
+        released: [...base.state.released, down.id],
+        plan: { ...base.state.plan, unassigned: [{ job_id: down.id, reason, rejections: {} }] },
+      },
       status: { ...base.status, [down.id]: 'unassigned' },
     }
     const ctx = await openLive('dispatcher', { 'POST /shifts': view, [`GET /shifts/${id}`]: view })
