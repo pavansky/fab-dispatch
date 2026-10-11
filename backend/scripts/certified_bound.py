@@ -1,18 +1,24 @@
 """Certified bounds on the optimum at sizes the exact solver can't prove in time.
 
-    python -m scripts.certified_bound 30 100 0 out/cg_30x100_s0   # writes .log and .json
+    python -m scripts.certified_bound 30 100 0 out/cg_30x100_s0            # one seed; writes .log and .json
+    python -m scripts.certified_bound 20 65 0 out/cg_20x65 --seeds 3 --preset normal
 
+With ``--seeds N`` the study runs seeds ``seed .. seed+N-1``, writes one ``<out>_s<seed>.json``
+per seed and a ``<out>.json`` summary with the per-heuristic mean and worst certified gap.
 
 1. Enumerate every feasible route (same code as the exact solver).
 2. Restricted master LP over a small column set (each heuristic's routes): solve, read duals.
 3. Price ALL routes at once (reduced cost = cost - A^T duals, one sparse mat-vec); add the most
    negative; repeat until none is negative. The final LP value is a LOWER BOUND on any plan.
 4. Integer solve over the generated columns gives a real plan (UPPER BOUND).
-Every heuristic's gap to the lower bound is then a certified maximum gap to the optimum.
+Every heuristic's gap to the lower bound is then a certified maximum gap to the optimum. The
+report also gives each gap on the *changeable* cost (the bound less the penalty of jobs no
+engineer on shift is certified for; see ANALYSIS, "gap on the changeable cost").
 """
 
 import argparse
 import json
+import statistics
 import time
 
 import highspy
@@ -34,29 +40,40 @@ def log(msg):
         f.write(line + "\n")
 
 
-def main(argv: list[str] | None = None) -> dict:
-    global OUT
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("engineers", type=int)
-    ap.add_argument("jobs", type=int)
-    ap.add_argument("seed", type=int)
-    ap.add_argument("out", help="output path prefix (.log and .json are added)")
-    ap.add_argument("--mip-time-limit", type=float, default=3600, help="seconds for the final integer solve")
-    args = ap.parse_args(argv)
-    E, J, SEED, OUT = args.engineers, args.jobs, args.seed, args.out
+def _solve(A, c, m, colset, integer=False, time_limit=None):
+    idx = np.array(sorted(colset))
+    sub = A[:, idx]
+    lp = highspy.HighsLp()
+    lp.num_col_, lp.num_row_ = len(idx), m
+    lp.col_cost_ = c[idx]
+    lp.col_lower_ = np.zeros(len(idx))
+    # No explicit x <= 1: each route uses its engineer's row (<= 1), which implies it. An explicit
+    # bound would let in-model columns sit at 1 with negative reduced cost and stall pricing.
+    lp.col_upper_ = np.ones(len(idx)) if integer else np.full(len(idx), highspy.kHighsInf)
+    lp.row_lower_ = np.full(m, -highspy.kHighsInf)
+    lp.row_upper_ = np.ones(m)
+    lp.a_matrix_.format_ = highspy.MatrixFormat.kColwise
+    lp.a_matrix_.start_ = sub.indptr.astype(np.int32)
+    lp.a_matrix_.index_ = sub.indices.astype(np.int32)
+    lp.a_matrix_.value_ = sub.data
+    if integer:
+        lp.integrality_ = [highspy.HighsVarType.kInteger] * len(idx)
+    hs = highspy.Highs()
+    hs.setOptionValue("output_flag", False)
+    hs.setOptionValue("mip_rel_gap", 0.0)
+    if time_limit:
+        hs.setOptionValue("time_limit", float(time_limit))
+    hs.passModel(lp)
+    hs.run()
+    info = hs.getInfo()
+    return hs, info, idx
 
-    max_routes = exact.MAX_ROUTES
-    exact.MAX_ROUTES = 10**9
-    try:
-        return _study(E, J, SEED, args.mip_time_limit)
-    finally:
-        exact.MAX_ROUTES = max_routes
 
-
-def _study(E: int, J: int, SEED: int, mip_time_limit: float) -> dict:
-    sc = generate(SEED, E, J, "normal")
+def certify(engineers: int, jobs: int, seed: int, preset: str, mip_time_limit: float, out: str) -> dict:
+    """Bound one shift; writes ``<out>.json`` and returns the report."""
+    sc = generate(seed, engineers, jobs, preset)
     w = Weights()
-    log(f"size {E}x{J} seed {SEED}")
+    log(f"size {engineers}x{jobs} seed {seed} preset {preset}")
     heur = {}
     for a, (_, fn) in ALGORITHMS.items():
         q = Planner(sc, w)
@@ -66,10 +83,10 @@ def _study(E: int, J: int, SEED: int, mip_time_limit: float) -> dict:
         log(f"heuristic {a}: cost {heur[a]['cost']:.2f} in {heur[a]['seconds']:.2f}s")
 
     p = Planner(sc, w)
-    jobs = p.unplaced()
-    ji = {j: i for i, j in enumerate(jobs)}
+    open_jobs = p.unplaced()
+    ji = {j: i for i, j in enumerate(open_jobs)}
     techs = list(p.techs)
-    m = E + len(jobs)
+    m = engineers + len(open_jobs)
     t0 = time.perf_counter()
     cost, start, index, key = [], [0], [], {}
     for k, tid in enumerate(techs):
@@ -77,15 +94,19 @@ def _study(E: int, J: int, SEED: int, mip_time_limit: float) -> dict:
             key[(tid, s)] = len(cost)
             cost.append(c)
             index.append(k)
-            index.extend(E + ji[j] for j in seq)
+            index.extend(engineers + ji[j] for j in seq)
             start.append(len(index))
-        if (k + 1) % 5 == 0 or k + 1 == E:
-            log(f"enumerated {k + 1}/{E} engineers: {len(cost):,} routes, {time.perf_counter() - t0:.0f}s")
+        if (k + 1) % 5 == 0 or k + 1 == engineers:
+            log(f"enumerated {k + 1}/{engineers} engineers: {len(cost):,} routes, {time.perf_counter() - t0:.0f}s")
     n = len(cost)
     c = np.array(cost)
     A = csc_matrix((np.ones(len(index)), np.array(index), np.array(start)), shape=(m, n))
     del cost, index, start
     reward = sum(w.priority_reward * j.priority for j in p.open_jobs.values())
+    # Jobs no engineer on shift can serve cost their penalty in every plan, the optimum included.
+    uncoverable = sum(
+        w.priority_reward * p.jobs[j].priority for j in open_jobs if all(p.tech_can_do(t, j) for t in techs)
+    )
 
     # initial columns: every heuristic's routes, plus each engineer's empty route
     cols = set()
@@ -97,45 +118,18 @@ def _study(E: int, J: int, SEED: int, mip_time_limit: float) -> dict:
         cols.add(key[(tid, frozenset())])
     del key
 
-    def solve(colset, integer=False, time_limit=None):
-        idx = np.array(sorted(colset))
-        sub = A[:, idx]
-        lp = highspy.HighsLp()
-        lp.num_col_, lp.num_row_ = len(idx), m
-        lp.col_cost_ = c[idx]
-        lp.col_lower_ = np.zeros(len(idx))
-        # No explicit x <= 1: each route uses its engineer's row (<= 1), which implies it. An explicit
-        # bound would let in-model columns sit at 1 with negative reduced cost and stall pricing.
-        lp.col_upper_ = np.ones(len(idx)) if integer else np.full(len(idx), highspy.kHighsInf)
-        lp.row_lower_ = np.full(m, -highspy.kHighsInf)
-        lp.row_upper_ = np.ones(m)
-        lp.a_matrix_.format_ = highspy.MatrixFormat.kColwise
-        lp.a_matrix_.start_ = sub.indptr.astype(np.int32)
-        lp.a_matrix_.index_ = sub.indices.astype(np.int32)
-        lp.a_matrix_.value_ = sub.data
-        if integer:
-            lp.integrality_ = [highspy.HighsVarType.kInteger] * len(idx)
-        hs = highspy.Highs()
-        hs.setOptionValue("output_flag", False)
-        hs.setOptionValue("mip_rel_gap", 0.0)
-        if time_limit:
-            hs.setOptionValue("time_limit", float(time_limit))
-        hs.passModel(lp)
-        hs.run()
-        info = hs.getInfo()
-        return hs, info, idx
-
     it = 0
     t1 = time.perf_counter()
     while True:
         it += 1
-        hs, info, idx = solve(cols)
+        hs, info, idx = _solve(A, c, m, cols)
         y = np.array(hs.getSolution().row_dual)
         rc = c - A.T @ y
         rc[idx] = 0.0  # price only routes not yet in the master
         neg = np.flatnonzero(rc < -1e-7)
         log(
-            f"colgen iter {it}: LP {info.objective_function_value + reward:.3f}, columns {len(cols):,}, improving routes {len(neg):,}, min reduced cost {rc.min():.4f}"
+            f"colgen iter {it}: LP {info.objective_function_value + reward:.3f}, columns {len(cols):,}, "
+            f"improving routes {len(neg):,}, min reduced cost {rc.min():.4f}"
         )
         if len(neg) == 0:
             break
@@ -144,7 +138,7 @@ def _study(E: int, J: int, SEED: int, mip_time_limit: float) -> dict:
     lower = info.objective_function_value + reward
     log(f"LP converged: certified lower bound {lower:.3f} after {it} iterations, {time.perf_counter() - t1:.0f}s")
 
-    hs, info, idx = solve(cols, integer=True, time_limit=mip_time_limit)
+    hs, info, idx = _solve(A, c, m, cols, integer=True, time_limit=mip_time_limit)
     upper = info.objective_function_value + reward
     status = hs.modelStatusToString(hs.getModelStatus())
     log(f"integer solve over {len(cols):,} generated columns: {status}, best plan {upper:.3f}")
@@ -154,12 +148,14 @@ def _study(E: int, J: int, SEED: int, mip_time_limit: float) -> dict:
         + (" (proven optimal)" if gap_ub_lb < 1e-6 else "")
     )
     report = {
-        "size": f"{E}x{J}",
-        "seed": SEED,
+        "size": f"{engineers}x{jobs}",
+        "seed": seed,
+        "preset": preset,
         "routes": n,
         "lower_bound": lower,
         "best_plan": upper,
         "best_plan_gap_to_bound_pct": gap_ub_lb,
+        "uncoverable_penalty": uncoverable,
         "colgen_iterations": it,
         "columns_generated": len(cols),
         "heuristics": {
@@ -171,14 +167,78 @@ def _study(E: int, J: int, SEED: int, mip_time_limit: float) -> dict:
             }
             for a, h in heur.items()
         },
+        # The same certified gaps on the part of the cost any plan can change.
+        "max_gap_on_changeable_pct": {a: 100 * (h["cost"] - lower) / abs(lower - uncoverable) for a, h in heur.items()},
     }
-    with open(OUT + ".json", "w") as f:
+    with open(out + ".json", "w") as f:
         json.dump(report, f, indent=1)
     for a, r in report["heuristics"].items():
         log(
-            f"| {a} | cost {r['cost']:.1f} | {r['gap_to_best_pct']:.2f}% above best plan | at most {r['max_gap_to_optimum_pct']:.2f}% above optimum | {r['seconds']:.1f}s |"
+            f"| {a} | cost {r['cost']:.1f} | {r['gap_to_best_pct']:.2f}% above best plan | at most "
+            f"{r['max_gap_to_optimum_pct']:.2f}% above optimum ({report['max_gap_on_changeable_pct'][a]:.2f}% on the "
+            f"changeable cost) | {r['seconds']:.1f}s |"
         )
     return report
+
+
+def summarise(reports: list[dict], out: str) -> dict:
+    summary = {
+        "size": reports[0]["size"],
+        "preset": reports[0]["preset"],
+        "seeds": [r["seed"] for r in reports],
+        "routes_mean": statistics.fmean(r["routes"] for r in reports),
+        "best_plan_gap_to_bound_pct_worst": max(r["best_plan_gap_to_bound_pct"] for r in reports),
+        "heuristics": {
+            a: {
+                "max_gap_to_optimum_pct_mean": statistics.fmean(
+                    r["heuristics"][a]["max_gap_to_optimum_pct"] for r in reports
+                ),
+                "max_gap_to_optimum_pct_worst": max(r["heuristics"][a]["max_gap_to_optimum_pct"] for r in reports),
+                "max_gap_on_changeable_pct_mean": statistics.fmean(r["max_gap_on_changeable_pct"][a] for r in reports),
+            }
+            for a in ALGORITHMS
+        },
+    }
+    with open(out + ".json", "w") as f:
+        json.dump(summary, f, indent=1)
+    log(f"summary over {len(reports)} seed(s) at {summary['size']} ({summary['preset']}):")
+    log("| Strategy | Max gap to optimum, mean | worst | on the changeable cost, mean |")
+    for a, h in summary["heuristics"].items():
+        log(
+            f"| {a} | {h['max_gap_to_optimum_pct_mean']:.2f}% | {h['max_gap_to_optimum_pct_worst']:.2f}% | "
+            f"{h['max_gap_on_changeable_pct_mean']:.2f}% |"
+        )
+    return summary
+
+
+def main(argv: list[str] | None = None) -> dict:
+    """One seed (the default): writes ``<out>.json`` and returns that shift's report. With
+    ``--seeds N`` > 1: writes ``<out>_s<seed>.json`` per seed and the ``<out>.json`` summary, and
+    returns the summary."""
+    global OUT
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("engineers", type=int)
+    ap.add_argument("jobs", type=int)
+    ap.add_argument("seed", type=int, help="first seed")
+    ap.add_argument("out", help="output path prefix (.log and .json are added)")
+    ap.add_argument("--seeds", type=int, default=1, help="number of seeded shifts, starting at seed")
+    ap.add_argument("--preset", default="normal")
+    ap.add_argument("--mip-time-limit", type=float, default=3600, help="seconds for the final integer solve, per seed")
+    args = ap.parse_args(argv)
+    OUT = args.out
+
+    max_routes = exact.MAX_ROUTES
+    exact.MAX_ROUTES = 10**9
+    try:
+        if args.seeds <= 1:
+            return certify(args.engineers, args.jobs, args.seed, args.preset, args.mip_time_limit, OUT)
+        reports = [
+            certify(args.engineers, args.jobs, seed, args.preset, args.mip_time_limit, f"{OUT}_s{seed}")
+            for seed in range(args.seed, args.seed + args.seeds)
+        ]
+        return summarise(reports, OUT)
+    finally:
+        exact.MAX_ROUTES = max_routes
 
 
 if __name__ == "__main__":

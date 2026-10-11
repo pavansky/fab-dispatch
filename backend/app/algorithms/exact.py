@@ -11,8 +11,8 @@
    ``scipy.optimize.milp``, so there's no extra dependency.
 
 Enumeration is exponential in route length, but routes here are short (an engineer does at
-most 4-6 jobs a shift) and time windows prune hard: a full 14 x 45 shift has about 40,000
-feasible route sets, enumerated in about a second, and HiGHS proves the optimum in seconds.
+most 4-6 jobs a shift) and time windows prune hard: a full 14 x 45 shift has about 39,000
+feasible route sets (seed 0), enumerated in about a second, and HiGHS proves the optimum in seconds.
 So heuristics are measured against the proven optimum at full size, not just on toy shifts.
 The guard is on the number of routes, which is what actually grows. It is not exposed in the
 interactive UI.

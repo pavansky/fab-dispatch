@@ -16,6 +16,7 @@ dependencies = [
     "qdrant-client==1.19.1",
     "pyjwt[crypto]==2.15.1",
     "psycopg[binary]==3.3.6",
+    "highspy==1.15.1",
 ]
 
 [tool.vercel]

@@ -296,12 +296,13 @@ for 20,000 engineers.
 **Why.** Engineers don't cross fabs, certifications split a fab into near-independent groups, and
 dispatch is per shift and area, so the split should lose little. What was measured is the speed of
 the decomposition, not its cost: in the scale study the groups are independent *by construction*
-(each area is generated and solved on its own), so the 47 s for a 20,000-engineer company (6,660 on
-shift, 222 areas) on one laptop, and the 217 ms live re-plan of one tool-down, show that the split is
-fast, not that it is lossless. What the study does show about quality is that solving the same work
-undecomposed is slower and further from optimal:
-PyVRP's gap grows from 2.7% at 14 × 45 to about 8% at 30 × 100, and ALNS stops improving on its
-start from 150 × 500 (ANALYSIS, "Scale").
+(each area is generated and planned on its own, a fresh plan rather than a re-plan), so the 211 s
+for a 20,000-engineer company's 222 areas (6,660 on shift) on a 4-core container with no area
+hitting the solver's cap, and the 247 ms median live re-plan of one tool-down, show that the split
+is fast, not that it is lossless. What the study does show about quality is that solving the same
+work undecomposed is slower and further from optimal: PyVRP's certified gap grows from 2–4% at
+14 × 45 to about 10% at 20 × 65, and at 150 × 500 a 3 s search gives either search method only a
+handful of iterations past its regret-2 warm start (ANALYSIS, "Scale").
 **Trade-off.** Work that genuinely crosses a boundary (a shared expert, a cross-bay job) needs a
 coordination step between areas; at the measured sizes that hasn't been needed.
 

@@ -81,7 +81,13 @@ def run_pyvrp(
     # PyVRP charges this per time unit of route duration. Only the waiting part is meant to
     # be charged: the walking and service time are cancelled using this same integer rate.
     unit_duration_cost = round(w.wait_min * C / T)
-    arcs = _arcs(np.array(xs), np.array(ys), p, unit_duration_cost, n_fixed=1 + len(techs))
+    # Engineers leaving the home bay are charged no idle wait before their first job (see
+    # Planner._simulate); engineers resuming after started work are. The wait before a
+    # first job is a constant per start->job arc, so it is cancelled on those arcs.
+    depart = np.array([round(start_time[e.id] * T) for e in techs], dtype=np.int64)
+    from_bay = np.array([not p.frozen[e.id].route for e in techs])
+    tw_early = np.array([round(j.earliest * T) for j in jobs], dtype=np.int64)
+    arcs = _arcs(np.array(xs), np.array(ys), p, unit_duration_cost, depart, from_bay, tw_early)
 
     for k, j in enumerate(jobs):
         service = round(j.duration * T)
@@ -126,9 +132,13 @@ def run_pyvrp(
         return {}
 
     data = _with_matrices(m.data(), arcs, jobs, profiles, p)
+    t_warm = time.perf_counter()
     initial = _warm_start(p, data, vt_order, [j.id for j in jobs])
+    t_search = time.perf_counter()
+    # MaxRuntime starts here, after the warm start, the same split as ALNS reports.
     stop = MultipleCriteria([MaxIterations(max_iterations), MaxRuntime(runtime_s)])
     res = solve(data, stop, seed=seed, collect_stats=False, display=False, initial_solution=initial)
+    search_s = time.perf_counter() - t_search
 
     # Re-play PyVRP's routes through our planner, so every number uses one engine.
     client_ids = [c.name for c in data.clients()]
@@ -159,6 +169,8 @@ def run_pyvrp(
     p.meta["solver"] = {
         "iterations": res.num_iterations,
         "hit_time_cap": res.num_iterations < max_iterations,
+        "warm_start_s": round(t_search - t_warm, 4),
+        "search_s": round(search_s, 4),
         "runtime_ms": round((time.perf_counter() - t0) * 1000, 1),
     }
     return decisions
@@ -186,20 +198,37 @@ class _Arcs(NamedTuple):
     offset: np.ndarray  # per job: lifts its column so no arc into it is negative
 
 
-def _arcs(xs: np.ndarray, ys: np.ndarray, p: Planner, unit_duration_cost: int, n_fixed: int) -> _Arcs:
+def _arcs(
+    xs: np.ndarray,
+    ys: np.ndarray,
+    p: Planner,
+    unit_duration_cost: int,
+    depart: np.ndarray,
+    from_bay: np.ndarray,
+    tw_early: np.ndarray,
+) -> _Arcs:
     """Walking cost and time of every arc, in PyVRP's integer units.
 
     PyVRP charges ``unit_duration_cost`` for every time unit of a route, walking included,
-    so the arc cost subtracts exactly that charge for its own walking time. That can make
-    an arc negative, which PyVRP doesn't handle (it stops visiting the job), so each job's
-    column is lifted by ``offset`` and the same amount is added to its prize: a served job
-    has exactly one incoming arc, so serving it costs the offset once and skipping it
-    forfeits the offset once, and the comparison is unchanged.
+    so the arc cost subtracts exactly that charge for its own walking time. The planner
+    charges no idle wait before an engineer's first job from the home bay, and because the
+    vehicle departs at a fixed time that wait is a constant per start->job arc, subtracted
+    here the same way (``depart`` is each engineer's departure time, ``from_bay`` whether
+    they start from the bay rather than from started work, ``tw_early`` each job's window
+    open). Either can make an arc negative, which PyVRP doesn't handle (it stops visiting
+    the job), so each job's column is lifted by ``offset`` and the same amount is added to
+    its prize: a served job has exactly one incoming arc, so serving it costs the offset
+    once and skipping it forfeits the offset once, and the comparison is unchanged.
     """
     w, speed = p.w, p.scenario.settings.walk_m_per_min
+    n_fixed = 1 + len(depart)  # sink + one start per engineer come before the jobs
     metres = np.abs(xs[:, None] - xs[None, :]) + np.abs(ys[:, None] - ys[None, :])
     duration = np.rint(metres / speed * T).astype(np.int64)
     net = np.rint(w.travel_100m * metres / 100 * C).astype(np.int64) - unit_duration_cost * duration
+    if len(tw_early):
+        arrive = depart[:, None] + duration[1:n_fixed, n_fixed:]
+        first_wait = np.maximum(0, tw_early[None, :] - arrive) * from_bay[:, None]
+        net[1:n_fixed, n_fixed:] -= unit_duration_cost * first_wait
     # Arcs into jobs come from a start or another job; the sink (row 0) is never left.
     offset = np.maximum(0, -net[1:, n_fixed:].min(axis=0)) if net.shape[1] > n_fixed else np.zeros(0, np.int64)
     return _Arcs(net, duration, offset)

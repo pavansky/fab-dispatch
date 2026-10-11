@@ -88,31 +88,41 @@ Where each part of a resource-allocation brief lives, in the app and in the code
 
 ## Results
 
-80 seeded shifts (4 scenario types × 20) of 14 engineers and 45 jobs, **every one solved to proven
-optimality**, so each strategy's gap is measured at the size it runs. Full tables and method in
-[docs/ANALYSIS.md](docs/ANALYSIS.md).
+80 seeded shifts (4 scenario types × 20) of 14 engineers and 45 jobs, every strategy scored by the
+same engine, with paired bootstrap confidence intervals on every cost difference. The gap column
+comes from solving every shift to **proven optimality**; it predates the current idle-wait model and
+is marked for regeneration. Full tables and method in [docs/ANALYSIS.md](docs/ANALYSIS.md).
 
-| Strategy | Kind | Solve time* | Lowest cost in | Gap to proven optimum | Strength |
+| Strategy | Kind | Solve time* | Lowest cost in | Gap to proven optimum† | Strength |
 |---|---|---|---|---|---|
-| Greedy | constructive | ~2 ms | 0 / 80 | 28.1% | Instant, simplest to explain |
-| Hungarian | assignment | ~3 ms | 0 / 80 | 25.8% | Fastest response to tool-downs, most even workload |
-| Regret-2 | constructive | ~6 ms | 0 / 80 | 19.4% | Protects scarce certifications |
-| ALNS | metaheuristic | ~0.2 s | 2 / 80 | 5.7% | Optimises the exact objective, including balance |
-| PyVRP | metaheuristic | ~0.4 s | **78 / 80** | **2.7%** | Lowest operating cost of the five |
-| Exact | set-partitioning MILP | ~20 s (max 138 s) | optimal | 0% | Proven optimum for planning ahead; certified bounds at larger sizes by column generation |
+| Greedy | constructive | ~6 ms | 0 / 80 | 28.1% | Instant, simplest to explain |
+| Hungarian | assignment | ~10 ms | 0 / 80 | 25.8% | Most even workload, fast response to tool-downs |
+| Regret-2 | constructive | ~20 ms | 0 / 80 | 19.4% | Protects scarce certifications |
+| ALNS | metaheuristic | ~0.5 s | 36 / 80 | 5.7% | Optimises the exact objective, including balance; cheapest in the litho crunch |
+| PyVRP | metaheuristic | ~1.0 s | **44 / 80** | **2.7%** | Lowest operating cost in three of four presets |
+| Exact | set-partitioning MILP | ~20 s (max 138 s)† | optimal | 0% | Proven optimum for planning ahead; certified bounds at larger sizes by column generation |
 
-**At scale (measured):** a 20,000-engineer company re-plans in 47 s on one laptop (222 areas in
-parallel), a live tool-down re-plans in 217 ms, and at 30 × 100 PyVRP is certified within 8.4% of
-the optimum. Details: [ANALYSIS, "Scale"](docs/ANALYSIS.md).
+**At scale (measured):** the scale study plans 222 independent areas of 30 engineers × 100 jobs
+(6,660 engineers on shift) in parallel and drives 50 tool-downs through the live-dispatch code;
+on a 4-core container that takes 211 s wall clock (1.9 s per area, none hitting the solver's cap) and a live tool-down re-plans in 247 ms median (542 ms p95), spread over the whole shift. At 30 × 100, on one seed, PyVRP was certified within 8.4% of the optimum (old code).
+Details: [ANALYSIS, "Scale"](docs/ANALYSIS.md).
 
-\*Laptop, 14 engineers × 45 jobs. On Vercel's serverless CPU, ALNS and PyVRP take about 0.7–1.3 s.
-A repeated plan is served from cache in under 1 ms of server time.
+\*Median of 5 runs, 14 engineers × 45 jobs, on a 4-core Intel Xeon @ 2.1 GHz container (an Apple M5
+Pro laptop measured 2 / 3 / 6 / 165 / 422 ms before the idle-wait change). On Vercel's serverless
+CPU, ALNS and PyVRP take about 1–3 s. A repeated plan is served from cache in under 1 ms of server
+time.
+†From the last full 80-shift proof, before the idle-wait change (regenerate:
+`python -m scripts.benchmark --seeds 20`).
 
 **What the comparison shows**
-- Search beats one-pass rules: PyVRP is **23–30% cheaper** than the best constructive method in three of
-  four scenario types, mostly by cutting idle wait by a third.
-- Hungarian is the right choice when time-to-respond matters most. It is fastest to every tool-down,
-  but builds up the most idle time.
+- With a known shift, search beats one-pass rules: PyVRP and ALNS are **8–17% cheaper** than the best
+  constructive method, mostly by cutting idle wait (the one-pass rules' is 2–4× higher), and the
+  difference is significant in every scenario type.
+- With tool-downs revealed only as they happen (the live-dispatch replay), the methods **don't
+  separate** on 5 seeds: 19 of 20 cost differences to PyVRP have a confidence interval that includes
+  zero. The static benchmark assumes foresight it wouldn't have on the floor.
+- Hungarian is the right choice when fairness matters most: by far the most even workload and a fast
+  response to tool-downs, but it builds up the most idle time.
 - When certified engineers run out, every strategy hits the same ceiling. The workforce view says so:
   it's a staffing problem, not an algorithm one.
 

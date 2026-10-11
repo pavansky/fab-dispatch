@@ -67,7 +67,9 @@ class Weights(BaseModel):
     """Soft-constraint weights. Everything is expressed in 'cost points'."""
 
     travel_100m: float = Field(4.0, ge=0, description="per 100 m walked on the floor")
-    wait_min: float = Field(0.2, ge=0, description="per minute idle before a window opens")
+    wait_min: float = Field(
+        0.2, ge=0, description="per minute idle at a tool before a window opens (not before the first job)"
+    )
     overqualification: float = Field(8.0, ge=0, description="per level above the job's need")
     workload_balance: float = Field(5.0, ge=0, description="per job the engineer already holds")
     priority_reward: float = Field(60.0, ge=0, description="reward per priority point served")

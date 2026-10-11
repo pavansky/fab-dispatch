@@ -157,17 +157,21 @@ def test_every_intent_has_a_handler_and_is_known_to_feedback():
 
 # ----------------------------------------------------------------------------- grounded answers
 def test_job_answer_matches_the_plans_exactly(shift):
+    """A job greedy leaves out and PyVRP serves: the answer carries greedy's exact reason and
+    PyVRP's engineer. The job is taken from the plans, not hardcoded, so a cost-model change
+    that re-routes the shift doesn't turn this into a test of one seed."""
     sc, plans = shift
-    a = ask("Why is J011 assigned this way?", scenario=sc)
+    served = {x["job_id"]: x for x in plans["pyvrp"]["assignments"]}
+    greedy = next(u for u in plans["greedy"]["unassigned"] if u["job_id"] in served)
+    job, pyvrp = greedy["job_id"], served[greedy["job_id"]]
+    a = ask(f"Why is {job} assigned this way?", scenario=sc)
     assert a["intent"] == "job"
-    assert a["answer"].startswith("**J011**")
-    greedy = next((u for u in plans["greedy"]["unassigned"] if u["job_id"] == "J011"), None)
-    pyvrp = next((x for x in plans["pyvrp"]["assignments"] if x["job_id"] == "J011"), None)
-    assert greedy and greedy["reason"] in a["answer"]  # the same reason the UI shows
-    assert pyvrp and f"**PyVRP:** {pyvrp['tech_id']}" in a["answer"]
-    assert {"label": "Open J011 on the floor plan", "kind": "job", "target": "J011"} in a["actions"]
+    assert a["answer"].startswith(f"**{job}**")
+    assert greedy["reason"] in a["answer"]  # the same reason the UI shows
+    assert f"**PyVRP:** {pyvrp['tech_id']}" in a["answer"]
+    assert {"label": f"Open {job} on the floor plan", "kind": "job", "target": job} in a["actions"]
     assert a["citations"][0]["slug"] == "floor-plan"
-    assert ask("why is job 11 assigned this way?", scenario=sc)["answer"] == a["answer"]
+    assert ask(f"why is job {int(job[1:])} assigned this way?", scenario=sc)["answer"] == a["answer"]
 
 
 def test_job_answer_can_focus_on_one_strategy(shift):
