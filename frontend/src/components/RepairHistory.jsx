@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { similarRepairs } from '../api.js'
 import { activeFab } from '../lib/fab.js'
 
-/** Nearest past repairs for a tool-down (Qdrant), with a duration prediction to compare
- *  against the planner's standard estimate. */
+/** Nearest past repairs for a tool-down (exact k-NN over hashed n-grams; Qdrant optional), with a
+ *  duration prediction to compare against the planner's standard estimate. `prediction` is null
+ *  with a `reason` and `weak_matches` when the symptom has no similar history. */
 export default function RepairHistory({ job }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
