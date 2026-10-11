@@ -1,9 +1,10 @@
 """Runtime settings, read once from environment variables (prefix ``FAB_``) or ``.env``.
 
-Local development needs none of them: the defaults give a SQLite store and an
-in-memory Qdrant collection, so the brief's "no API keys, runs locally" rule holds.
-Production sets ``FAB_DATABASE_URL`` (Supabase/any Postgres) and, optionally,
-``FAB_QDRANT_URL``.
+Local development needs none of them: the defaults give a SQLite store and exact
+nearest-neighbour search in NumPy for repair history (no Qdrant), so the brief's
+"no API keys, runs locally" rule holds. Production sets ``FAB_DATABASE_URL``
+(Supabase/any Postgres) and, optionally, ``FAB_QDRANT_URL`` (a Qdrant server) or
+``FAB_QDRANT_PATH`` (embedded Qdrant on disk).
 """
 
 from __future__ import annotations
@@ -16,19 +17,27 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Published in this repository, so it may sign tokens only where nothing real is at stake.
+DEFAULT_AUTH_SECRET = "local-demo-signing-secret-not-for-production-use"
+DEMO_AUTH_ENVS = frozenset({"local", "test"})  # where demo sign-in needs no opt-in
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="FAB_", env_file=".env", extra="ignore")
 
-    env: str = Field("local", description="local | test | production")
+    env: str = Field("local", description="local | test | staging | production; demo auth only in local/test")
     database_url: str = Field("sqlite:///./data/fab.db", description="sqlite:///path or postgresql://...")
     db_schema: str = Field(
         "public", pattern=r"^[a-z_][a-z0-9_]{0,62}$", description="Postgres schema; lets UAT share a database safely"
     )
-    qdrant_url: str | None = Field(None, description="Qdrant server URL; unset = embedded local mode")
+    qdrant_url: str | None = Field(
+        None, description="Qdrant server URL; unset = no server (FAB_QDRANT_PATH, else exact NumPy search)"
+    )
     qdrant_api_key: str | None = None
     qdrant_path: str | None = Field(
-        None, description="optional on-disk path for embedded Qdrant; unset = in-memory per process"
+        None,
+        description="on-disk path for embedded Qdrant (ignored when FAB_ENV=test); unset, with no "
+        "FAB_QDRANT_URL = exact NumPy search, no Qdrant at all",
     )
     tenant_databases: dict[str, str] = Field(
         default_factory=dict,
@@ -43,7 +52,20 @@ class Settings(BaseSettings):
         "posting tool-downs (POST /api/ingest/tool-downs). Store hashes, never tokens.",
     )
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
-    solver_time_limit_s: float = Field(3.0, gt=0, le=20, description="safety cap for ALNS and PyVRP")
+    max_engineers: int = Field(
+        60,
+        ge=1,
+        le=100_000,
+        description="largest shift the API generates or plans (engineers). 60 x 200 keeps the hosted "
+        "demo inside its 60 s function limit; raise both locally to run 1000 x 1000 (ANALYSIS, Scale)",
+    )
+    max_jobs: int = Field(200, ge=1, le=1_000_000, description="largest shift the API generates or plans (jobs)")
+    solver_time_limit_s: float = Field(
+        3.0,
+        gt=0,
+        le=3600,
+        description="safety cap for ALNS and PyVRP; 3 s suits the hosted demo, a local 1000 x 1000 run wants minutes",
+    )
     alns_iterations: int = Field(300, ge=1, description="ALNS iteration budget (deterministic stop); see ANALYSIS §1")
     pyvrp_iterations: int = Field(
         1000, ge=1, description="PyVRP iteration budget (deterministic stop); see ANALYSIS §1"
@@ -57,10 +79,16 @@ class Settings(BaseSettings):
 
     # ---- authentication ------------------------------------------------------------
     auth_mode: Literal["demo", "supabase"] = Field(
-        "demo", description="demo = one-click local sign-in (refused in production); supabase = Supabase Auth"
+        "demo",
+        description="demo = one-click local sign-in (refused outside local/test unless opted in); "
+        "supabase = Supabase Auth",
     )
-    auth_secret: str = Field("local-demo-signing-secret-not-for-production-use", description="signs demo-mode tokens")
-    allow_demo_auth_in_production: bool = Field(False, description="explicit opt-in for a public demo deployment")
+    auth_secret: str = Field(DEFAULT_AUTH_SECRET, description="signs demo-mode tokens")
+    allow_demo_auth_in_production: bool = Field(
+        False,
+        description="explicit opt-in for demo auth outside local/test (a public demo deployment); "
+        "needs a non-default FAB_AUTH_SECRET",
+    )
     supabase_url: str | None = Field(None, validation_alias=AliasChoices("FAB_SUPABASE_URL", "SUPABASE_URL"))
     supabase_publishable_key: str | None = Field(
         None,
@@ -70,6 +98,13 @@ class Settings(BaseSettings):
         None, validation_alias=AliasChoices("FAB_SUPABASE_JWT_SECRET", "SUPABASE_JWT_SECRET")
     )
     dispatcher_emails: list[str] = Field(default_factory=list, description="bootstrap dispatchers by email")
+    stream_ticket_secret: str | None = Field(
+        None,
+        description="signs the 90 s tickets that open an SSE stream; unset = the Supabase JWT secret "
+        "or demo signing secret, or (neither configured) a key private to each process, which breaks "
+        "with several instances",
+        repr=False,
+    )
     turnstile_site_key: str | None = Field(
         None, description="Cloudflare Turnstile site key (public); set when CAPTCHA is on in Supabase Auth"
     )
@@ -81,6 +116,22 @@ class Settings(BaseSettings):
         default_factory=lambda: ["*"], description="fabs a user can access unless their profile says otherwise"
     )
     cron_secret: str | None = Field(None, validation_alias=AliasChoices("FAB_CRON_SECRET", "CRON_SECRET"))
+
+    # ---- client address (per-IP rate limits) --------------------------------------
+    client_ip_header: str | None = Field(
+        None,
+        description="header the hosting platform sets to the caller's IP and clients cannot set "
+        "(x-vercel-forwarded-for on Vercel, set automatically there; cf-connecting-ip behind "
+        "Cloudflare); unset = no such header is trusted",
+    )
+    trusted_proxy_hops: int = Field(
+        0,
+        ge=0,
+        le=10,
+        description="reverse proxies in front of the API that append to X-Forwarded-For; the "
+        "client is the entry this many places from the right. 0 = X-Forwarded-For is ignored, "
+        "since clients can write it",
+    )
 
     # ---- assistant -----------------------------------------------------------------
     assistant_llm: Literal["none", "anthropic", "ollama"] = Field(
@@ -131,32 +182,40 @@ class Settings(BaseSettings):
     def _serverless_defaults(self) -> Settings:
         """On Vercel only /tmp is writable. Without FAB_DATABASE_URL the app still boots
         (ephemeral SQLite per instance, fine for a demo); with it, state is durable and
-        shared. Logs go out as JSON for the platform's log drain."""
+        shared. Logs go out as JSON for the platform's log drain. Vercel's edge sets
+        ``x-vercel-forwarded-for`` (and overwrites X-Forwarded-For) with the real client IP,
+        so per-IP rate limits trust those there and nowhere else by default."""
         if os.environ.get("VERCEL"):
             if "database_url" not in self.model_fields_set:
                 self.database_url = "sqlite:////tmp/fab.db"
             if "log_json" not in self.model_fields_set:
                 self.log_json = True
+            if "client_ip_header" not in self.model_fields_set:
+                self.client_ip_header = "x-vercel-forwarded-for"
+            if "trusted_proxy_hops" not in self.model_fields_set:
+                self.trusted_proxy_hops = 1
             if self.env == "local":
                 self.env = "production"
         return self
 
     @model_validator(mode="after")
     def _auth_safe(self) -> Settings:
-        """Fail closed: demo sign-in must never be reachable in production by accident."""
-        if self.env == "production" and self.auth_mode == "demo" and not self.allow_demo_auth_in_production:
-            raise ValueError(
-                "FAB_AUTH_MODE=demo is refused in production; use supabase "
-                "(or set FAB_ALLOW_DEMO_AUTH_IN_PRODUCTION=true for a public demo)"
-            )
+        """Fail closed: demo sign-in is for local development and tests. Any other environment
+        (staging, uat, production, or a typo) refuses it unless explicitly opted in, and never
+        accepts the signing secret that is published in this repository."""
         if self.auth_mode == "supabase" and not self.supabase_url:
             raise ValueError("FAB_AUTH_MODE=supabase needs SUPABASE_URL")
-        if (
-            self.env == "production"
-            and self.auth_mode == "demo"
-            and self.auth_secret == "local-demo-signing-secret-not-for-production-use"
-        ):
-            raise ValueError("set FAB_AUTH_SECRET when demo auth is allowed in production")
+        if self.auth_mode != "demo" or self.env in DEMO_AUTH_ENVS:
+            return self
+        if not self.allow_demo_auth_in_production:
+            raise ValueError(
+                f"FAB_AUTH_MODE=demo is refused outside local/test (FAB_ENV={self.env}); use supabase "
+                "(or set FAB_ALLOW_DEMO_AUTH_IN_PRODUCTION=true for a public demo)"
+            )
+        if self.auth_secret == DEFAULT_AUTH_SECRET:
+            raise ValueError(
+                f"set FAB_AUTH_SECRET: the default demo secret is refused outside local/test (FAB_ENV={self.env})"
+            )
         return self
 
     @property

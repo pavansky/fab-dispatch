@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import statistics
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, model_validator
 
 from ..algorithms import ALGORITHMS
 from ..auth import User, require
@@ -17,13 +18,48 @@ from ..validation import check_scenario, fab_for
 
 router = APIRouter(prefix="/api", tags=["planning"])
 
+# Benchmark work is bounded by seeds x jobs. The slowest admitted request (8 seeds of 120 jobs,
+# 60 engineers, all five strategies) takes ~25 s on a laptop with the production solver budgets,
+# well inside the 60 s serverless limit (vercel.json maxDuration); the unbounded worst case
+# (30 x 120) took ~95 s.
+BENCHMARK_MAX_JOB_RUNS = 1000
+
+
+def _unique(names: list[str]) -> list[str]:
+    return list(dict.fromkeys(names))  # keeps the caller's order
+
+
+# At most one entry per strategy (duplicates dropped), each a short name: an unbounded list made
+# one rate-limited request plan the same shift thousands of times.
+AlgorithmNames = Annotated[
+    list[Annotated[str, StringConstraints(max_length=40)]],
+    Field(min_length=1, max_length=len(ALGORITHMS)),
+    AfterValidator(_unique),
+]
+
+
+def check_size(n_engineers: int, n_jobs: int) -> None:
+    """The configured ceiling (FAB_MAX_ENGINEERS / FAB_MAX_JOBS): a plain 422 with the limit in it,
+    so a local run that wants 1000 x 1000 knows which setting to raise."""
+    s = get_settings()
+    if n_engineers > s.max_engineers or n_jobs > s.max_jobs:
+        raise ValueError(
+            f"shift too large for this deployment: at most {s.max_engineers} engineers and {s.max_jobs} jobs "
+            f"(got {n_engineers} x {n_jobs}); set FAB_MAX_ENGINEERS and FAB_MAX_JOBS to raise the limit"
+        )
+
 
 class GenerateRequest(BaseModel):
     fab_id: str | None = None
     seed: int = Field(7, ge=0, le=1_000_000)
-    n_engineers: int = Field(14, ge=1, le=60)
-    n_jobs: int = Field(45, ge=1, le=200)
+    n_engineers: int = Field(14, ge=1)
+    n_jobs: int = Field(45, ge=1)
     preset: str = "normal"
+
+    @model_validator(mode="after")
+    def _within_limits(self) -> GenerateRequest:
+        check_size(self.n_engineers, self.n_jobs)
+        return self
 
 
 class PlanRequest(BaseModel):
@@ -31,21 +67,41 @@ class PlanRequest(BaseModel):
     weights: Weights = Weights()
     algorithm: str = "pyvrp"
 
+    @model_validator(mode="after")
+    def _within_limits(self) -> PlanRequest:
+        check_size(len(self.scenario.engineers), len(self.scenario.jobs))
+        return self
+
 
 class AllocateRequest(BaseModel):
     scenario: Scenario
     weights: Weights = Weights()
-    algorithms: list[str] = Field(default_factory=lambda: list(ALGORITHMS))
+    algorithms: AlgorithmNames = Field(default_factory=lambda: list(ALGORITHMS))
+
+    @model_validator(mode="after")
+    def _within_limits(self) -> AllocateRequest:
+        check_size(len(self.scenario.engineers), len(self.scenario.jobs))
+        return self
 
 
 class BenchmarkRequest(BaseModel):
     fab_id: str | None = None
     preset: str = "normal"
     seeds: int = Field(10, ge=1, le=30)
-    n_engineers: int = Field(14, ge=1, le=60)
-    n_jobs: int = Field(45, ge=1, le=120)
+    n_engineers: int = Field(14, ge=1)
+    n_jobs: int = Field(45, ge=1)
     weights: Weights = Weights()
-    algorithms: list[str] = Field(default_factory=lambda: list(ALGORITHMS))
+    algorithms: AlgorithmNames = Field(default_factory=lambda: list(ALGORITHMS))
+
+    @model_validator(mode="after")
+    def _bounded(self) -> BenchmarkRequest:
+        check_size(self.n_engineers, self.n_jobs)
+        if self.seeds * self.n_jobs > BENCHMARK_MAX_JOB_RUNS:
+            raise ValueError(
+                f"benchmark too large: seeds x n_jobs must be at most {BENCHMARK_MAX_JOB_RUNS} "
+                f"(got {self.seeds} x {self.n_jobs}); use fewer seeds or split it into several requests"
+            )
+        return self
 
 
 class GapRequest(BaseModel):
@@ -108,10 +164,11 @@ def allocate_many(
 def benchmark(
     req: BenchmarkRequest,
     user: User = Depends(require("dispatcher")),
-    _rl: None = Depends(rate_limit("benchmark", 20, 6)),
+    _rl: None = Depends(rate_limit("benchmark", 20, 6, fail_closed=True)),
 ) -> dict:
-    """All strategies over many seeded shifts of one preset. The client calls it once per
-    preset, so each request stays well inside serverless time limits."""
+    """All strategies over many seeded shifts of one preset. Each request is capped at
+    ``seeds x n_jobs <= 1000`` (BENCHMARK_MAX_JOB_RUNS), which keeps the slowest admitted case
+    to roughly 25 s against a 60 s serverless limit; the client calls it once per preset."""
     profile = _profile_and_preset(user, req.fab_id, req.preset)
     _check_algos(req.algorithms)
     svc = get_planning()
@@ -132,7 +189,9 @@ def benchmark(
 
 @router.post("/optimality-gap")
 def optimality_gap(
-    req: GapRequest, user: User = Depends(require("dispatcher")), _rl: None = Depends(rate_limit("benchmark", 20, 6))
+    req: GapRequest,
+    user: User = Depends(require("dispatcher")),
+    _rl: None = Depends(rate_limit("benchmark", 20, 6, fail_closed=True)),
 ) -> dict:
     """Exact optimum (route enumeration + MILP) vs every heuristic, on small shifts."""
     from ..algorithms.exact import TooLarge, run_exact  # SciPy's MILP: loaded only for this endpoint

@@ -20,13 +20,12 @@ import hmac
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
-from .. import live
 from ..auth import User
 from ..config import get_settings
 from ..deps import get_store, rate_limit
 from ..fabs import UnknownFab, get_profile
 from ..models import Job
-from .live import _mutate
+from .live import _mutate, reporting
 
 router = APIRouter(prefix="/api/ingest", tags=["integration"])
 
@@ -68,7 +67,7 @@ def tool_down(
     if shift_id is None:
         raise HTTPException(409, f"{req.fab_id} has no live shift to receive the tool-down")
     job = req.job.model_copy(update={"kind": "down"})
-    out = _mutate(shift_id, user, lambda s: live.report_job(s, job, user.email), None, idempotency_key)
+    out = _mutate(shift_id, user, reporting(user, job), None, idempotency_key)
     return {
         "shift_id": shift_id,
         "job_id": job.id,

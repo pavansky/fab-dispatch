@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from functools import cache, lru_cache
 
 from fastapi import HTTPException, Request
@@ -79,24 +80,40 @@ _limiter = RateLimiter()
 log = logging.getLogger("fab")
 
 
-def rate_limit(name: str, per_min: float, burst: int):
-    """Two layers. A token bucket in this instance absorbs bursts with no I/O; a per-minute
-    counter in the database holds the quota across every instance (serverless runs many).
-    If the database can't be reached the request is allowed: rate limiting must not take
-    the service down with it."""
+def rate_limit(name: str, per_min: float, burst: int, fail_closed: bool | Callable[[], bool] = False):
+    """Two layers. A token bucket in this instance turns away bursts before any I/O; every
+    request it lets through from a signed-in user then costs one database upsert, a per-minute
+    counter that holds the quota across every instance (serverless runs many).
+
+    * Unauthenticated calls (help search, equipment ingestion) use the in-memory bucket only: a
+      request that cost nothing to authenticate must not cost a database write.
+    * If the shared counter can't be reached, a cheap endpoint lets the request through (rate
+      limiting must not take the service down with it), while an expensive one (``fail_closed``:
+      benchmarks, the optimality gap, starting a shift, an LLM-backed answer) answers 503 with
+      Retry-After, since those are exactly the requests a limiter outage would let pile up."""
 
     def dep(request: Request) -> None:
-        if get_settings().env == "test":
+        s = get_settings()
+        if s.env == "test":
             return
         # Per signed-in user where known (fair across shared NAT/proxies), else per client IP.
         user = getattr(request.state, "user", None)
-        who = f"user:{user.id}" if user else client_id(request)
+        who = f"user:{user.id}" if user else client_id(request, s.client_ip_header, s.trusted_proxy_hops)
         if not _limiter.allow(who, name, per_min, burst):
             raise HTTPException(429, f"Too many {name} requests; slow down.", headers={"Retry-After": "5"})
+        if user is None:
+            return  # anonymous: the in-memory bucket only, never a database write per request
         try:
             hits = get_store().hit_rate(f"{name}:{who}", 60)
         except Exception as e:
-            log.warning("shared rate limit unavailable (%s); allowing", type(e).__name__)
+            closed = fail_closed() if callable(fail_closed) else fail_closed
+            log.warning(
+                "shared rate limit unavailable (%s); %s", type(e).__name__, "refusing" if closed else "allowing"
+            )
+            if closed:
+                raise HTTPException(
+                    503, f"The {name} quota can't be checked right now; retry shortly.", headers={"Retry-After": "30"}
+                ) from None
             return
         if hits > per_min + burst:
             raise HTTPException(429, f"Too many {name} requests; slow down.", headers={"Retry-After": "30"})
