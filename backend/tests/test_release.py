@@ -103,7 +103,10 @@ def test_readme_test_counts_match_the_suites():
         "README highlights": (readme, f"{backend} backend tests, {frontend} frontend component tests"),
         "README highlights (e2e)": (readme, f"and {e2e} Playwright end-to-end tests"),
         "README testing table (backend)": (readme, f"| Backend | pytest | **{backend}**"),
-        "README testing table (frontend)": (readme, f"| Frontend components | Vitest + Testing Library | **{frontend}**"),
+        "README testing table (frontend)": (
+            readme,
+            f"| Frontend components | Vitest + Testing Library | **{frontend}**",
+        ),
         "README testing table (e2e)": (readme, f"| End-to-end | Playwright | **{e2e}**"),
         "README project structure": (readme, f"tests/                   {backend} tests"),
         "docs/reviewers.md": (reviewers, f"**{total}** automated tests"),
