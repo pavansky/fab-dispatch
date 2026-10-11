@@ -11,18 +11,20 @@ The loop is simple:
      related  - a seed job plus its neighbours in space, time window and tool family
                 (Shaw removal). Related jobs are the ones worth swapping between engineers.
      route    - every open job on one engineer's route, so the plan can be rebuilt without them
-3. *Repair*: reinsert open jobs with greedy (cheapest-first) or regret-2 insertion.
+3. *Repair*: reinsert open jobs with greedy (cheapest-first) or regret-2 insertion,
+   committing only insertions that lower the total cost (see planner.py).
 4. *Accept* the new plan if it's better, or with simulated-annealing probability if it's
    worse, so the search can climb out of local optima.
 5. *Adapt*: operators that keep finding improvements are picked more often.
 
 Unlike PyVRP, ALNS minimises *exactly* our objective, including the convex
-workload-balance term. Being pure Python it runs a few hundred iterations per second
-rather than PyVRP's tens of thousands.
+workload-balance term. Being pure Python it runs roughly 2,000 iterations per second on a
+14 x 45 shift (a few hundred at 30 x 100), rather than PyVRP's tens of thousands.
 
-It stops after a fixed number of iterations, with the time limit only as a safety cap,
-so the same input always gives the same plan. Users don't see plans change on refresh,
-and results can be cached safely.
+It stops after a fixed number of iterations (seeded), so as long as the time limit
+doesn't bind the same input gives the same plan: users don't see plans change on refresh,
+and results can be cached safely. When the cap does bind (live re-plans use a much
+shorter one), the plan depends on machine speed; ``solver.hit_time_cap`` reports it.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from .regret import run_regret
 SCORES = (12.0, 6.0, 2.0)  # new global best, improved current, accepted worse
 REACTION = 0.2  # how fast operator weights follow recent success
 SEGMENT = 50  # iterations between weight updates
+END_TEMPERATURE = 1e-3  # fraction of the starting temperature left at the last iteration
 
 
 def run_alns(
@@ -50,8 +53,13 @@ def run_alns(
     runtime_s = runtime_s if runtime_s is not None else p.time_limit_s or settings.solver_time_limit_s
     max_iterations = max_iterations if max_iterations is not None else settings.alns_iterations
     rng = random.Random(seed)
-    deadline = time.perf_counter() + runtime_s
+    t0 = time.perf_counter()
     run_regret(p)
+    # The time budget is for the search: it starts after the regret-2 warm start, as
+    # PyVRP's does, so the two solvers' iteration counts are comparable at a given cap.
+    t_search = time.perf_counter()
+    warm_start_s = t_search - t0
+    deadline = t_search + runtime_s
 
     current = best = p.total_cost()
     best_snap = p.snapshot()
@@ -60,9 +68,13 @@ def run_alns(
     weights = {k: 1.0 for k in [*destroy_ops, *repair_ops]}
     scores = {k: 0.0 for k in weights}
     uses = {k: 0 for k in weights}
-    # Start hot enough to accept a 5% worse plan half the time, then cool to near-greedy.
+    # Start hot enough to accept a 5% worse plan half the time, then cool geometrically to
+    # END_TEMPERATURE of that by the last iteration, whatever the budget: by then a 5% worse
+    # plan is accepted with probability 2^-1000, so the search ends near-greedy. (A fixed
+    # rate can't do that: 0.9975 per iteration still left 47% of the heat after 300.) If the
+    # time cap stops the search first it ends warmer; the best plan seen is kept either way.
     temp = max(1.0, 0.05 * current / math.log(2))
-    cooling = 0.9975
+    cooling = END_TEMPERATURE ** (1 / max_iterations)
     it = best_it = 0
 
     while it < max_iterations and time.perf_counter() < deadline:
@@ -101,6 +113,8 @@ def run_alns(
         "iterations": it,
         "best_iteration": best_it,
         "hit_time_cap": it < max_iterations,
+        "warm_start_s": round(warm_start_s, 4),
+        "search_s": round(time.perf_counter() - t_search, 4),
         "operator_weights": {k: round(v, 2) for k, v in weights.items()},
     }
     return explain_final(p, f"ALNS kept this assignment: best plan found at iteration {best_it} of {it}.")
@@ -115,12 +129,9 @@ def explain_final(p: Planner, prefix: str) -> dict[str, Decision]:
             scratch = p.clone()
             scratch.remove(jid)
             feasible, rejected = scratch.scan(jid)
-            here = next((i for i in feasible if i.tech_id == tid), None)
-            if here is None:  # its slot only works in its current sequence
-                here = feasible[0] if feasible else None
-            if here is None:
-                out[jid] = Decision(tid, 0.0, {}, prefix)
-                continue
+            # Its own slot is always feasible again (it restores the current route), so its
+            # engineer is always among the options.
+            here = next(i for i in feasible if i.tech_id == tid)
             d = decision(here, feasible, rejected, prefix + " Re-inserting it alone would cost")
             d.tech_id = tid
             out[jid] = d
@@ -138,21 +149,24 @@ def _random(p: Planner, rng: random.Random, q: int) -> None:
         p.remove(j)
 
 
+def _removal_gain(p: Planner, job_id: str) -> float:
+    """How much ``total_cost`` drops if this open job comes off its route."""
+    tid = next(t for t, r in p.routes.items() if job_id in r)
+    k = len(p.routes[tid])
+    before = p.route_soft_cost(tid) + p.w.workload_balance * k * (k - 1) / 2
+    scratch = p.clone()
+    scratch.remove(job_id)
+    after = scratch.route_soft_cost(tid) + p.w.workload_balance * (k - 1) * (k - 2) / 2
+    # Removing it also refunds any live-mode stability cost, and forgoes its reward.
+    return before - after + p._moved(tid, job_id) - p.w.priority_reward * p.jobs[job_id].priority
+
+
 def _worst(p: Planner, rng: random.Random, q: int) -> None:
     for _ in range(q):
         movable = _movable(p)
         if not movable:
             return
-        gains = []
-        for j in movable:
-            tid = next(t for t, r in p.routes.items() if j in r)
-            k = len(p.routes[tid])
-            before = p.route_soft_cost(tid) + p.w.workload_balance * k * (k - 1) / 2
-            scratch = p.clone()
-            scratch.remove(j)
-            after = scratch.route_soft_cost(tid) + p.w.workload_balance * (k - 1) * (k - 2) / 2
-            gains.append((before - after - p.w.priority_reward * p.jobs[j].priority, j))
-        gains.sort(reverse=True)
+        gains = sorted(((_removal_gain(p, j), j) for j in movable), reverse=True)
         # Randomised pick biased to the top (y^p rule from Ropke & Pisinger).
         p.remove(gains[int(len(gains) * rng.random() ** 4)][1])
 
@@ -189,7 +203,7 @@ def _greedy_repair(p: Planner, rng: random.Random) -> None:
     pending.sort(key=lambda j: -p.jobs[j].priority)
     for j in pending:
         feasible, _ = p.scan(j)
-        if feasible:
+        if feasible and feasible[0].cost < 0:
             p.commit(feasible[0])
 
 
