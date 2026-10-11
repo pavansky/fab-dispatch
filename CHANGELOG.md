@@ -2,6 +2,84 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [2.9.0] - 2026-10-12
+
+### Summary
+- **One objective everywhere.** "Lowest cost", the gap tables, the exact solver and every strategy
+  minimise the same total cost, workload balance included.
+- **Measured against the proven optimum on 80 full-size shifts (14 × 45).** PyVRP is 3.85% away on
+  average, ALNS 5.74% (1.36% at 20,000 iterations), the one-pass rules 20 to 30%.
+- **A revealed-information benchmark.** Tool-downs are known only when they happen. In that mode 17 of
+  20 cost differences against PyVRP are not significant.
+- **Live re-planning measured** through the real live-dispatch code: 83 ms median and 159 ms p95 on a
+  30 × 100 shift.
+- **Security, platform and accessibility fixes** across the API, the UI image and the release pipeline.
+
+### Planner and model
+- Heuristics and repair steps insert a job only when it lowers the total cost.
+- No idle wait is charged before an engineer's first job.
+- Priority 3 means a tool-down on the constraint family and nothing else.
+- The *Overstaffed* preset adds a certified engineer. Cross-trained engineers can take some
+  constraint-family PMs.
+- The exact solver prices frozen work and stability exactly like `total_cost`, and accepts a time limit.
+- Unassigned jobs report the real reason.
+
+### Algorithms
+- Regret ranks by every feasible engineer and gates only the commit.
+- The ALNS budget starts after the warm start, and its annealing cools to near-greedy by the last
+  iteration of any budget.
+- PyVRP keeps the plan that is cheapest by the planner's own cost.
+
+### Live dispatch
+- Streams use a 90-second ticket instead of the access token in the URL.
+- Writes are idempotent, carry `If-Match` and freeze ended shifts.
+- Started jobs are replayed at their recorded times on re-plan.
+- Guests may only change the live shifts they started. Stream opens are rate-limited per user.
+
+### Security and platform
+- The API sends a Content-Security-Policy and HSTS. The UI image sends its headers from every nginx
+  location and runs nginx unprivileged.
+- Tokens must carry `exp`. Bootstrap dispatchers need a verified email.
+- Anonymous calls write no rate-limit rows, and expensive endpoints fail closed when the quota store
+  is down.
+- Idle guest accounts are deleted after 30 days.
+- Shift size limits are settings: `FAB_MAX_ENGINEERS` and `FAB_MAX_JOBS` (default 60 and 200).
+
+### Assistant and repair history
+- The optional LLM rewrite is checked against the grounded draft and falls back with a reason.
+- The recommendation is computed on the server.
+- Retrieval uses IDF-weighted lexical search with glossary terms, evaluated on a harder question set.
+- No duration prediction is made below a similarity floor.
+- Feedback is validated, de-duplicated and exportable as new evaluation cases.
+
+### Frontend
+- Benchmark verdicts use paired t intervals, Holm-adjusted, with a warning below ten seeds.
+- Weight sliders commit on release, and identical solves share one request.
+- Absent metrics show "n/a", and workload spread is shown in minutes.
+- Accessibility meets WCAG AA in the light and dark themes and the phone layout.
+- Heavy views load on demand.
+
+### Analysis and scripts
+- Every table in `docs/ANALYSIS.md` is regenerated, with paired bootstrap confidence intervals.
+- The duration study uses realistic baselines. k-NN beats the standard estimate (26.7 vs 34.7 min).
+- The predictive study counts planned repair and false-alarm time.
+- The learned-policy study runs 5 search seeds with cached optima.
+- Proof scripts run in parallel. `FAB_EXACT_THREADS` caps HiGHS threads per proof, and every study
+  has size flags.
+
+### Tests and CI
+- Smoke tests cover every study script behind ANALYSIS.md.
+- The exact solver is held to the hard constraints on every preset of both fabs.
+- A slow test runs ALNS and PyVRP at their shipped budgets.
+- CI tests Python 3.11 to 3.14 and Node 20 and 22.
+- Releases are gated on `main` and a green UAT deployment. Actions are pinned to commits.
+- The commit check rejects co-author and session trailers.
+
+### Docs
+- The README, design review, decisions, help articles and ANALYSIS carry the 2.9.0 numbers.
+- Citations and solver lineage are corrected, and the technician-routing literature is cited.
+- SECURITY.md and the deployment docs say exactly what the CSP, RLS, tokens and rate limits do.
+
 ## [2.8.0] - 2026-10-06
 
 ### Added
