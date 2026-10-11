@@ -59,6 +59,10 @@ export function workspaceRoutes({ role = 'dispatcher' } = {}) {
     'GET /health': health,
     'DELETE /auth/me': { erased: { assistant_feedback: 0, shifts: 0 }, account_deleted: true },
     'POST /assistant/feedback': () => new Response(null, { status: 204 }),
+    // Dispatchers only, like the real API. The integrator mirrors this shape in the fixtures.
+    'GET /assistant/stats': ({ headers }) => ((headers?.Authorization ?? '').endsWith('viewer')
+      ? json(403, errorBody('forbidden', 'dispatcher role required'))
+      : { days: 30, total: 40, helpful_rate: 0.85, by_intent: [{ intent: 'job', total: 25, helpful: 22, helpful_rate: 0.88 }, { intent: 'docs', total: 15, helpful: 12, helpful_rate: 0.8 }] }),
     'GET /help': helpIndex,
     'GET /help/search': ({ url }) => ({ ...helpSearch, query: new URL(url, 'http://x').searchParams.get('q') }),
     ...Object.fromEntries(Object.entries(helpArticles).map(([slug, a]) => [`GET /help/${slug}`, a])),
@@ -67,11 +71,27 @@ export function workspaceRoutes({ role = 'dispatcher' } = {}) {
   }
 }
 
-/** A live shift on the server: created, viewable, advanceable. */
+/** The version an If-Match header pins, like the real API: `"<version>-<digest>"`, `"<version>"` or bare. */
+const pinnedVersion = (h) => (h ? /^(?:W\/)?"?(\d+)/.exec(h)?.[1] : null)
+
+/**
+ * A live shift on the server: created, viewable, advanceable. Like the real API, writes
+ * that pin a stale version with If-Match get 409, and the stream is opened with a
+ * short-lived ticket (POST /shifts/{id}/stream-ticket). The integrator mirrors both in the
+ * exported fixtures.
+ */
 export function liveRoutes() {
   const id = shift.state.id
   const { events: _created, ...view } = shift
   let current = view
+  let tickets = 0
+  const guarded = (write) => ({ headers, body }) => {
+    const pinned = pinnedVersion(headers['If-Match'])
+    if (pinned !== null && pinned !== String(current.version)) {
+      return json(409, errorBody('conflict', `shift changed (now version ${current.version}); reload and retry`))
+    }
+    return write({ headers, body })
+  }
   return {
     'GET /shifts': shifts,
     'POST /shifts': shift,
@@ -80,8 +100,9 @@ export function liveRoutes() {
       const tag = `"${current.version}"`
       return headers['If-None-Match'] === tag ? new Response(null, { status: 304, headers: { etag: tag } }) : json(200, current, { etag: tag })
     },
-    [`POST /shifts/${id}/advance`]: () => { const { events: _e, ...v } = shiftAdvanced; current = v; return shiftAdvanced },
-    [`POST /shifts/${id}/release`]: () => current,
+    [`POST /shifts/${id}/advance`]: guarded(() => { const { events: _e, ...v } = shiftAdvanced; current = v; return shiftAdvanced }),
+    [`POST /shifts/${id}/release`]: guarded(() => current),
+    [`POST /shifts/${id}/stream-ticket`]: () => ({ ticket: `ticket-${++tickets}`, expires_in: 90 }),
     [`GET /shifts/${id}/events`]: shiftEvents,
   }
 }

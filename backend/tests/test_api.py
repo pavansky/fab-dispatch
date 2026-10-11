@@ -44,6 +44,46 @@ def test_meta_is_cacheable_with_etag():
     assert again.status_code == 304
 
 
+def test_meta_reports_the_repair_index_actually_in_use():
+    from app.deps import get_repairs
+
+    assert anonymous.get("/api/meta").json()["vector_index"] == get_repairs().mode == "exact"
+
+
+def test_health_checks_the_databases_at_most_once_per_interval(monkeypatch):
+    from app.routes import system
+
+    checks = []
+    monkeypatch.setattr(system, "_health", {})
+    monkeypatch.setattr(system, "_check_databases", lambda: checks.append(1) or (True, True, 1))
+    for _ in range(5):
+        assert anonymous.get("/api/health").json()["status"] == "ok"
+    assert len(checks) == 1
+    monkeypatch.setattr(system, "HEALTH_CACHE_S", 0.0)
+    anonymous.get("/api/health")
+    assert len(checks) == 2
+
+
+def test_health_reports_a_database_that_is_down(monkeypatch):
+    from app.routes import system
+
+    class Down:
+        kind = "postgres"
+
+        def schema_version(self):
+            raise ConnectionError("refused")
+
+    monkeypatch.setattr(system, "_health", {})
+    monkeypatch.setattr(system, "all_stores", lambda: [Down()])
+    body = anonymous.get("/api/health").json()
+    assert body["status"] == "degraded" and body["db_ok"] is False and body["databases"] == 1
+
+
+def test_cache_stats_need_a_signed_in_user():
+    assert anonymous.get("/api/cache/stats").status_code == 401
+    assert set(client.get("/api/cache/stats").json()) == {"size", "hits", "misses"}
+
+
 def test_responses_carry_request_id_and_security_headers():
     r = client.get("/api/health", headers={"X-Request-ID": "abc123"})
     assert r.headers["x-request-id"] == "abc123"
@@ -126,3 +166,123 @@ def test_sse_stream_replays_events_after_cursor(scenario):
         assert r.headers["content-type"].startswith("text/event-stream")
         text = "".join(r.iter_text())
     assert "event: shift_started" in text and "event: replanned" in text
+
+
+def test_strategy_lists_are_bounded_and_deduplicated(scenario):
+    r = client.post("/api/allocate", json={"scenario": scenario, "algorithms": ["greedy"] * 2000})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid"
+    res = client.post("/api/allocate", json={"scenario": scenario, "algorithms": ["regret", "greedy", "regret"]})
+    assert [p["algorithm"] for p in res.json()] == ["regret", "greedy"]
+    assert client.post("/api/allocate", json={"scenario": scenario, "algorithms": ["x" * 10_000]}).status_code == 422
+    body = {"preset": "normal", "seeds": 1, "n_jobs": 5, "algorithms": ["greedy"] * 6}
+    assert client.post("/api/benchmark", json=body).status_code == 422
+
+
+def test_benchmark_work_is_capped_to_fit_the_serverless_time_limit():
+    from app.routes.planning import BENCHMARK_MAX_JOB_RUNS
+
+    r = client.post("/api/benchmark", json={"seeds": 30, "n_engineers": 60, "n_jobs": 120})
+    assert r.status_code == 422 and "seeds x n_jobs" in r.json()["error"]["message"]
+    assert 30 * 120 > BENCHMARK_MAX_JOB_RUNS >= 20 * 45  # the UI's largest default (20 seeds of 45 jobs) fits
+
+
+def test_router_404_and_405_use_the_error_envelope():
+    r = anonymous.get("/api/no-such-endpoint")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found" and "detail" not in r.json()
+    r = anonymous.delete("/api/meta")
+    assert r.status_code == 405 and r.json()["error"]["code"] == "method_not_allowed"
+    assert "GET" in r.headers["allow"]
+
+
+def test_sse_cursor_is_validated_not_a_500(scenario):
+    sid = client.post("/api/shifts", json={"scenario": scenario, "algorithm": "greedy"}).json()["state"]["id"]
+    r = client.get(f"/api/shifts/{sid}/stream", params={"after": "abc"})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid"
+    assert client.get(f"/api/shifts/{sid}/stream", params={"after": -1}).status_code == 422
+    # A malformed Last-Event-ID (here a superscript digit) falls back to ?after instead of failing.
+    with client.stream("GET", f"/api/shifts/{sid}/stream", headers={"Last-Event-ID": b"\xb2"}) as r:
+        assert r.status_code == 200
+        assert "event: shift_started" in "".join(r.iter_text())
+
+
+def test_unhandled_errors_still_carry_cors_headers(monkeypatch):
+    from app.routes import fabs
+
+    def boom():
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(fabs, "all_profiles", boom)
+    r = client.get("/api/fabs", headers={"Origin": "http://localhost:5173"})
+    assert r.status_code == 500 and r.json()["error"]["code"] == "internal"
+    assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert r.headers["x-request-id"]
+
+
+# ------------------------------------------------------------------ security headers on the API
+def test_every_api_response_carries_a_no_script_csp_and_the_docs_their_own():
+    import base64
+    import hashlib
+    import re
+
+    for path in ("/api/health", "/api/openapi.json", "/api/meta", "/api/nope"):
+        r = anonymous.get(path)
+        assert r.headers["content-security-policy"] == "default-src 'self'; frame-ancestors 'none'", path
+        assert r.headers["x-frame-options"] == "DENY" and r.headers["x-content-type-options"] == "nosniff"
+    for path in ("/api/docs", "/api/redoc"):
+        r = anonymous.get(path)
+        csp = r.headers["content-security-policy"]
+        assert csp.startswith("default-src 'self'; script-src 'self' https://cdn.jsdelivr.net")
+        assert "'unsafe-inline'" not in csp.split("style-src")[0]  # scripts are never unsafe-inline
+        assert "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in csp
+        assert "img-src 'self' data: https://fastapi.tiangolo.com" in csp and "connect-src 'self'" in csp
+        assert "frame-ancestors 'none'" in csp
+        # Every inline script on the page is pinned by hash, so the page works without unsafe-inline.
+        for m in re.finditer(r"<script(?:\s[^>]*)?>(.*?)</script[^>]*>", r.text, re.S | re.I):
+            digest = base64.b64encode(hashlib.sha256(m.group(1).encode()).digest()).decode()
+            assert f"'sha256-{digest}'" in csp
+        # Everything the page loads is on the allow-list.
+        for src in re.findall(r'(?:src|href)="(https://[^"]+)"', r.text):
+            host = src.split("/")[2]
+            assert host in ("cdn.jsdelivr.net", "fastapi.tiangolo.com", "fonts.googleapis.com"), src
+
+
+def test_hsts_is_sent_in_production_or_over_https_and_not_on_a_plain_local_run():
+    from fastapi import FastAPI
+
+    from app.observability import HSTS, RequestContext
+
+    assert "strict-transport-security" not in anonymous.get("/api/health").headers  # FAB_ENV=test, http
+    plain, production = FastAPI(), FastAPI()
+    for a in (plain, production):
+        a.get("/x")(lambda: {"ok": True})
+    plain.add_middleware(RequestContext)
+    production.add_middleware(RequestContext, hsts=True)
+    assert "strict-transport-security" not in TestClient(plain).get("/x").headers
+    assert TestClient(plain, base_url="https://api.example").get("/x").headers["strict-transport-security"] == HSTS
+    assert TestClient(production).get("/x").headers["strict-transport-security"] == HSTS
+    assert HSTS.startswith("max-age=63072000")
+
+
+def test_shift_size_limits_are_configurable(monkeypatch):
+    """The 60 x 200 ceiling is a setting, not a constant: a local run raises it to plan 1000 x 1000,
+    and every path that takes a size or a scenario (generate, plan, allocate, benchmark, live) uses it."""
+    from app.config import get_settings
+
+    c = TestClient(app, headers=auth_headers("dispatcher"))
+    monkeypatch.setattr(get_settings(), "max_engineers", 5)
+    monkeypatch.setattr(get_settings(), "max_jobs", 9)
+    assert c.get("/api/meta").json()["limits"] == {"max_engineers": 5, "max_jobs": 9, "benchmark_max_job_runs": 1000}
+    r = c.post("/api/scenario", json={"n_engineers": 6, "n_jobs": 9})
+    assert r.status_code == 422 and "FAB_MAX_ENGINEERS" in r.text and "at most 5 engineers and 9 jobs" in r.text
+    sc = c.post("/api/scenario", json={"n_engineers": 5, "n_jobs": 9}).json()
+    assert c.post("/api/plan", json={"scenario": sc, "algorithm": "greedy"}).status_code == 200
+    big = {**sc, "jobs": sc["jobs"] + [{**sc["jobs"][0], "id": "J999"}]}
+    assert c.post("/api/plan", json={"scenario": big, "algorithm": "greedy"}).status_code == 422
+    assert c.post("/api/allocate", json={"scenario": big, "algorithms": ["greedy"]}).status_code == 422
+    assert c.post("/api/benchmark", json={"seeds": 1, "n_engineers": 5, "n_jobs": 10}).status_code == 422
+    r = c.post("/api/shifts", json={"scenario": big, "algorithm": "greedy"})
+    assert r.status_code == 413 and "FAB_MAX_ENGINEERS" in r.text  # scenario check, same limits
+    monkeypatch.setattr(get_settings(), "max_engineers", 1000)
+    monkeypatch.setattr(get_settings(), "max_jobs", 1000)
+    r = c.post("/api/scenario", json={"n_engineers": 300, "n_jobs": 300})
+    assert r.status_code == 200 and len(r.json()["jobs"]) == 300

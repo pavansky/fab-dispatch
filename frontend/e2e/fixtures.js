@@ -3,16 +3,23 @@
 import { test as base, expect } from '@playwright/test'
 
 export const test = base.extend({
-  // The first-run tour is tested on its own (tour.spec.js); everywhere else it's already been seen.
+  // The first-run tour is tested in help-and-assistant.spec.js with its own context; everywhere
+  // else it's already been seen.
   page: async ({ page }, use) => {
     await page.addInitScript(() => { try { localStorage.setItem('fab-dispatch-tour', 'done') } catch { /* ignore */ } })
     await use(page)
   },
 
-  consoleErrors: [async ({ page }, use) => {
+  // Every page of the context (the default one and any a test opens) reports its console
+  // errors and uncaught exceptions; any of them fails the test.
+  consoleErrors: [async ({ context }, use) => {
     const errors = []
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
-    page.on('pageerror', (e) => errors.push(e.message))
+    const watch = (p) => {
+      p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+      p.on('pageerror', (e) => errors.push(e.message))
+    }
+    context.pages().forEach(watch)
+    context.on('page', watch)
     await use(errors)
     expect(errors, 'browser console errors').toEqual([])
   }, { auto: true }],
@@ -30,6 +37,7 @@ export { expect }
 
 /** Click an empty spot inside a tool area on the floor plan (where a job can be reported). */
 export async function clickToolArea(page, index = 0) {
+  await page.locator('svg.floor').first().waitFor() // the floor plan view loads on demand
   const point = await page.evaluate((i) => {
     const svg = document.querySelector('svg.floor')
     const area = svg.querySelectorAll('rect.f-area')[i].getBBox()

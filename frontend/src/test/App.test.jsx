@@ -8,6 +8,9 @@ import { errorBody, fixtures, json, mockApi, workspaceRoutes } from './api.js'
 import { renderApp, signInAs } from './app.jsx'
 
 const results = ALGO_ORDER.map((a) => fixtures.plans[a])
+// A job Greedy leaves unassigned that another strategy serves (the fixtures decide which).
+const stranded = fixtures.plans.greedy.unassigned.map((u) => u.job_id)
+  .find((id) => ALGO_ORDER.some((a) => fixtures.plans[a].assignments.some((x) => x.job_id === id)))
 
 describe('sign-in', () => {
   it('offers one-click demo roles in local mode', async () => {
@@ -83,6 +86,45 @@ describe('planning workspace', () => {
     expect(screen.getByText(String(next))).toBeInTheDocument()
   })
 
+  it('renders findings as elements, so markup in the data is shown, not interpreted', async () => {
+    const routes = workspaceRoutes()
+    const hostile = '<img src=x onerror="window.pwned=1">'
+    // The job Greedy strands and others serve is quoted by id in a finding.
+    const rename = (x) => JSON.parse(JSON.stringify(x).replaceAll(stranded, hostile.replaceAll('"', '\\"')))
+    routes['POST /scenario'] = rename(fixtures.scenario)
+    routes['POST /plan'] = ({ body }) => rename(fixtures.plans[body.algorithm])
+    await signInAs('dispatcher', routes)
+    const findings = await screen.findByRole('heading', { name: /Key findings/ })
+    const list = await within(findings.closest('section')).findByRole('list')
+    expect(list.querySelector('img')).toBeNull()
+    expect(list.textContent).toContain(hostile)
+    expect(list.querySelectorAll('b').length).toBeGreaterThan(0) // the lead of each finding is emphasised as an element
+    expect(window.pwned).toBeUndefined()
+  })
+
+  it('shows one notice, not five error bars, when the API rate-limits every re-plan', async () => {
+    const routes = workspaceRoutes()
+    let limited = false
+    let n = 0
+    routes['POST /plan'] = ({ body }) => (limited
+      ? json(429, errorBody('rate_limited', 'Too many requests'), { 'retry-after': '3600' })
+      : { ...fixtures.plans[body.algorithm], label: `${body.algorithm}#${++n}` })
+    const { api, user } = await signInAs('dispatcher', routes)
+    await waitFor(() => expect(api.find('POST', '/plan')).toHaveLength(5))
+    limited = true
+    const walking = screen.getByRole('slider', { name: 'Walking' })
+    fireEvent.change(walking, { target: { value: String(fixtures.meta.default_weights.travel_100m + 1) } })
+    const notice = (await screen.findByText(/rate-limiting re-plans right now \(every strategy\)/, {}, { timeout: 2000 })).closest('[role="status"]')
+    expect(notice).toBeInTheDocument()
+    expect(screen.queryByText(/PyVRP: Too many requests/)).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('alert')).toHaveLength(0)
+    expect(api.find('POST', '/plan')).toHaveLength(10)
+    limited = false
+    await user.click(within(notice).getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(api.find('POST', '/plan')).toHaveLength(15))
+    await waitFor(() => expect(screen.queryByText(/rate-limiting re-plans/)).not.toBeInTheDocument())
+  })
+
   it('opens a view from the tabs and keeps it in the URL', async () => {
     const { user } = await signInAs('dispatcher')
     await user.click(screen.getByRole('tab', { name: /Floor plan/ }))
@@ -94,11 +136,11 @@ describe('planning workspace', () => {
   it('explains a job picked on the floor plan, per strategy', async () => {
     const { user } = await signInAs('dispatcher')
     await user.click(screen.getByRole('tab', { name: /Floor plan/ }))
-    await user.click(await screen.findByRole('button', { name: /^J006,/ }))
-    const inspector = screen.getByRole('complementary', { name: 'Inspector' })
-    expect(within(inspector).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
-    expect(within(inspector).getByText('Unassigned')).toBeInTheDocument() // Greedy leaves it
-    expect(new URL(location.href).searchParams.get('job')).toBe('J006')
+    await user.click(await screen.findByRole('button', { name: new RegExp(`^${stranded},`) }))
+    const inspector = await screen.findByRole('complementary', { name: 'Inspector' })
+    expect(within(inspector).getByRole('heading', { level: 3 })).toHaveTextContent(stranded)
+    expect(within(inspector).getAllByText('Unassigned').length).toBeGreaterThan(0) // Greedy leaves it
+    expect(new URL(location.href).searchParams.get('job')).toBe(stranded)
   })
 
   it('starts in the light theme and remembers a change', async () => {
@@ -127,7 +169,7 @@ describe('roles', () => {
   it('lets a viewer explore but not run benchmarks', async () => {
     const { user } = await signInAs('viewer')
     await user.click(screen.getByRole('tab', { name: /Benchmark/ }))
-    expect(screen.getByRole('button', { name: 'Run benchmark' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Run benchmark' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Measure gaps' })).toBeDisabled()
     expect(screen.getByText(/need the dispatcher role/)).toBeInTheDocument()
   })
@@ -135,7 +177,7 @@ describe('roles', () => {
   it('lets a dispatcher run the benchmark for every preset of the fab', async () => {
     const { api, user } = await signInAs('dispatcher')
     await user.click(screen.getByRole('tab', { name: /Benchmark/ }))
-    await user.click(screen.getByRole('button', { name: 'Run benchmark' }))
+    await user.click(await screen.findByRole('button', { name: 'Run benchmark' }))
     await screen.findByRole('button', { name: 'Re-run benchmark' }, { timeout: 4000 })
     const presets = Object.keys(fixtures.fab1.presets)
     expect(api.find('POST', '/benchmark').map((c) => c.body.preset)).toEqual(presets)
@@ -154,27 +196,57 @@ describe('views', () => {
     expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent(recommend(results, 'cost').winner.label)
   })
 
+  it('describes the noise band only for the goal that draws it, as a one-sided margin', async () => {
+    const { user } = await signInAs('dispatcher')
+    const card = screen.getByRole('region', { name: 'Recommendation' })
+    await waitFor(() => expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent(recommend(results, 'value').winner.label))
+    const chart = screen.getByRole('heading', { name: /Cost × latency/ }).closest('section')
+    const { margin, pool } = recommend(results, 'value')
+    const cheapest = results.filter((r) => pool.includes(r.algorithm)).sort((a, b) => a.metrics.objective - b.metrics.objective)[0]
+    expect(chart).toHaveTextContent(`plans costing up to ${Math.round(margin)} pts more than ${ALGO_SHORT[cheapest.algorithm]}`)
+    expect(chart).not.toHaveTextContent('±')
+    expect(chart.querySelector('rect.band')).not.toBeNull()
+    await user.selectOptions(within(card).getByRole('combobox', { name: 'Planning goal' }), 'bottleneck')
+    expect(chart).not.toHaveTextContent(/shaded band/)
+    expect(chart.querySelector('rect.band')).toBeNull()
+  })
+
   it('opens a job the strategies disagree on in the floor plan', async () => {
     const { user } = await signInAs('dispatcher')
     await waitFor(() => expect(screen.getByRole('heading', { name: /Where the strategies disagree/ })).toBeInTheDocument())
     const row = (await screen.findAllByText('J006')).map((el) => el.closest('tr')).find(Boolean)
     await user.click(row)
     expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
-    expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
+    expect(within(await screen.findByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
+  })
+
+  it('opens a disagreement or an unserved job from the keyboard', async () => {
+    const { user } = await signInAs('dispatcher')
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Where the strategies disagree/ })).toBeInTheDocument())
+    screen.getByRole('button', { name: 'Inspect J006 on the floor plan' }).focus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
+    expect(within(await screen.findByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
+    await user.click(screen.getByRole('tab', { name: /Workforce/ }))
+    const first = fixtures.plans.pyvrp.unassigned[0].job_id
+    ;(await screen.findByRole('button', { name: `Inspect ${first} on the floor plan` })).focus()
+    await user.keyboard(' ')
+    expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
+    expect(within(await screen.findByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent(first)
   })
 
   it("jumps from a strategy's scorecard to its floor plan", async () => {
     const { user } = await signInAs('dispatcher')
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'View on floor plan' })).toHaveLength(5))
     await user.click(screen.getAllByRole('button', { name: 'View on floor plan' })[1]) // Hungarian
-    expect(screen.getByRole('group', { name: `Fab floor plan, ${fixtures.plans.hungarian.label}` })).toBeInTheDocument()
+    expect(await screen.findByRole('group', { name: `Fab floor plan, ${fixtures.plans.hungarian.label}` })).toBeInTheDocument()
     expect(within(screen.getByRole('group', { name: 'Strategy' })).getByRole('button', { name: /Hungarian/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('shows every engineer on the schedule with their jobs in time order', async () => {
     const { user } = await signInAs('dispatcher')
     await user.click(screen.getByRole('tab', { name: /Schedule/ }))
-    const table = screen.getByRole('table', { name: `Shift schedule, ${fixtures.plans.pyvrp.label}` })
+    const table = await screen.findByRole('table', { name: `Shift schedule, ${fixtures.plans.pyvrp.label}` })
     expect(within(table).getAllByRole('row')).toHaveLength(fixtures.scenario.engineers.length + 1)
     const route = fixtures.plans.pyvrp.routes.find((r) => r.stops.length)
     for (const s of route.stops) expect(within(table).getByLabelText(new RegExp(`^${s.job_id} `))).toBeInTheDocument()
@@ -201,7 +273,7 @@ describe('views', () => {
     const replanned = api.find('POST', '/plan').at(-1).body.scenario.engineers.map((e) => e.id)
     expect(replanned).not.toContain('E01')
     expect(replanned).toHaveLength(fixtures.scenario.engineers.length - 1)
-    expect(screen.getByRole('button', { name: 'Restore all 1 engineers' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Restore 1 engineer' })).toBeInTheDocument()
   })
 })
 

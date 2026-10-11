@@ -61,3 +61,143 @@ def test_frozen_work_is_kept_in_place_by_every_method():
                 assert r.stops[0].locked
                 for s in r.stops[1:]:
                     assert s.start >= 90.0 - 1e-6, f"{algo} scheduled open work in the past"
+
+
+@pytest.mark.parametrize("weights", [Weights(wait_min=0.25), Weights(wait_min=0.03), Weights(travel_100m=0.1)])
+def test_pyvrp_objective_is_our_cost_for_its_own_routes(monkeypatch, weights):
+    """PyVRP's own objective for the plan it returns, less a constant, equals the planner's
+    operating cost of those routes: waiting is charged at the configured rate and the
+    walking and service corrections cancel exactly (even when walking is cheap)."""
+    from pyvrp import ActivityType
+
+    from app.algorithms import pyvrp_ils
+
+    seen = {}
+    real_solve = pyvrp_ils.solve
+
+    def spy(data, *args, **kwargs):
+        seen["data"], seen["result"] = data, real_solve(data, *args, **kwargs)
+        return seen["result"]
+
+    monkeypatch.setattr(pyvrp_ils, "solve", spy)
+    sc = generate(3, 8, 24, "normal")
+    run_pyvrp(Planner(sc, weights), seed=0, max_iterations=500)
+    data, best = seen["data"], seen["result"].best
+    assert best.is_feasible()
+
+    replay = Planner(sc, weights)  # PyVRP's routes exactly as it returned them
+    names, vehicles = [c.name for c in data.clients()], [v.name for v in data.vehicle_types()]
+    for route in best.routes():
+        for act in route.schedule():
+            if act.type == ActivityType.CLIENT:
+                assert replay.append(vehicles[route.vehicle_type()], names[act.idx]) is not None
+    rewards = {j.id: round(weights.priority_reward * j.priority * pyvrp_ils.C) for j in sc.jobs}
+    constant = sum(c.prize - rewards[c.name] for c in data.clients())  # service-time and arc offsets
+    pyvrp_points = (seen["result"].cost() - constant) / pyvrp_ils.C
+    assert pyvrp_points == pytest.approx(replay.cost_parts()["operating"], abs=0.1)
+
+
+def test_pyvrp_more_iterations_never_return_a_dearer_plan():
+    """PyVRP's own objective lacks the convex workload term, so the plan it calls best after
+    more iterations can be dearer by the planner's cost than one it found earlier (seed 0:
+    a job moved onto a fuller route, 0.09 cheaper for PyVRP, +5 workload here). Every PyVRP
+    best is re-scored by the planner and the cheapest kept, so with the same seed a larger
+    budget can never lose to a smaller one, nor to the regret-2 warm start."""
+    from app.algorithms.regret import run_regret
+
+    sc = generate(0, 14, 45, "normal")
+    warm = Planner(sc, Weights())
+    run_regret(warm)
+    costs = {}
+    for its in (300, 1000):
+        p = Planner(sc, Weights())
+        run_pyvrp(p, runtime_s=120, max_iterations=its)
+        costs[its] = p.total_cost()
+    assert costs[1000] <= costs[300] + 1e-6, costs
+    assert costs[300] <= warm.total_cost() + 1e-6
+    assert p.meta["solver"]["plans_scored"] >= 2  # the warm start and at least one PyVRP best
+
+
+def _live_instance(seed: int, clock: float = 180.0):
+    """A re-plan at ``clock``: started stops frozen at their real times, previous owners known."""
+    sc = generate(seed, 6, 18, "normal")
+    base = allocate(sc, Weights(), "regret")
+    frozen = {}
+    for r in base.routes:
+        started = [s for s in r.stops if s.start <= clock]
+        frozen[r.tech_id] = Frozen(
+            route=[s.job_id for s in started],
+            not_before=clock,
+            starts=[s.start for s in started],
+            arrivals=[s.arrival for s in started],
+        )
+    return sc, frozen, {a.job_id: a.tech_id for a in base.assignments}
+
+
+@pytest.mark.parametrize("seed", [0, 2, 3])
+def test_exact_is_a_lower_bound_in_live_mode(seed):
+    """Frozen work and the stability term are priced the same way as in total_cost, so
+    the proven optimum is never beaten by a heuristic on a live re-plan either."""
+    from app.algorithms import ALGORITHMS
+
+    sc, frozen, owner = _live_instance(seed)
+    p = Planner(sc, Weights(), frozen=frozen, previous_owner=owner)
+    run_exact(p)
+    opt = p.total_cost()
+    assert any(frozen[t].route for t in frozen) and any(p.routes[t][len(frozen[t].route) :] for t in frozen)
+    for name, (_, fn) in ALGORITHMS.items():
+        q = Planner(sc, Weights(), frozen=frozen, previous_owner=owner)
+        fn(q)
+        assert q.total_cost() >= opt - 1e-6, f"{name} beat the proven optimum on a live re-plan"
+
+
+def test_alns_worst_removal_ranks_by_the_real_cost_drop():
+    """The 'worst' destroy operator's gain is exactly what total_cost drops by, including
+    the stability cost refunded when a moved job comes off its new engineer."""
+    from app.algorithms.alns import _movable, _removal_gain
+    from app.algorithms.regret import run_regret
+
+    sc, frozen, owner = _live_instance(0)
+    techs = [e.id for e in sc.engineers]
+    elsewhere = {j: techs[(techs.index(t) + 1) % len(techs)] for j, t in owner.items()}
+    p = Planner(sc, Weights(), frozen=frozen, previous_owner=elsewhere)
+    run_regret(p)
+    assert p.cost_parts()["reassignment"] > 0
+    for j in _movable(p):
+        scratch = p.clone()
+        scratch.remove(j)
+        assert _removal_gain(p, j) == pytest.approx(p.total_cost() - scratch.total_cost(), abs=1e-9)
+
+
+def test_live_replan_does_not_rewrite_started_work():
+    """A job started after an earlier re-plan keeps the times it really ran at (that
+    re-plan's "not before now" delay included), so later re-plans can't move it earlier
+    and double-book its engineer."""
+    from app import live
+    from app.models import Engineer, Job, Scenario
+
+    pm = {"skill": "etch", "kind": "pm", "priority": 1, "earliest": 0, "latest": 600}
+    sc = Scenario(
+        engineers=[
+            Engineer(id="E1", name="a", x=0, y=0, skills={"etch": 2}),
+            Engineer(id="E2", name="b", x=300, y=0, skills={"etch": 2}),
+        ],
+        jobs=[
+            Job(id="A", x=300, y=0, duration=120, **pm),
+            Job(id="C", x=300, y=0, duration=100, **pm),
+            Job(id="B", x=0, y=0, duration=40, **pm),
+        ],
+    )
+    state, _ = live.start(sc, Weights(), "regret")
+    live.advance(state, 50)
+    live.engineer_off(state, "E2")  # A moves to E1, who can't leave B's bay before 50
+    a = next(s for r in state.plan.routes for s in r.stops if s.job_id == "A")
+    assert (a.arrival, a.start, a.end) == (55.0, 55.0, 175.0)
+    live.advance(state, 150)
+    live.report_job(state, Job(id="D", x=300, y=0, skill="etch", priority=3, earliest=0, latest=60, duration=30))
+
+    stops = {s.job_id: s for r in state.plan.routes for s in r.stops}
+    assert stops["A"].locked and (stops["A"].arrival, stops["A"].start, stops["A"].end) == (55.0, 55.0, 175.0)
+    for route in state.plan.routes:
+        for prev, nxt in zip(route.stops, route.stops[1:], strict=False):
+            assert nxt.start >= prev.end, f"{route.tech_id} double-booked: {prev.job_id} and {nxt.job_id}"
