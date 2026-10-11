@@ -126,6 +126,7 @@ def test_supabase_tokens_map_roles_and_fabs():
                 "email": email,
                 "aud": "authenticated",
                 "iss": "https://abc.supabase.co/auth/v1",
+                "iat": time.time(),
                 "exp": time.time() + 60,
                 "app_metadata": meta or {},
             },
@@ -143,11 +144,60 @@ def test_supabase_tokens_map_roles_and_fabs():
     with pytest.raises(ValueError, match="list of fab ids"):
         _verify_supabase(token("odd@fab.com", {"fabs": "fab1-300mm-logic"}), s)
     bad = jwt.encode(
-        {"sub": "x", "aud": "authenticated", "iss": "https://evil.example/auth/v1", "exp": time.time() + 60},
+        {"sub": "x", "aud": "authenticated", "iss": "https://evil.example/auth/v1", "iat": 0, "exp": time.time() + 60},
         s.supabase_jwt_secret,
     )
     with pytest.raises(jwt.InvalidIssuerError):
         _verify_supabase(bad, s)
+
+
+def test_tokens_must_carry_an_expiry_and_the_other_standard_claims():
+    """PyJWT only checks the claims it finds: without ``require``, a token with no ``exp`` is
+    accepted and never expires."""
+    s = Settings(
+        auth_mode="supabase",
+        supabase_url="https://abc.supabase.co",
+        supabase_jwt_secret="super-secret-jwt-key-for-tests-only-123456",
+    )
+    base = {"sub": "u1", "email": "u@x.com", "aud": "authenticated", "iss": "https://abc.supabase.co/auth/v1"}
+    now = int(time.time())
+    assert _verify_supabase(jwt.encode({**base, "iat": now, "exp": now + 60}, s.supabase_jwt_secret), s).id == "u1"
+    for missing in ("exp", "sub", "aud", "iss"):
+        claims = {k: v for k, v in {**base, "iat": now, "exp": now + 60}.items() if k != missing}
+        with pytest.raises(jwt.MissingRequiredClaimError, match=missing):
+            _verify_supabase(jwt.encode(claims, s.supabase_jwt_secret), s)
+    from app.config import get_settings
+
+    demo = get_settings()
+    claims = jwt.decode(
+        auth_headers("viewer")["Authorization"][7:], demo.auth_secret, ["HS256"], audience="fab-dispatch"
+    )
+    del claims["exp"]
+    r = anon.get("/api/auth/me", headers={"Authorization": f"Bearer {jwt.encode(claims, demo.auth_secret)}"})
+    assert r.status_code == 401  # a demo token without an expiry is not a session either
+
+
+def test_the_bootstrap_dispatcher_grant_needs_a_verified_email():
+    s = Settings(
+        auth_mode="supabase",
+        supabase_url="https://abc.supabase.co",
+        supabase_jwt_secret="super-secret-jwt-key-for-tests-only-123456",
+        dispatcher_emails=["lead@fab.com"],
+    )
+    now = int(time.time())
+
+    def token(**extra):
+        base = {"sub": "u1", "email": "lead@fab.com", "aud": "authenticated", "iat": now, "exp": now + 60}
+        return jwt.encode({**base, "iss": "https://abc.supabase.co/auth/v1", **extra}, s.supabase_jwt_secret)
+
+    assert _verify_supabase(token(), s).role == "dispatcher"  # no claim: passwordless sign-in verified it
+    assert _verify_supabase(token(user_metadata={"email_verified": True}), s).role == "dispatcher"
+    assert _verify_supabase(token(email_verified=True), s).role == "dispatcher"
+    assert _verify_supabase(token(user_metadata={"email_verified": False}), s).role == "viewer"
+    assert _verify_supabase(token(email_verified=False), s).role == "viewer"
+    assert _verify_supabase(token(email_verified="yes"), s).role == "viewer"  # only a real true counts
+    # An admin-set role never depends on the flag (it isn't an email-based grant).
+    assert _verify_supabase(token(email_verified=False, app_metadata={"role": "dispatcher"}), s).role == "dispatcher"
 
 
 def _anonymous_token(s: Settings, extra: dict | None = None) -> str:
@@ -156,6 +206,7 @@ def _anonymous_token(s: Settings, extra: dict | None = None) -> str:
         "is_anonymous": True,
         "aud": "authenticated",
         "iss": "https://abc.supabase.co/auth/v1",
+        "iat": time.time(),
         "exp": time.time() + 60,
         **(extra or {}),
     }

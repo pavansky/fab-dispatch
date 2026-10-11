@@ -54,6 +54,9 @@ ROLE_RANK: dict[str, int] = {"viewer": 1, "dispatcher": 2}
 DEMO_ISSUER, DEMO_AUDIENCE = "fab-dispatch-demo", "fab-dispatch"
 DEMO_TTL_S = 12 * 3600
 STREAM_TICKET_TTL_S = 90
+# PyJWT only checks a claim it finds: a token with no ``exp`` would never expire, so every
+# token must carry these. (Supabase and the demo issuer always set them.)
+REQUIRED_CLAIMS = {"require": ["exp", "sub", "aud", "iss"]}
 log = logging.getLogger("fab")
 
 
@@ -92,7 +95,14 @@ def issue_demo_token(role: Role, settings: Settings) -> str:
 
 
 def _verify_demo(token: str, settings: Settings) -> User:
-    claims = jwt.decode(token, settings.auth_secret, algorithms=["HS256"], audience=DEMO_AUDIENCE, issuer=DEMO_ISSUER)
+    claims = jwt.decode(
+        token,
+        settings.auth_secret,
+        algorithms=["HS256"],
+        audience=DEMO_AUDIENCE,
+        issuer=DEMO_ISSUER,
+        options=REQUIRED_CLAIMS,
+    )
     return User(
         id=claims["sub"], email=claims["email"], role=claims["role"], fabs=claims.get("fabs", ["*"]), provider="demo"
     )
@@ -111,11 +121,23 @@ def _verify_supabase(token: str, settings: Settings) -> User:
         if not settings.supabase_jwt_secret:
             raise jwt.InvalidTokenError("HS-signed token but no SUPABASE_JWT_SECRET configured")
         claims = jwt.decode(
-            token, settings.supabase_jwt_secret, algorithms=["HS256"], audience="authenticated", issuer=issuer
+            token,
+            settings.supabase_jwt_secret,
+            algorithms=["HS256"],
+            audience="authenticated",
+            issuer=issuer,
+            options=REQUIRED_CLAIMS,
         )
     else:
         key = _jwks(settings.supabase_url).get_signing_key_from_jwt(token)
-        claims = jwt.decode(token, key.key, algorithms=["ES256", "RS256"], audience="authenticated", issuer=issuer)
+        claims = jwt.decode(
+            token,
+            key.key,
+            algorithms=["ES256", "RS256"],
+            audience="authenticated",
+            issuer=issuer,
+            options=REQUIRED_CLAIMS,
+        )
     if claims.get("is_anonymous"):
         # Guest sign-in (Supabase anonymous user): no email; the role comes from settings.
         if settings.guest_role == "none":
@@ -131,7 +153,12 @@ def _verify_supabase(token: str, settings: Settings) -> User:
     meta = claims.get("app_metadata") or {}  # set by admins, not editable by users
     role = meta.get("role")
     if role not in ROLE_RANK:
-        role = "dispatcher" if email in {e.lower() for e in settings.dispatcher_emails} else settings.default_role
+        # The bootstrap allow-list grants dispatcher by email alone, so the email must be the
+        # user's: an account whose token says its email is unverified (an identity added but not
+        # yet confirmed) stays at the default role. Supabase puts the flag in user_metadata.
+        verified = claims.get("email_verified", (claims.get("user_metadata") or {}).get("email_verified"))
+        listed = email in {e.lower() for e in settings.dispatcher_emails}
+        role = "dispatcher" if listed and verified in (None, True) else settings.default_role
     # Presence, not truthiness: an admin setting ``fabs: []`` revokes access to every fab; only a
     # user without the key falls back to the default (["*"] on the public demo: synthetic fabs).
     fabs = meta.get("fabs", settings.default_fabs)
