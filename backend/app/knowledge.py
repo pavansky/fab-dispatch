@@ -5,11 +5,18 @@ profile (app/fabs/profiles), and each fab gets its own history and its own index
 the symptom and search a vector index of past repairs for the nearest neighbours on the same
 tool family. That gives:
 
-* a **duration prediction**: similarity-weighted mean of the neighbours' actual repair
-  times, with a p10-p90 range. This is k-nearest-neighbour regression, i.e. the brief's
-  "ML-based" option done in a way that can be explained.
-* **who has fixed this before**: engineers ranked by how many of the neighbours they fixed.
-* the **likely root cause and fix** to brief the engineer with.
+* a **duration estimate**: the similarity-weighted mean of the neighbours' actual repair
+  times (k-nearest-neighbour regression, explained by showing the neighbours), with the P10
+  and P90 of those neighbours' times. P10-P90 is the middle 80% of the neighbours, so roughly
+  8 in 10 repairs land inside it; it is not a 90% interval. About 9 in 10 finish by the P90.
+  ``scripts/duration_study.py`` measures both on held-out repairs.
+* **who has fixed this before**: engineers ranked by how many of the neighbours they fixed,
+  limited to the people on shift when the caller passes a roster. History and shifts share
+  engineer ids (E01, E02, ...).
+* the **likely root cause and fix** to brief the engineer with: the cause with the largest
+  similarity-weighted share of the neighbours. ``cause_share`` is that share and
+  ``confidence`` is the mean cosine similarity of the closest five neighbours (how close the
+  matches are). Neither is a calibrated probability.
 
 Runs with no key and no server by default: an exact cosine search in NumPy over a
 dependency-free hashed n-gram embedding. At 1,800 repairs per fab that is one ~1 ms matrix
@@ -41,6 +48,7 @@ import random
 import re
 import statistics
 import threading
+from collections.abc import Collection
 from dataclasses import astuple, dataclass
 
 import numpy as np
@@ -292,7 +300,12 @@ class RepairIndex:
     def mode(self) -> str:
         return self.backend.mode
 
-    def similar(self, profile: FabProfile, family: str, symptom: str, k: int = 12) -> dict:
+    def similar(
+        self, profile: FabProfile, family: str, symptom: str, k: int = 12, roster: Collection[str] | None = None
+    ) -> dict:
+        """The k most similar past repairs on this tool family and what they suggest (module
+        doc). ``roster``: engineer ids on shift; when given, ``experienced_engineers`` lists
+        only them (the history spans a larger pool than any one shift)."""
         # A neighbour with no shared feature (score 0) says nothing about this fault.
         hits = [(score, p) for score, p in self.backend.search(profile, family, symptom, k) if score > 0]
         if not hits:
@@ -307,15 +320,24 @@ class RepairIndex:
         for (_, p), w in zip(hits, weights, strict=True):
             causes[p["cause"]] = causes.get(p["cause"], 0) + w
             engineers[p["engineer"]] = engineers.get(p["engineer"], 0) + 1
+        if roster is not None:
+            on_shift = set(roster)
+            engineers = {e: n for e, n in engineers.items() if e in on_shift}
         top_cause = max(causes, key=causes.get)
         return {
             "prediction": {
                 "minutes": round(mean),
                 "p10": round(q[0]),
                 "p90": round(q[-1]),
+                # Mean cosine similarity of the closest five: how close the matches are.
                 "confidence": round(statistics.fmean(score for score, _ in hits[:5]), 3),
                 "likely_cause": top_cause,
-                "cause_share": round(causes[top_cause] / total, 2),
+                "cause_share": round(causes[top_cause] / total, 2),  # weighted share, not a probability
+                "neighbours": len(hits),
+                "basis": (
+                    f"similarity-weighted mean of the {len(hits)} most similar past repairs; "
+                    "p10-p90 spans the middle 80% of their actual times"
+                ),
             },
             "experienced_engineers": sorted(engineers.items(), key=lambda kv: -kv[1])[:5],
             "neighbours": [

@@ -117,6 +117,18 @@ def test_similar_repairs_stay_in_family_and_match_the_fault():
     assert all(n["code"] == "SLURRY" for n in body["neighbours"][:3])
     p = body["prediction"]
     assert p["p10"] <= p["minutes"] <= p["p90"]
+    assert p["neighbours"] >= len(body["neighbours"])
+    assert "middle 80%" in p["basis"]
+
+
+def test_experienced_engineers_are_limited_to_the_roster():
+    req = {"family": "litho", "symptom": "overlay drift out of spec", "k": 30}
+    everyone = client.post("/api/repairs/similar", json=req).json()["experienced_engineers"]
+    assert everyone, "history has no engineers for this fault"
+    roster = [e for e, _ in everyone[1:3]]
+    limited = client.post("/api/repairs/similar", json={**req, "roster": roster}).json()["experienced_engineers"]
+    assert [e for e, _ in limited] == roster
+    assert client.post("/api/repairs/similar", json={**req, "roster": []}).json()["experienced_engineers"] == []
 
 
 def test_predict_durations_only_touches_tool_downs():
@@ -127,6 +139,13 @@ def test_predict_durations_only_touches_tool_downs():
     kinds = {j["id"]: j["kind"] for j in sc["jobs"]}
     assert changed and all(kinds[j] == "down" for j in changed)
     assert len(out["scenario"]["jobs"]) == 20
+    assert out["basis"]
+    on_shift = {e["id"] for e in sc["engineers"]}
+    for c in out["changes"]:
+        # The keys the UI reads stay; the band and basis come with every change.
+        assert {"job_id", "standard", "predicted", "p10", "p90", "likely_cause"} <= set(c)
+        assert c["p10"] <= c["p90"] and c["basis"] == "knn_mean"
+        assert all(e in on_shift for e, _ in c["experienced_engineers"])
 
 
 def test_unknown_family_is_rejected():
