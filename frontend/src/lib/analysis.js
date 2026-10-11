@@ -218,7 +218,8 @@ function recommendGoal(results, goalKey) {
         ? `No strategy has a value for ${label(lead)} (${absentText(lead)}), and all ${results.length} tie on the rest of this goal, so ${short(winner)} is listed first by default order.`
         : `All ${results.length} strategies tie on this goal, so ${short(winner)} is listed first by default order.`
     } else {
-      why = `Ties with ${names(group.filter((r) => r !== winner))} on every criterion of this goal; listed first by default order.`
+      const note = hasMetric(m, lead) ? '' : ` (${label(lead)}: ${absentText(lead)})`
+      why = `Ties with ${names(group.filter((r) => r !== winner))} on every criterion of this goal${note}; listed first by default order.`
     }
   }
   why += ` Covers ${fmt(m.assigned)} of ${plural(m.jobs, 'job')}.`
