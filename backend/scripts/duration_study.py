@@ -85,8 +85,12 @@ def has_observation(profile, r):
     return any(o in r.symptom for c in causes for o in cause_observations(c))
 
 
-def study(profile, index, test_n, gbm_iters):
-    train = synthetic_history(profile, seed=TRAIN_SEED)
+def study(profile, index, test_n, gbm_iters, train_n=None):
+    train = (
+        synthetic_history(profile, seed=TRAIN_SEED)
+        if train_n is None
+        else synthetic_history(profile, n=train_n, seed=TRAIN_SEED)
+    )
     test = synthetic_history(profile, n=test_n, seed=TEST_SEED)
     families = profile.family_ids
     codes = sorted({c for f in families for c in profile.family(f).faults})
@@ -216,19 +220,28 @@ def study(profile, index, test_n, gbm_iters):
     }
 
 
-def main():
+def main(argv=None):
     global OUT
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("out", nargs="?", default=OUT, help="output path prefix (.log and .json are added)")
     ap.add_argument("--quick", action="store_true", help="150 test repairs per fab and smaller trees")
-    args = ap.parse_args()
+    # Smoke-test sizes (tests/test_scripts.py); each overrides the study's or --quick's value.
+    ap.add_argument("--train-n", type=int, help="training repairs per fab (default: the fab's full history)")
+    ap.add_argument("--test-n", type=int, help="held-out test repairs per fab (default 600; 150 with --quick)")
+    ap.add_argument("--gbm-iters", type=int, help="boosting iterations (default 300; 100 with --quick)")
+    ap.add_argument("--fab", help="study one fab only (default: every profile)")
+    args = ap.parse_args(argv)
     OUT = args.out
     test_n, gbm_iters = (150, 100) if args.quick else (600, 300)
+    test_n, gbm_iters = args.test_n or test_n, args.gbm_iters or gbm_iters
 
     index = RepairIndex(get_settings())
     report = []
-    for profile in all_profiles().values():
-        res = study(profile, index, test_n, gbm_iters)
+    profiles = all_profiles()
+    if args.fab:
+        profiles = {args.fab: profiles[args.fab]}
+    for profile in profiles.values():
+        res = study(profile, index, test_n, gbm_iters, args.train_n)
         report.append(res)
         log(
             f"{res['fab']}: within-code spread {res['spread_within_code_min']} min, "
@@ -240,6 +253,7 @@ def main():
         log(f"  MAE by observation {res['mae_by_observation']}")
     with open(OUT + ".json", "w") as f:
         json.dump({"quick": args.quick, "fabs": report}, f, indent=1)
+    return report
 
 
 if __name__ == "__main__":

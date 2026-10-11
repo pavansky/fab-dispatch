@@ -43,7 +43,7 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
 
 import numpy as np  # noqa: E402
 
-E, J = 14, 45
+E, J = 14, 45  # shift size; --engineers / --jobs exist for the smoke test (set in every worker too)
 PRESETS = ("normal", "litho_crunch", "excursion", "overstaffed")
 FEATURES = ["priority", "earliest", "latest", "duration", "min_level", "scarcity"]
 HAND_RULE = [10.0, 0.0, -1.0, 0.0, 0.0, 0.0]  # priority first, then the earliest deadline
@@ -51,11 +51,36 @@ SOLVERS = ("greedy", "regret", "alns", "pyvrp")
 OUT = "out/learned"
 
 
+class _Inline:
+    """``--workers 1``: run in this process instead of forking one worker. The smoke test runs the
+    study under pytest, where a fork after the solvers' threads have started can hang."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def map(self, fn, iterable, chunksize=None):
+        return list(map(fn, iterable))
+
+
+def _pool(workers, **kwargs):
+    return ProcessPoolExecutor(max_workers=workers, **kwargs) if workers > 1 else _Inline()
+
+
 def log(m):
     line = f"[{time.strftime('%H:%M:%S')}] {m}"
     print(line, flush=True)
     with open(OUT + ".log", "a") as f:
         f.write(line + "\n")
+
+
+def _set_size(e, j):
+    """Pool initializer: the shift size in every worker process, whatever the start method."""
+    global E, J
+    E, J = e, j
+    shift.cache_clear()
 
 
 @lru_cache(maxsize=256)
@@ -182,15 +207,18 @@ def paired_ci(base, other, seed=1):
     return round(float(d.mean()), 2), [round(float(np.percentile(boots, q)), 2) for q in (2.5, 97.5)]
 
 
-def main():
+def main(argv=None):
     global OUT
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("out", nargs="?", default=OUT, help="output path prefix (.log and .json are added)")
     ap.add_argument("--quick", action="store_true", help="1 seed, 4 training and 4 test shifts, short search")
     ap.add_argument("--seeds", type=int, help="independent CEM runs (default 5; 1 with --quick)")
+    ap.add_argument("--engineers", type=int, default=E)
+    ap.add_argument("--jobs", type=int, default=J)
     ap.add_argument("--workers", type=int, default=8)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     OUT = args.out
+    _set_size(args.engineers, args.jobs)
     Path(OUT).parent.mkdir(parents=True, exist_ok=True)
     per_preset = 1 if args.quick else 10
     n_seeds = args.seeds or (1 if args.quick else 5)
@@ -202,7 +230,7 @@ def main():
         f"{len(test)} test shifts, {iters} iterations x {pop} candidates"
     )
 
-    with ProcessPoolExecutor(max_workers=args.workers) as ex:
+    with _pool(args.workers, initializer=_set_size, initargs=(E, J)) as ex:
         opt_by_shift = optima(ex, test, Path(OUT).parent / "exact_optima.json")
         opt = [opt_by_shift[t] for t in test]
         solved = list(ex.map(solver_costs, test))
@@ -262,25 +290,24 @@ def main():
             f"{label} (seed {r['seed']}): {vs_hand:+.2f} gap points vs hand rule {vs_hand_ci}, "
             f"{vs_greedy:+.2f} vs greedy {vs_greedy_ci}"
         )
+    out = {
+        "method": "black-box policy search (cross-entropy method)",
+        "size": f"{E}x{J}",
+        "quick": args.quick,
+        "train_shifts": len(train),
+        "test_shifts": len(test),
+        "cem": {"seeds": n_seeds, "iterations": iters, "population": pop, "elite": elite},
+        "features": FEATURES,
+        "hand_rule_weights": HAND_RULE,
+        "hand_rule_train_cost": round(hand_train, 1),
+        "test": test_summary,
+        "learned_per_seed": [{k: v for k, v in r.items() if k != "test_gaps"} for r in runs],
+        "learned_across_seeds": across,
+        "paired": paired,
+    }
     with open(OUT + ".json", "w") as f:
-        json.dump(
-            {
-                "method": "black-box policy search (cross-entropy method)",
-                "quick": args.quick,
-                "train_shifts": len(train),
-                "test_shifts": len(test),
-                "cem": {"seeds": n_seeds, "iterations": iters, "population": pop, "elite": elite},
-                "features": FEATURES,
-                "hand_rule_weights": HAND_RULE,
-                "hand_rule_train_cost": round(hand_train, 1),
-                "test": test_summary,
-                "learned_per_seed": [{k: v for k, v in r.items() if k != "test_gaps"} for r in runs],
-                "learned_across_seeds": across,
-                "paired": paired,
-            },
-            f,
-            indent=1,
-        )
+        json.dump(out, f, indent=1)
+    return out
 
 
 if __name__ == "__main__":
