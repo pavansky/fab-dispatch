@@ -228,8 +228,8 @@ Full solver numbers are in [ANALYSIS.md](ANALYSIS.md).
 
 The design assumption is **decomposition**: engineers don't cross fabs, certifications split a fab
 into near-independent skill groups, and dispatch happens per shift and area. Thousands of engineers
-across hundreds of fabs is therefore hundreds of small problems, not one large one. Measured on one
-laptop (ANALYSIS, "Scale: 20,000 engineers, measured"):
+across hundreds of fabs is therefore hundreds of small problems, not one large one. Measured with
+`scripts/scale_study.py` (ANALYSIS, "Scale: 20,000 engineers, measured"):
 
 - the 222 areas of a 20,000-engineer company (6,660 on shift) are each planned as independent
   problems in parallel in **211 s** on a 4-core container with 2 workers, none hitting the solver's cap;
