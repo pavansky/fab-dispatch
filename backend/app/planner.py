@@ -187,19 +187,27 @@ class Planner:
             if sim is None:
                 fails[why] += 1  # type: ignore[index]
                 continue
-            after = self._soft(sim)
-            breakdown = {k: round(after[k] - before[k], 2) for k in after}
-            breakdown["workload"] = self.w.workload_balance * len(route)
-            breakdown["priority"] = -self.w.priority_reward * job.priority
-            moved = self._moved(tech_id, job_id)
-            if moved:
-                breakdown["reassignment"] = moved
-            cost = sum(breakdown.values())
+            cost, breakdown = self._marginal(tech_id, job_id, before, sim)
             if best is None or cost < best.cost:
                 best = Insertion(tech_id, job_id, True, None, pos, cost, breakdown)
         if best is None:
             return Insertion(tech_id, job_id, False, fails.most_common(1)[0][0])
         return best
+
+    def _marginal(
+        self, tech_id: str, job_id: str, before: dict[str, float], sim: RouteSim
+    ) -> tuple[float, dict[str, float]]:
+        """Exact change in ``total_cost`` from adding ``job_id`` to the route (giving
+        ``sim``), plus its breakdown rounded for display. The cost is summed unrounded, so
+        it equals the ``total_cost`` delta, not the sum of the displayed parts."""
+        after = self._soft(sim)
+        parts = {k: after[k] - before[k] for k in after}
+        parts["workload"] = self.w.workload_balance * len(self.routes[tech_id])
+        parts["priority"] = -self.w.priority_reward * self.jobs[job_id].priority
+        moved = self._moved(tech_id, job_id)
+        if moved:
+            parts["reassignment"] = moved
+        return sum(parts.values()), {k: round(v, 2) for k, v in parts.items()}
 
     def scan(self, job_id: str, tech_ids: list[str] | None = None) -> tuple[list[Insertion], Counter[str]]:
         """All feasible insertions for a job (cheapest first) and why the rest failed."""
@@ -227,19 +235,14 @@ class Planner:
     def append(self, tech_id: str, job_id: str) -> Insertion | None:
         """Put a job at the end of a route (used to replay an external solver's
         sequence). Returns None if that breaks a hard constraint."""
-        tech, job, route = self.techs[tech_id], self.jobs[job_id], self.routes[tech_id]
+        tech, route = self.techs[tech_id], self.routes[tech_id]
         if self.tech_can_do(tech_id, job_id) is not None or len(route) >= tech.max_jobs:
             return None
         sim, _ = self._simulate(tech_id, route + [job_id])
         if sim is None:
             return None
-        before, after = self._soft(self._sims[tech_id]), self._soft(sim)
-        breakdown = {k: round(after[k] - before[k], 2) for k in after}
-        breakdown["workload"] = self.w.workload_balance * len(route)
-        breakdown["priority"] = -self.w.priority_reward * job.priority
-        if self._moved(tech_id, job_id):
-            breakdown["reassignment"] = self._moved(tech_id, job_id)
-        ins = Insertion(tech_id, job_id, True, None, len(route), sum(breakdown.values()), breakdown)
+        cost, breakdown = self._marginal(tech_id, job_id, self._soft(self._sims[tech_id]), sim)
+        ins = Insertion(tech_id, job_id, True, None, len(route), cost, breakdown)
         self.commit(ins)
         return ins
 

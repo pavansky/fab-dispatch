@@ -2,9 +2,12 @@
 
 import statistics
 
+import pytest
+
 from app.engine import allocate
 from app.generator import generate
 from app.models import Engineer, Job, Scenario, Weights
+from app.planner import Planner
 
 
 def test_greedy_falls_into_the_trap(greedy_trap):
@@ -76,6 +79,22 @@ def test_insertion_reorders_route_by_time():
     )
     res = allocate(sc, Weights(), "greedy")
     assert [s.job_id for s in res.routes[0].stops] == ["Early", "Late"]
+
+
+def test_insertion_cost_is_the_exact_total_cost_change():
+    """The cost an algorithm compares is exactly what the objective moves by (no per-term
+    rounding), so ranking insertions and ranking plans agree."""
+    sc = generate(seed=5, n_engineers=8, n_jobs=24)
+    p = Planner(sc, Weights(travel_100m=3.337, wait_min=0.2371, overqualification=7.77))
+    committed = 0
+    for job_id in p.unplaced():
+        feasible, _ = p.scan(job_id)
+        if feasible:
+            before = p.total_cost()
+            p.commit(feasible[0])
+            assert p.total_cost() - before == pytest.approx(feasible[0].cost, abs=1e-9)
+            committed += 1
+    assert committed > 10
 
 
 def test_batch_and_regret_serve_at_least_as_much_priority_on_average():
