@@ -65,10 +65,21 @@ class Insertion:
 @dataclass
 class Frozen:
     """Live-shift state for one engineer: jobs already started can't move, and new
-    work can't start before ``not_before`` (the current shift clock)."""
+    work can't start before ``not_before`` (the current shift clock).
+
+    ``starts`` and ``arrivals`` record when each started job actually began and when the
+    engineer reached it. Started work is history: a re-plan replays those times rather
+    than re-deriving them from shift start, which would forget the "not before now" delay
+    that applied when the job was planned and could double-book the engineer."""
 
     route: list[str] = field(default_factory=list)
     not_before: float = 0.0
+    starts: list[float] = field(default_factory=list)
+    arrivals: list[float] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if len(self.starts) > len(self.route) or len(self.arrivals) > len(self.starts):
+            raise ValueError("recorded times must cover a prefix of the started route")
 
 
 class Planner:
@@ -125,10 +136,15 @@ class Planner:
                 t = max(t, frozen.not_before)  # open work starts no earlier than "now"
             job = self.jobs[jid]
             d = self.metres(here, jid)
-            arrival = t + d / self._speed
-            if arrival > job.latest:
-                return None, WINDOW_MISSED
-            start = max(arrival, job.earliest)
+            if i < len(frozen.starts):
+                # Started work: replay the recorded times, it already happened.
+                start = frozen.starts[i]
+                arrival = frozen.arrivals[i] if i < len(frozen.arrivals) else min(t + d / self._speed, start)
+            else:
+                arrival = t + d / self._speed
+                if arrival > job.latest:
+                    return None, WINDOW_MISSED
+                start = max(arrival, job.earliest)
             wait += start - arrival
             overq += tech.skills[job.skill] - job.min_level
             t, here = start + job.duration, jid

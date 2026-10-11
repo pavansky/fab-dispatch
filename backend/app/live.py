@@ -236,8 +236,14 @@ def _replan(state: LiveState, reason: str, actor: str = "system") -> list[dict]:
     frozen: dict[str, Frozen] = {}
     if state.plan:
         for route in state.plan.routes:
-            started = [s.job_id for s in route.stops if s.start <= state.clock]
-            frozen[route.tech_id] = Frozen(route=started, not_before=state.clock)
+            # Started work keeps the times it actually ran at (see Frozen).
+            started = [s for s in route.stops if s.start <= state.clock]
+            frozen[route.tech_id] = Frozen(
+                route=[s.job_id for s in started],
+                not_before=state.clock,
+                starts=[s.start for s in started],
+                arrivals=[s.arrival for s in started],
+            )
     for eid in state.off_shift:
         frozen.setdefault(eid, Frozen(not_before=state.clock))
 

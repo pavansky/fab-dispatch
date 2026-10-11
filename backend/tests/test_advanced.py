@@ -61,3 +61,37 @@ def test_frozen_work_is_kept_in_place_by_every_method():
                 assert r.stops[0].locked
                 for s in r.stops[1:]:
                     assert s.start >= 90.0 - 1e-6, f"{algo} scheduled open work in the past"
+
+
+def test_live_replan_does_not_rewrite_started_work():
+    """A job started after an earlier re-plan keeps the times it really ran at (that
+    re-plan's "not before now" delay included), so later re-plans can't move it earlier
+    and double-book its engineer."""
+    from app import live
+    from app.models import Engineer, Job, Scenario
+
+    pm = {"skill": "etch", "kind": "pm", "priority": 1, "earliest": 0, "latest": 600}
+    sc = Scenario(
+        engineers=[
+            Engineer(id="E1", name="a", x=0, y=0, skills={"etch": 2}),
+            Engineer(id="E2", name="b", x=300, y=0, skills={"etch": 2}),
+        ],
+        jobs=[
+            Job(id="A", x=300, y=0, duration=120, **pm),
+            Job(id="C", x=300, y=0, duration=100, **pm),
+            Job(id="B", x=0, y=0, duration=40, **pm),
+        ],
+    )
+    state, _ = live.start(sc, Weights(), "regret")
+    live.advance(state, 50)
+    live.engineer_off(state, "E2")  # A moves to E1, who can't leave B's bay before 50
+    a = next(s for r in state.plan.routes for s in r.stops if s.job_id == "A")
+    assert (a.arrival, a.start, a.end) == (55.0, 55.0, 175.0)
+    live.advance(state, 150)
+    live.report_job(state, Job(id="D", x=300, y=0, skill="etch", priority=3, earliest=0, latest=60, duration=30))
+
+    stops = {s.job_id: s for r in state.plan.routes for s in r.stops}
+    assert stops["A"].locked and (stops["A"].arrival, stops["A"].start, stops["A"].end) == (55.0, 55.0, 175.0)
+    for route in state.plan.routes:
+        for prev, nxt in zip(route.stops, route.stops[1:], strict=False):
+            assert nxt.start >= prev.end, f"{route.tech_id} double-booked: {prev.job_id} and {nxt.job_id}"
