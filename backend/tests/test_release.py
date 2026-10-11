@@ -44,3 +44,38 @@ def test_every_runtime_dependency_is_in_the_third_party_notices():
     node = list(json.loads((ROOT / "frontend/package.json").read_text())["dependencies"])
     missing = [name for name in python + node if name.lower() not in notices]
     assert not missing, f"add to THIRD_PARTY_NOTICES.md with its license: {missing}"
+
+
+def test_every_workflow_job_has_a_timeout_and_every_action_is_pinned_to_a_commit():
+    """ENVIRONMENTS.md promises both: a hung job can't run for six hours, and a moved tag can't
+    change what runs in CI or in a release."""
+    import yaml
+
+    for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        spec = yaml.safe_load(path.read_text())
+        for name, job in spec["jobs"].items():
+            if "uses" in job:  # a reusable workflow: its own jobs carry the timeouts
+                assert job["uses"].startswith("./.github/workflows/"), (path.name, name)
+                continue
+            assert "timeout-minutes" in job, f"{path.name}: job {name} has no timeout"
+            for step in job["steps"]:
+                if uses := step.get("uses"):
+                    assert re.fullmatch(r"[\w.-]+/[\w.-]+(/[\w.-]+)*@[0-9a-f]{40}", uses), (
+                        f"{path.name}: {uses} not pinned"
+                    )
+        # And a version comment next to every pin, so a human can read what it is.
+        for line in path.read_text().splitlines():
+            if "uses:" in line and "@" in line and "./.github" not in line:
+                assert re.search(r"@[0-9a-f]{40} # v\d", line), f"{path.name}: {line.strip()}"
+
+
+def test_the_release_gates_on_main_and_uat_before_publishing_anything():
+    import yaml
+
+    jobs = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())["jobs"]
+    assert "on-main" in jobs and "merge-base --is-ancestor" in jobs["on-main"]["steps"][-1]["run"]
+    assert "on-main" in jobs["images"]["needs"] and jobs["verify"]["needs"] == "on-main"
+    uat = jobs["uat"]["steps"][-1]["run"]
+    assert "deployments?sha=$GITHUB_SHA" in uat and "workflows/smoke.yml/runs?head_sha=$GITHUB_SHA" in uat
+    assert set(jobs["promote"]["needs"]) >= {"images", "uat", "verify", "on-main"}
+    assert "EXPECTED_DATABASES" in (ROOT / ".github/workflows/smoke.yml").read_text()

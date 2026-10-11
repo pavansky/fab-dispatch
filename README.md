@@ -350,7 +350,7 @@ What a production AI application needs, and where to see it here.
 | **Data security** | Row-level security on every app table (closed to the public API), strict CSP, HSTS, rate limits, request size limits, secrets only in the platform |
 | **Reliability** | Versioned migrations under a lock, optimistic concurrency, idempotent live actions, a clock lease, an SSE stream that resumes, cached plans |
 | **Operations** | Health and liveness endpoints, request ids, structured logs, daily data retention, post-deploy smoke tests, an [uptime check every 30 minutes](.github/workflows/uptime.yml) that opens an incident issue |
-| **Delivery** | CI on every PR (lint, 3 test layers, coverage floors, audits, accessibility, images), branch protection, tagged releases promoted UAT → production, Dependabot |
+| **Delivery** | CI on every PR (lint, 3 test layers, coverage floors, audits, accessibility, images), branch protection, actions pinned to commits, tagged releases that wait for a green UAT deployment and smoke run of that commit before promoting to production, Dependabot (pip, npm, actions, Docker) |
 | **AI quality** | A grounded assistant with sources and honest refusals, an [evaluation set](backend/tests/eval/assistant_eval.json) in CI (42/42), 👍/👎 feedback with stats, an [AI transparency page](https://pavansky.github.io/fab-dispatch/ai/), an optional LLM that can only reword |
 | **Experience** | Light/dark themes, phone layouts, keyboard shortcuts, a first-run tour, contextual help, WCAG 2.1 AA checks, a crash screen with a prefilled report, link previews |
 | **Documentation** | [Docs site](https://pavansky.github.io/fab-dispatch/) (guide, architecture, decisions, operations), [interactive API reference](https://fab-dispatch.vercel.app/api/docs), in-app help center |
@@ -423,9 +423,12 @@ Everything is optional locally. Variables use the `FAB_` prefix (see [.env.examp
   Playwright end-to-end on desktop and phone with WCAG audits, `pip-audit` + `npm audit`,
   **dependency review** (no vulnerable or GPL-family additions), the **full Docker stack started and
   signed into**, **Trivy** image scans, **actionlint**, and Conventional Commits.
-- **Release:** pushing a tag re-runs CI on that exact commit, requires it to be on `main` (UAT-tested),
-  publishes **signed images to GHCR** with an SBOM and build provenance, fast-forwards `production`,
-  **waits until production serves the new version**, then publishes release notes from the changelog.
+- **Release:** pushing a tag requires the commit to be on `main` before anything is published,
+  re-runs CI on that exact commit, publishes **images to GHCR with an SBOM and a GitHub
+  build-provenance attestation** (verifiable with `gh attestation verify`; not cosign-signed), **waits
+  for a successful UAT deployment and a passing smoke run of that commit** (up to 15 minutes),
+  fast-forwards `production`, **waits until production serves the new version**, then publishes
+  release notes from the changelog.
 - **Smoke tests** after every deployment: healthy, schema current, real auth (never demo).
 - **Rollback:** promote the previous deployment in Vercel; migrations are additive so it keeps working.
 

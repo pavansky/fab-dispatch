@@ -31,8 +31,8 @@ jobs:
     env:
       FAB_TEST_PG_URL: postgresql://postgres:fab@localhost:5432/fab
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip, cache-dependency-path: backend/requirements*.txt }
       - run: pip install -r requirements-dev.txt
       - run: ruff check app tests scripts
@@ -52,8 +52,8 @@ jobs:
       matrix: { python: ["3.11", "3.12", "3.14"] }
     defaults: { run: { working-directory: backend } }
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "${{ matrix.python }}", cache: pip, cache-dependency-path: backend/requirements*.txt }
       - run: pip install -r requirements-dev.txt
       - run: pytest -q
@@ -73,8 +73,8 @@ jobs:
       FAB_DATABASE_URL: postgresql://postgres:fab@localhost:5432/fab
       FAB_TEST_PG_URL: postgresql://postgres:fab@localhost:5432/fab
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip, cache-dependency-path: backend/requirements*.txt }
       - run: pip install -r requirements-dev.txt
       - run: pytest -q
@@ -85,8 +85,8 @@ jobs:
     timeout-minutes: 15
     defaults: { run: { working-directory: frontend } }
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
       - run: npm run lint
@@ -99,11 +99,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip, cache-dependency-path: backend/requirements*.txt }
       - run: pip install -r backend/requirements.txt
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
         working-directory: frontend
@@ -113,7 +113,7 @@ jobs:
         run: npm run test:e2e
         working-directory: frontend
         env: { E2E_PYTHON: python }
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: playwright-report
@@ -127,11 +127,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12" }
       - run: pip install pip-audit && pip-audit -r backend/requirements.txt --progress-spinner off
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22 }
       - run: npm ci --prefix frontend && npm audit --prefix frontend --audit-level=high
 
@@ -141,7 +141,7 @@ jobs:
     timeout-minutes: 25
     needs: [backend-quality, frontend, e2e]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build and start the production-like stack
         run: docker compose up -d --build --wait --wait-timeout 180
       - name: The stack serves the app, the API and sign-in
@@ -168,7 +168,7 @@ jobs:
     timeout-minutes: 25
     needs: [backend-quality, frontend]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Start the stack with a separate Postgres for each fab
         run: docker compose -f docker-compose.yml -f docker-compose.fabs.yml up -d --build --wait --wait-timeout 240
       - name: Each fab's data is only in its own database (queried directly)
@@ -184,7 +184,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Lint GitHub Actions workflows (with shellcheck)
         run: |
           bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
@@ -196,9 +196,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: New dependencies must be free of known vulnerabilities and MIT-compatible
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
         with:
           fail-on-severity: high
           deny-licenses: AGPL-1.0-only, AGPL-1.0-or-later, AGPL-3.0-only, AGPL-3.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, SSPL-1.0
@@ -209,7 +209,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { fetch-depth: 0 }
       - name: Title and every commit follow Conventional Commits, one author per commit
         env:

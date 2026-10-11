@@ -14,6 +14,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       URL: ${{ vars.PRODUCTION_URL || 'https://fab-dispatch.vercel.app' }}
       GH_TOKEN: ${{ github.token }}
@@ -28,12 +29,15 @@ jobs:
             sleep 20
           done
           echo "unhealthy: ${body:-no response}"; exit 1
+      - name: The incident label exists (this path runs rarely; a missing label would fail the issue)
+        if: steps.health.outcome == 'failure'
+        run: gh label create incident --color B60205 --description "Production is unhealthy" --force
       - name: Open or update the incident
         if: steps.health.outcome == 'failure'
         run: |
           n=$(gh issue list --label incident --state open --json number --jq '.[0].number')
           msg="Production health check failed at $(date -u +'%Y-%m-%d %H:%M UTC'): $URL/api/health ([run]($GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID))"
-          if [ -n "$n" ]; then gh issue comment "$n" --body "$msg"; else gh label create incident --color B60205 --force >/dev/null; gh issue create --title "Incident: production is unhealthy" --label incident --body "$msg"; fi
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$msg"; else gh issue create --title "Incident: production is unhealthy" --label incident --body "$msg"; fi
           exit 1
       - name: Close a resolved incident
         if: steps.health.outcome == 'success'
