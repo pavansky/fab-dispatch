@@ -3,6 +3,7 @@ rate limiting, and account deletion."""
 
 import hashlib
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -150,7 +151,77 @@ def test_the_quota_is_shared_across_instances(monkeypatch):
     assert allowed == 5  # per_min + burst, however many instances served it
 
 
-def test_rate_limiting_fails_open_when_the_store_is_down(monkeypatch):
+def _request(xff: str | None = None, peer: str = "10.0.0.9", **headers: str):
+    from starlette.requests import Request
+
+    raw = {**headers, **({"x-forwarded-for": xff} if xff else {})}
+    return Request(
+        {"type": "http", "headers": [(k.encode(), v.encode()) for k, v in raw.items()], "client": (peer, 5000)}
+    )
+
+
+def test_a_client_cannot_pick_its_own_address_with_x_forwarded_for():
+    from app.observability import client_id
+
+    spoofed = _request("6.6.6.6", peer="203.0.113.7")
+    assert client_id(spoofed) == "203.0.113.7"  # XFF is ignored unless a proxy is trusted
+    # Behind one trusted proxy, the client wrote everything left of the entry it appended.
+    assert client_id(_request("6.6.6.6, 198.51.100.4"), proxy_hops=1) == "198.51.100.4"
+    assert client_id(_request("6.6.6.6, 198.51.100.4, 10.1.1.1"), proxy_hops=2) == "198.51.100.4"
+    assert client_id(_request("198.51.100.4"), proxy_hops=2) == "10.0.0.9"  # too few hops: the peer
+    vercel = _request("6.6.6.6", **{"x-vercel-forwarded-for": "198.51.100.8"})
+    assert client_id(vercel, ip_header="x-vercel-forwarded-for", proxy_hops=1) == "198.51.100.8"
+
+
+def test_on_vercel_the_platform_header_is_trusted_by_default(monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("FAB_ENV", "test")
+    s = Settings()
+    assert (s.client_ip_header, s.trusted_proxy_hops) == ("x-vercel-forwarded-for", 1)
+    monkeypatch.delenv("VERCEL")
+    assert (Settings().client_ip_header, Settings().trusted_proxy_hops) == (None, 0)
+
+
+def test_rotating_x_forwarded_for_does_not_reset_the_limit(monkeypatch):
+    from app import deps
+    from app.observability import RateLimiter
+
+    monkeypatch.setattr(deps, "get_settings", lambda: Settings(env="local"))
+    monkeypatch.setattr(deps, "_limiter", RateLimiter())
+
+    class Up:
+        def hit_rate(self, *a):
+            return 1
+
+    monkeypatch.setattr(deps, "get_store", lambda: Up())
+    dep = deps.rate_limit("spoof-test", per_min=1, burst=2)
+    codes = []
+    for i in range(5):
+        request = _request(f"192.0.2.{i}", peer="203.0.113.50")
+        request.state.user = None
+        try:
+            dep(request)
+            codes.append(200)
+        except HTTPException as e:
+            codes.append(e.status_code)
+    assert codes == [200, 200, 429, 429, 429]
+
+
+def test_idle_buckets_are_evicted_and_their_number_is_capped():
+    from app.observability import RateLimiter
+
+    now = [0.0]
+    limiter = RateLimiter(max_buckets=3, idle_s=60, clock=lambda: now[0])
+    for i in range(5):
+        limiter.allow(f"c{i}", "plan", 60, 2)
+    assert len(limiter) == 3  # least recently used dropped beyond the cap
+    assert limiter.allow("c4", "plan", 60, 2) and not limiter.allow("c4", "plan", 60, 2)  # c4 kept its count
+    now[0] = 61.0
+    limiter.allow("fresh", "plan", 60, 2)
+    assert len(limiter) == 1  # everything idle for a minute (full again) is forgotten
+
+
+def test_cheap_endpoints_fail_open_and_expensive_ones_fail_closed_when_the_store_is_down(monkeypatch):
     from types import SimpleNamespace
 
     from app import deps
@@ -162,7 +233,66 @@ def test_rate_limiting_fails_open_when_the_store_is_down(monkeypatch):
     monkeypatch.setattr(deps, "get_settings", lambda: Settings(env="local"))
     monkeypatch.setattr(deps, "get_store", lambda: Down())
     request = SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(id="u-down")), headers={})
-    deps.rate_limit("down-test", per_min=60, burst=10)(request)  # no exception
+    deps.rate_limit("down-test", per_min=60, burst=10)(request)  # cheap: no exception
+    with pytest.raises(HTTPException) as e:
+        deps.rate_limit("benchmark-test", per_min=60, burst=10, fail_closed=True)(request)
+    assert e.value.status_code == 503 and e.value.headers["Retry-After"] == "30"
+    # Decided per request (the assistant: closed only when a paid model answers).
+    llm_on = [False]
+    dep = deps.rate_limit("assistant-test", per_min=60, burst=10, fail_closed=lambda: llm_on[0])
+    dep(request)
+    llm_on[0] = True
+    with pytest.raises(HTTPException) as e:
+        dep(request)
+    assert e.value.status_code == 503
+
+
+def test_the_api_maps_503_to_the_unavailable_error_code(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import deps
+    from app.main import app
+    from app.observability import RateLimiter
+    from tests.conftest import auth_headers
+
+    class Down:
+        def hit_rate(self, *a):
+            raise ConnectionError("db down")
+
+    monkeypatch.setattr(deps, "get_settings", lambda: Settings(env="local"))
+    monkeypatch.setattr(deps, "get_store", lambda: Down())
+    monkeypatch.setattr(deps, "_limiter", RateLimiter())
+    r = TestClient(app, headers=auth_headers("dispatcher")).post("/api/optimality-gap", json={})
+    assert r.status_code == 503 and r.json()["error"]["code"] == "unavailable" and r.headers["retry-after"]
+
+
+def test_anonymous_requests_never_write_a_rate_limit_row(monkeypatch):
+    """Help search needs no token, so a flood of it must not become a flood of database upserts."""
+    from app import deps
+    from app.observability import RateLimiter
+
+    writes = []
+
+    class Store:
+        def hit_rate(self, key, *a):
+            writes.append(key)
+            return 1
+
+    monkeypatch.setattr(deps, "get_settings", lambda: Settings(env="local"))
+    monkeypatch.setattr(deps, "get_store", lambda: Store())
+    monkeypatch.setattr(deps, "_limiter", RateLimiter())
+    dep = deps.rate_limit("help-test", per_min=60, burst=2)
+    anonymous = _request(peer="203.0.113.9")
+    anonymous.state.user = None
+    dep(anonymous)
+    dep(anonymous)
+    with pytest.raises(HTTPException) as e:  # the in-memory bucket still limits them
+        dep(anonymous)
+    assert e.value.status_code == 429 and writes == []
+    signed_in = _request(peer="203.0.113.9")
+    signed_in.state.user = SimpleNamespace(id="u-1")
+    dep(signed_in)
+    assert writes == ["help-test:user:u-1"]
 
 
 # ------------------------------------------------------------------ account deletion

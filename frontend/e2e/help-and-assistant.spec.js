@@ -65,7 +65,8 @@ test('the assistant answers how-to questions with a source, and refuses off-topi
   await expect(panel.getByRole('button', { name: /^What-if scenarios/ })).toBeVisible()
   await box.fill("What's the weather in Paris?")
   await box.press('Enter')
-  await expect(panel.getByText(/^I don't know that one/)).toBeVisible()
+  // An off-task question is refused by name, with where the answers come from.
+  await expect(panel.getByText(/^I can't check the weather: I only answer from the help articles/)).toBeVisible()
   await panel.getByRole('button', { name: /^What-if scenarios/ }).click()
   await expect(page.getByRole('dialog', { name: 'Help' }).getByRole('heading', { level: 2, name: 'What-if scenarios' })).toBeVisible()
 })

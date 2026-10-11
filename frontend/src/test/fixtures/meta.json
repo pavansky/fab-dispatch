@@ -40,8 +40,12 @@
   "stability": 25.0
  },
  "store": "sqlite",
- "fab_databases": [],
  "vector_index": "exact",
+ "limits": {
+  "max_engineers": 60,
+  "max_jobs": 200,
+  "benchmark_max_job_runs": 1000
+ },
  "solver_budget": {
   "alns_iterations": 60,
   "pyvrp_iterations": 300,

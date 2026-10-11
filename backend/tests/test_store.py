@@ -6,7 +6,15 @@ import uuid
 
 import pytest
 
-from app.store import APP_TABLES, SCHEMA_VERSION, NotFound, PostgresStore, SQLiteStore, VersionConflict
+from app.store import (
+    APP_TABLES,
+    SCHEMA_VERSION,
+    DuplicateRequest,
+    NotFound,
+    PostgresStore,
+    SQLiteStore,
+    VersionConflict,
+)
 
 PG_URL = os.environ.get("FAB_TEST_PG_URL")
 
@@ -26,11 +34,57 @@ def store(request):
     s.init_schema()
     s.init_schema()  # idempotent
     yield s
+    s.close()
     if isinstance(s, PostgresStore):
         import psycopg
 
         with psycopg.connect(PG_URL, autocommit=True) as c:
             c.execute(f'DROP SCHEMA "{s.schema}" CASCADE')
+
+
+@pytest.fixture
+def pg_store():
+    if not PG_URL:
+        pytest.skip("FAB_TEST_PG_URL not set")
+    s = PostgresStore(PG_URL, f"t_{uuid.uuid4().hex[:8]}")
+    s.migrate()
+    yield s
+    s.close()
+    import psycopg
+
+    with psycopg.connect(PG_URL, autocommit=True) as c:
+        c.execute(f'DROP SCHEMA "{s.schema}" CASCADE')
+
+
+def _backend_pid(store) -> int:
+    return store._q("SELECT pg_backend_pid() AS pid")[0]["pid"]
+
+
+def test_postgres_reuses_connections_across_calls(pg_store):
+    pid = _backend_pid(pg_store)
+    assert all(_backend_pid(pg_store) == pid for _ in range(5))  # one connection, not six
+    sid = uuid.uuid4().hex[:12]
+    pg_store.create_shift(sid, {"v": 1}, "fab1-300mm-logic", "a@b.c")
+    with pytest.raises(VersionConflict):
+        pg_store.save_shift(sid, {"v": 2}, 7)  # a failed transaction is rolled back...
+    assert _backend_pid(pg_store) == pid  # ...and its connection goes back to the pool clean
+    assert pg_store.get_shift(sid) == ({"v": 1}, 1)
+
+
+def test_postgres_replaces_a_connection_the_server_dropped(pg_store):
+    import psycopg
+
+    pid = _backend_pid(pg_store)
+    with psycopg.connect(PG_URL, autocommit=True) as admin:  # e.g. a pooler timing out an idle client
+        admin.execute("SELECT pg_terminate_backend(%s)", (pid,))
+    assert _backend_pid(pg_store) != pid  # retried once on a new connection, not an error
+    assert pg_store.ping()
+
+
+def test_postgres_does_not_reuse_connections_idle_too_long(pg_store, monkeypatch):
+    pid = _backend_pid(pg_store)
+    monkeypatch.setattr(PostgresStore, "POOL_IDLE_S", 0.0)
+    assert _backend_pid(pg_store) != pid
 
 
 def test_shift_roundtrip_and_optimistic_versioning(store):
@@ -166,6 +220,43 @@ def test_read_model_rows_are_written_with_the_document(store):
     with pytest.raises(VersionConflict):
         store.save_shift(sid, {"v": 3}, 1, assignments=[])
     assert len(store.shift_assignments(sid)) == 2
+
+
+def test_a_write_claims_its_idempotency_key_and_events_atomically(store):
+    sid = uuid.uuid4().hex[:12]
+    store.create_shift(sid, {"v": 1}, "fab1-300mm-logic", "a@b.c", events=[{"kind": "shift_started"}])
+    assert [e["kind"] for e in store.events_after(sid, 0)] == ["shift_started"]
+    key = f"u:{sid}:k1"
+    assert store.save_shift(sid, {"v": 2}, 1, events=[{"kind": "clock"}], idempotency=(key, {"version": 2})) == 2
+    assert store.get_idempotent(key) == {"version": 2}
+    # The same key again (a concurrent duplicate that read version 2): nothing is written.
+    with pytest.raises(DuplicateRequest):
+        store.save_shift(sid, {"v": 3}, 2, events=[{"kind": "clock"}], idempotency=(key, {"version": 3}))
+    assert store.get_shift(sid) == ({"v": 2}, 2) and store.get_idempotent(key) == {"version": 2}
+    # A lost race releases the key it tried to claim, and appends no events.
+    with pytest.raises(VersionConflict):
+        store.save_shift(sid, {"v": 9}, 1, events=[{"kind": "clock"}], idempotency=(f"{key}-2", {"version": 9}))
+    assert store.get_idempotent(f"{key}-2") is None
+    assert [e["kind"] for e in store.events_after(sid, 0)] == ["shift_started", "clock"]
+
+
+def test_concurrent_writers_with_one_key_commit_once(store):
+    from concurrent.futures import ThreadPoolExecutor
+
+    sid = uuid.uuid4().hex[:12]
+    store.create_shift(sid, {"v": 1}, "fab1-300mm-logic", "a@b.c")
+    key = f"u:{sid}:same"
+
+    def write(n):
+        try:
+            return store.save_shift(sid, {"v": n}, 1, events=[{"kind": "clock"}], idempotency=(key, {"n": n}))
+        except (DuplicateRequest, VersionConflict) as e:
+            return type(e).__name__
+
+    with ThreadPoolExecutor(4) as pool:
+        outcomes = list(pool.map(write, range(4)))
+    assert sorted(map(str, outcomes)) == ["2", "DuplicateRequest", "DuplicateRequest", "DuplicateRequest"]
+    assert store.get_shift(sid)[1] == 2 and len(store.events_after(sid, 0)) == 1
 
 
 def test_rate_counters_are_shared_per_window(store):

@@ -82,3 +82,18 @@ def test_help_search_finds_the_right_article_and_nothing_for_nonsense():
     assert hits[0]["slug"] == "metrics"
     assert len({h["slug"] for h in hits}) == len(hits)  # one result per article
     assert anon.get("/api/help/search", params={"q": "zzzz qqqq"}).json()["results"] == []
+
+
+def test_glossary_terms_are_separate_search_hits_that_point_at_the_glossary():
+    from app.assistant.index import entries_for, get_index
+
+    glossary = load_articles()["glossary"]
+    entries = entries_for(glossary)
+    assert [e.heading for e in entries][:3] == ["Tool-down", "Bottleneck down", "PM (preventive maintenance)"]
+    assert all(e.section.anchor == "" for e in entries)  # the citation still opens the glossary
+    hit = get_index().search("what is a home bay", k=1)[0]
+    assert hit.slug == "glossary" and hit.heading == "Home bay" and hit.text.startswith("**Home bay.**")
+    hits = anon.get("/api/help/search", params={"q": "excursion"}).json()["results"]
+    assert hits[0]["slug"] == "glossary" and hits[0]["heading"] == "Excursion"
+    # Ordinary sections are untouched by the split.
+    assert [e.heading for e in entries_for(load_articles()["live-dispatch"])][1] == "Start a shift"

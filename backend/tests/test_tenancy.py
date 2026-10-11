@@ -107,7 +107,9 @@ def test_ingestion_writes_to_the_fabs_own_database(two_fab_databases, monkeypatc
 def test_health_covers_every_database_and_deletion_reaches_them_all(two_fab_databases):
     health = client.get("/api/health").json()
     assert health["databases"] == 3 and health["db_ok"] and health["schema_ok"]
-    assert client.get("/api/meta").json()["fab_databases"] == [FAB1, FAB2]
+    # /meta is public: it must not confirm which customers' fabs have their own database.
+    meta = TestClient(app).get("/api/meta")
+    assert "fab_databases" not in meta.json() and FAB2 not in meta.text  # (FAB1 is the public default_fab)
     one, two = _shift(FAB1, 8), _shift(FAB2, 9)
     erased = client.delete("/api/auth/me").json()["erased"]
     assert erased["shifts"] >= 2  # the demo user's shifts in both fab databases
