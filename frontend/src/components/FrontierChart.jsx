@@ -52,7 +52,7 @@ export default function FrontierChart({ points, band, caption, wide = false }) {
   return (
     <figure style={{ margin: 0 }}>
       <svg className="frontier" viewBox={`0 0 ${W} ${H}`} role="img"
-        aria-label={`Cost versus solve latency for ${points.length} strategies`}>
+        aria-label={`Cost versus solve latency for ${points.length} strategies. The same data follows as a table.`}>
         {bandTop !== null && (
           <rect className="band" x={M.l} width={W - M.l - M.r} y={y(bandTop)} height={Math.max(1, y(band.from) - y(bandTop))} />
         )}
@@ -99,6 +99,21 @@ export default function FrontierChart({ points, band, caption, wide = false }) {
           </g>
         ))}
       </svg>
+      <table className="sr-only">
+        <caption>Total cost and solve time per strategy</caption>
+        <thead><tr><th scope="col">Strategy</th><th scope="col">Total cost (pts)</th><th scope="col">Solve time (ms)</th><th scope="col">Cost × latency</th></tr></thead>
+        <tbody>
+          {points.map((p) => (
+            <tr key={p.key}>
+              <th scope="row">{ALGO_SHORT[p.key]}{p.reco ? ' (recommended)' : ''}</th>
+              <td>{fmt(p.cost)}{p.costLo !== undefined ? `, 95% CI ${fmt(p.costLo)} to ${fmt(p.costHi)}` : ''}</td>
+              <td>{fmt(p.latency, p.latency < 10 ? 1 : 0)}</td>
+              <td>{status(p)}</td>
+            </tr>
+          ))}
+        </tbody>
+        {bandTop !== null && <tfoot><tr><td colSpan={4}>Noise margin: up to {fmt(band.margin, 0)} pts above {fmt(band.from)} pts counts as equally cheap.</td></tr></tfoot>}
+      </table>
       {caption && <figcaption className="help" style={{ marginTop: 6 }}>{caption}</figcaption>}
       <Tooltip tip={tip} />
     </figure>

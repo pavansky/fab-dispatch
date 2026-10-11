@@ -178,6 +178,21 @@ describe('views', () => {
     expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
   })
 
+  it('opens a disagreement or an unserved job from the keyboard', async () => {
+    const { user } = await signInAs('dispatcher')
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Where the strategies disagree/ })).toBeInTheDocument())
+    screen.getByRole('button', { name: 'Inspect J006 on the floor plan' }).focus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
+    expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent('J006')
+    await user.click(screen.getByRole('tab', { name: /Workforce/ }))
+    const first = fixtures.plans.pyvrp.unassigned[0].job_id
+    screen.getByRole('button', { name: `Inspect ${first} on the floor plan` }).focus()
+    await user.keyboard(' ')
+    expect(screen.getByRole('tab', { name: /Floor plan/ })).toHaveAttribute('aria-selected', 'true')
+    expect(within(screen.getByRole('complementary', { name: 'Inspector' })).getByRole('heading', { level: 3 })).toHaveTextContent(first)
+  })
+
   it("jumps from a strategy's scorecard to its floor plan", async () => {
     const { user } = await signInAs('dispatcher')
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'View on floor plan' })).toHaveLength(5))

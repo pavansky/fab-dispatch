@@ -28,7 +28,9 @@ export default function Schedule({ scenario, result, selection, onSelect, offShi
         const busy = r?.stops.reduce((s, x) => s + (x.end - x.start), 0) ?? 0
         return (
           <div key={e.id} className={`g-row ${off ? 'off' : ''}`} role="row" style={!r && !off ? { opacity: 0.6 } : undefined}>
-            <div className="g-name" role="rowheader" onClick={() => onSelect({ type: 'engineer', id: e.id })}>{e.id}<small>{e.name}</small></div>
+            <div className="g-name" role="rowheader" onClick={() => onSelect({ type: 'engineer', id: e.id })}>
+              <button type="button" className="row-link" aria-label={`Inspect ${e.id} ${e.name}`}>{e.id}<small>{e.name}</small></button>
+            </div>
             <div className="g-track" role="cell">
               {hours.map((h) => <span key={h} className="g-grid" style={{ left: pct(h) }} />)}
               {now !== undefined && <span className="g-now" style={{ left: pct(now) }} />}

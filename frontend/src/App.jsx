@@ -431,7 +431,7 @@ function Workspace({ theme, setTheme }) {
                               const j = scenario.jobs.find((x) => x.id === u.job_id)
                               return (
                                 <tr key={u.job_id} onClick={() => select({ type: 'job', id: u.job_id })}>
-                                  <td><b>{u.job_id}</b> <span className="muted">{j.tool}</span></td>
+                                  <td><button type="button" className="row-link" aria-label={`Inspect ${u.job_id} on the floor plan`}><b>{u.job_id}</b></button> <span className="muted">{j.tool}</span></td>
                                   <td><span className={`badge p${j.priority}`}>{PRIORITY[j.priority].label}</span></td>
                                   <td>{familyLabel(j.skill)} L{j.min_level}+</td>
                                   <td>{u.reason}</td>

@@ -136,7 +136,8 @@ export default function Overview({ results, pending, reco, scenario, weights, go
                 <tbody>
                   {diffs.map((d) => (
                     <tr key={d.job.id} onClick={() => onSelect({ type: 'job', id: d.job.id })}>
-                      <td><b>{d.job.id}</b> <span className="muted">{d.job.tool}</span></td>
+                      {/* The row is clickable with a mouse; the button makes it reachable by keyboard (its click bubbles to the row). */}
+                      <td><button type="button" className="row-link" aria-label={`Inspect ${d.job.id} on the floor plan`}><b>{d.job.id}</b></button> <span className="muted">{d.job.tool}</span></td>
                       <td><span className={`badge p${d.job.priority}`}>{PRIORITY[d.job.priority].label}</span></td>
                       {solved.map((a) => (
                         <td key={a}>{d.who[a] ? <span className="cell-eng">{d.who[a]}</span> : <span className="cell-none">—</span>}</td>

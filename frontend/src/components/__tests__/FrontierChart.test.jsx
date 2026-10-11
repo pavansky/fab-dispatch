@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import FrontierChart from '../FrontierChart.jsx'
 
@@ -25,9 +25,20 @@ describe('FrontierChart', () => {
   })
 
   it('says "same cost, but slower" rather than "beaten on cost" when costs are equal', () => {
-    render(<FrontierChart points={[pt('regret', 500, 6, { front: true }), pt('pyvrp', 500, 400)]} />)
-    expect(screen.getByText('same cost as Regret-2, but slower')).toBeInTheDocument()
+    const { container } = render(<FrontierChart points={[pt('regret', 500, 6, { front: true }), pt('pyvrp', 500, 400)]} />)
+    expect(container.querySelector('text.lbl-note')).toHaveTextContent('same cost as Regret-2, but slower')
     expect(screen.queryByText(/beaten by/)).not.toBeInTheDocument()
+  })
+
+  it('gives screen readers the plotted data as a table', () => {
+    render(<FrontierChart points={[pt('regret', 500, 6, { front: true, reco: true }), pt('pyvrp', 500, 400)]} band={{ from: 500, margin: 10 }} />)
+    const table = screen.getByRole('table', { name: 'Total cost and solve time per strategy' })
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(rows.map((r) => r.textContent)).toEqual([
+      'Regret-2 (recommended)5006on the frontier',
+      'PyVRP500400same cost as Regret-2, but slower',
+      'Noise margin: up to 10 pts above 500 pts counts as equally cheap.',
+    ])
   })
 
   it('never draws the recommended point hollow or as "beaten"', () => {
