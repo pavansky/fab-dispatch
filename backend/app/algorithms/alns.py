@@ -41,6 +41,7 @@ from .regret import run_regret
 SCORES = (12.0, 6.0, 2.0)  # new global best, improved current, accepted worse
 REACTION = 0.2  # how fast operator weights follow recent success
 SEGMENT = 50  # iterations between weight updates
+END_TEMPERATURE = 1e-3  # fraction of the starting temperature left at the last iteration
 
 
 def run_alns(
@@ -67,11 +68,13 @@ def run_alns(
     weights = {k: 1.0 for k in [*destroy_ops, *repair_ops]}
     scores = {k: 0.0 for k in weights}
     uses = {k: 0 for k in weights}
-    # Start hot enough to accept a 5% worse plan half the time, then cool geometrically. At
-    # 0.9975 per iteration the default 300 iterations end at about half the starting
-    # temperature, so worse plans are still accepted late on; the best plan seen is kept.
+    # Start hot enough to accept a 5% worse plan half the time, then cool geometrically to
+    # END_TEMPERATURE of that by the last iteration, whatever the budget: by then a 5% worse
+    # plan is accepted with probability 2^-1000, so the search ends near-greedy. (A fixed
+    # rate can't do that: 0.9975 per iteration still left 47% of the heat after 300.) If the
+    # time cap stops the search first it ends warmer; the best plan seen is kept either way.
     temp = max(1.0, 0.05 * current / math.log(2))
-    cooling = 0.9975
+    cooling = END_TEMPERATURE ** (1 / max_iterations)
     it = best_it = 0
 
     while it < max_iterations and time.perf_counter() < deadline:

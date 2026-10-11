@@ -154,6 +154,20 @@ def budgets() -> None:
             print(f"| {name} | {it} | {100 * (base - c) / base:.1f}% | {t:.0f} |")
 
 
+def set_alns_iterations(n: int) -> None:
+    """Run every ALNS plan in this process with an ``n``-iteration budget and no time cap,
+    so the gap at a larger budget (ANALYSIS "Distance from the proven optimum at full size")
+    is reproducible: ``--alns-iterations 20000``."""
+    from app.algorithms.alns import run_alns
+
+    def run(p: Planner, *args, **kwargs):
+        kwargs.setdefault("max_iterations", n)
+        kwargs.setdefault("runtime_s", 3600)
+        return run_alns(p, *args, **kwargs)
+
+    ALGORITHMS["alns"] = (f"ALNS ({n} iterations)", run)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", type=int, default=20)
@@ -161,7 +175,10 @@ def main() -> None:
     ap.add_argument("--jobs", type=int, default=45)
     ap.add_argument("--gap-seeds", type=int, default=20)
     ap.add_argument("--only", choices=["gaps-full"], help="run one study")
+    ap.add_argument("--alns-iterations", type=int, help="ALNS budget for every study (default: the shipped 300)")
     args = ap.parse_args()
+    if args.alns_iterations:
+        set_alns_iterations(args.alns_iterations)
     if args.only == "gaps-full":
         print(f"### Optimality gap at full size ({args.gap_seeds} shifts per preset, {args.engineers} x {args.jobs})")
         gaps_full(args.gap_seeds, args.engineers, args.jobs)
