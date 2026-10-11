@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ApiError, advanceShift, getMeta, plan, reportJob, setTokenProvider, streamUrl } from '../api.js'
+import { ApiError, advanceShift, getHealth, getMeta, plan, reportJob, retryAfterMs, setTokenProvider, streamUrl } from '../api.js'
 import { errorBody, fixtures, json, mockApi } from './api.js'
 
 describe('API client', () => {
@@ -85,6 +85,57 @@ describe('API client', () => {
     expect(api.find('POST', '/plan')).toHaveLength(1)
     expect(second.cache).toBe('browser')
     expect(second.result).toEqual(first.result)
+  })
+
+  it('shares one request between identical plan requests in flight', async () => {
+    const release = {}
+    const api = mockApi({ 'POST /plan': ({ body }) => new Promise((r) => { release[body.algorithm] = () => r(fixtures.plans[body.algorithm]) }) })
+    const scenario = { ...fixtures.scenario, id: 'dedupe-test' }
+    const first = plan(scenario, fixtures.meta.default_weights, 'greedy')
+    const second = plan(scenario, fixtures.meta.default_weights, 'greedy')
+    const other = plan(scenario, fixtures.meta.default_weights, 'alns')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(api.find('POST', '/plan')).toHaveLength(2) // greedy once, alns once
+    release.greedy(); release.alns()
+    expect((await first).result).toEqual(fixtures.plans.greedy)
+    expect((await second).result).toEqual(fixtures.plans.greedy)
+    await expect(other).resolves.toBeTruthy()
+  })
+
+  it('drops only the caller that aborts; the shared solve runs on and fills the cache', async () => {
+    let release
+    const api = mockApi({ 'POST /plan': () => new Promise((r) => { release = () => r(fixtures.plans.greedy) }) })
+    const scenario = { ...fixtures.scenario, id: 'abort-test' }
+    const ctrl = new AbortController()
+    const dropped = plan(scenario, fixtures.meta.default_weights, 'greedy', ctrl.signal)
+    const kept = plan(scenario, fixtures.meta.default_weights, 'greedy')
+    ctrl.abort()
+    await expect(dropped).rejects.toMatchObject({ name: 'AbortError' })
+    release()
+    expect((await kept).cache).not.toBe('browser')
+    expect((await plan(scenario, fixtures.meta.default_weights, 'greedy')).cache).toBe('browser')
+    expect(api.find('POST', '/plan')).toHaveLength(1)
+  })
+
+  it('retries a 429 once after the Retry-After the server asks for, then gives up', async () => {
+    let n = 0
+    const api = mockApi({
+      'GET /meta': () => (++n === 1 ? json(429, errorBody('rate_limited', 'slow down'), { 'retry-after': '0' }) : fixtures.meta),
+      'GET /health': json(429, errorBody('rate_limited', 'still too fast'), { 'retry-after': '0' }),
+    })
+    await expect(getMeta()).resolves.toEqual(fixtures.meta)
+    expect(api.find('GET', '/meta')).toHaveLength(2)
+    await expect(getHealth()).rejects.toMatchObject({ status: 429, code: 'rate_limited' })
+    expect(api.find('GET', '/health')).toHaveLength(2) // one retry, not a storm
+  })
+
+  it('does not wait out a Retry-After longer than the UI can stand', async () => {
+    const api = mockApi({ 'GET /meta': json(429, errorBody('rate_limited', 'come back later'), { 'retry-after': '3600' }) })
+    await expect(getMeta()).rejects.toMatchObject({ status: 429 })
+    expect(api.find('GET', '/meta')).toHaveLength(1)
+    expect(retryAfterMs(new Response(null, { headers: { 'retry-after': '2' } }))).toBe(2000)
+    expect(retryAfterMs(new Response(null, { headers: { 'retry-after': new Date(Date.now() + 1500).toUTCString() } }))).toBeGreaterThan(0)
+    expect(retryAfterMs(new Response(null))).toBe(1000)
   })
 
   it('puts the token in the stream URL, encoded (EventSource cannot send headers)', () => {

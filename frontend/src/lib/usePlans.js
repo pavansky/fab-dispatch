@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { plan } from '../api.js'
 import { ALGO_ORDER } from './metrics.js'
 
@@ -14,6 +14,14 @@ const keyOf = (x) => JSON.stringify(x)
  * shift (a new seed reuses the same job ids) is never drawn on this one. The one exception:
  * while new weights wait out the debounce, the previous weights' plans stay on screen,
  * flagged `stale`, so dragging a slider doesn't blank the page.
+ *
+ * Returns { results, pending, errors, rateLimited, cacheInfo, done, stale, retry }:
+ *  - results: plans for the inputs shown; pending: strategies still solving for the current inputs;
+ *  - errors: strategy → message for the current inputs; rateLimited: the strategies among them the
+ *    API refused with 429 (shown as one notice, not one error bar each); retry() re-sends those inputs;
+ *  - cacheInfo: strategy → where its plan came from; done: nothing pending;
+ *  - stale: true while the plans on screen were solved for different (previous) inputs than the
+ *    current ones and a newer request is pending.
  */
 export function usePlans(scenario, weights, { debounceMs = 200 } = {}) {
   const sKey = useMemo(() => (scenario ? keyOf(scenario) : null), [scenario])
@@ -22,6 +30,7 @@ export function usePlans(scenario, weights, { debounceMs = 200 } = {}) {
   // The inputs last sent to the solvers, and each strategy's latest answer.
   const [sent, setSent] = useState(null)
   const [answers, setAnswers] = useState({})
+  const [attempt, setAttempt] = useState(0) // bumped by retry(): the same inputs, sent again
   const ctrl = useRef(null)
 
   useEffect(() => {
@@ -38,12 +47,12 @@ export function usePlans(scenario, weights, { debounceMs = 200 } = {}) {
             if (!c.signal.aborted) setAnswers((prev) => ({ ...prev, [algo]: { key: k, result, cache } }))
           })
           .catch((e) => {
-            if (e.name !== 'AbortError' && !c.signal.aborted) setAnswers((prev) => ({ ...prev, [algo]: { key: k, error: e.message } }))
+            if (e.name !== 'AbortError' && !c.signal.aborted) setAnswers((prev) => ({ ...prev, [algo]: { key: k, error: e.message, status: e.status } }))
           })
       })
     }, debounceMs)
     return () => clearTimeout(t)
-  }, [scenario, weights, sKey, wKey, debounceMs])
+  }, [scenario, weights, sKey, wKey, debounceMs, attempt])
 
   useEffect(() => () => ctrl.current?.abort(), [])
 
@@ -54,8 +63,11 @@ export function usePlans(scenario, weights, { debounceMs = 200 } = {}) {
   const shownKey = fresh || stale ? sent.key : null
   const shown = ALGO_ORDER.filter((a) => shownKey && answers[a]?.key === shownKey)
   const results = shown.filter((a) => answers[a].result).map((a) => answers[a].result)
-  const errors = fresh ? Object.fromEntries(shown.filter((a) => answers[a].error).map((a) => [a, answers[a].error])) : {}
+  const failed = fresh ? shown.filter((a) => answers[a].error) : []
+  const errors = Object.fromEntries(failed.map((a) => [a, answers[a].error]))
+  const rateLimited = failed.filter((a) => answers[a].status === 429)
   const cacheInfo = Object.fromEntries(shown.filter((a) => answers[a].result).map((a) => [a, answers[a].cache]))
   const pending = new Set(fresh ? ALGO_ORDER.filter((a) => !shown.includes(a)) : key ? ALGO_ORDER : [])
-  return { results, pending, errors, cacheInfo, done: pending.size === 0, stale: stale && results.length > 0 }
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+  return { results, pending, errors, rateLimited, cacheInfo, done: pending.size === 0, stale: stale && results.length > 0, retry }
 }

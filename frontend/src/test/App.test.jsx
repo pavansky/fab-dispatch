@@ -83,6 +83,29 @@ describe('planning workspace', () => {
     expect(screen.getByText(String(next))).toBeInTheDocument()
   })
 
+  it('shows one notice, not five error bars, when the API rate-limits every re-plan', async () => {
+    const routes = workspaceRoutes()
+    let limited = false
+    let n = 0
+    routes['POST /plan'] = ({ body }) => (limited
+      ? json(429, errorBody('rate_limited', 'Too many requests'), { 'retry-after': '3600' })
+      : { ...fixtures.plans[body.algorithm], label: `${body.algorithm}#${++n}` })
+    const { api, user } = await signInAs('dispatcher', routes)
+    await waitFor(() => expect(api.find('POST', '/plan')).toHaveLength(5))
+    limited = true
+    const walking = screen.getByRole('slider', { name: 'Walking' })
+    fireEvent.change(walking, { target: { value: String(fixtures.meta.default_weights.travel_100m + 1) } })
+    const notice = (await screen.findByText(/rate-limiting re-plans right now \(every strategy\)/, {}, { timeout: 2000 })).closest('[role="status"]')
+    expect(notice).toBeInTheDocument()
+    expect(screen.queryByText(/PyVRP: Too many requests/)).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('alert')).toHaveLength(0)
+    expect(api.find('POST', '/plan')).toHaveLength(10)
+    limited = false
+    await user.click(within(notice).getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(api.find('POST', '/plan')).toHaveLength(15))
+    await waitFor(() => expect(screen.queryByText(/rate-limiting re-plans/)).not.toBeInTheDocument())
+  })
+
   it('opens a view from the tabs and keeps it in the URL', async () => {
     const { user } = await signInAs('dispatcher')
     await user.click(screen.getByRole('tab', { name: /Floor plan/ }))

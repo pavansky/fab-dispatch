@@ -203,7 +203,7 @@ function Workspace({ theme, setTheme }) {
     ...scenario, engineers: scenario.engineers.filter((e) => !offShift.has(e.id)),
   }), [scenario, offShift])
 
-  const { results, pending, errors: planErrors, cacheInfo, done, stale } = usePlans(effective, weights)
+  const { results, pending, errors: planErrors, rateLimited, cacheInfo, done, stale, retry: retryPlans } = usePlans(effective, weights)
   const busy = pending.size > 0
   // Until every strategy has answered for the inputs on screen, the pick is provisional (and says so).
   const reco = results.length ? recommend(results, goal, { complete: done, stale, waiting: ALGO_ORDER.filter((a) => pending.has(a)) }) : null
@@ -327,7 +327,12 @@ function Workspace({ theme, setTheme }) {
 
         <main className="content">
           {error && <div className="error-bar" role="alert">{error} <button className="btn ghost" onClick={() => setError(null)}>Dismiss</button></div>}
-          {Object.entries(planErrors).map(([a, msg]) => <div key={a} className="error-bar" role="alert">{ALGO_SHORT[a]}: {msg}</div>)}
+          {rateLimited.length > 0 && (
+            <div className="notice-bar" role="status">
+              The API is rate-limiting re-plans right now ({rateLimited.length === ALGO_ORDER.length ? 'every strategy' : rateLimited.map((a) => ALGO_SHORT[a]).join(', ')}). Give it a moment, then <button className="btn ghost" onClick={retryPlans}>Try again</button>
+            </div>
+          )}
+          {Object.entries(planErrors).filter(([a]) => !rateLimited.includes(a)).map(([a, msg]) => <div key={a} className="error-bar" role="alert">{ALGO_SHORT[a]}: {msg}</div>)}
           <nav className="nav" role="tablist" aria-label="Views" data-tour="tabs">
             {TABS.map(([k, label], i) => (
               <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>

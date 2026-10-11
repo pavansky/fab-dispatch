@@ -18,9 +18,27 @@ export function setTokenProvider(fn) { tokenProvider = fn }
 export const currentToken = () => tokenProvider()
 
 const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const abortError = () => new DOMException('The request was aborted', 'AbortError')
+/** Wait, unless the signal aborts first. */
+const sleep = (ms, signal) => new Promise((resolve, reject) => {
+  if (signal?.aborted) { reject(abortError()); return }
+  const t = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve() }, ms)
+  function onAbort() { clearTimeout(t); reject(abortError()) }
+  signal?.addEventListener('abort', onAbort, { once: true })
+})
 const RETRY_STATUS = new Set([502, 503, 504])
 export const RETRY_DELAYS_MS = [250, 750]
+/** The longest a 429's Retry-After is honoured for; beyond that the error shows instead. */
+export const RETRY_AFTER_MAX_MS = 15000
+
+/** Milliseconds a 429 asks us to wait: a Retry-After in seconds or as an HTTP date, else 1 s. */
+export function retryAfterMs(res) {
+  const raw = res.headers.get('retry-after')
+  if (!raw) return 1000
+  if (/^\d+$/.test(raw.trim())) return Number(raw) * 1000
+  const at = Date.parse(raw)
+  return Number.isNaN(at) ? 1000 : Math.max(0, at - Date.now())
+}
 
 /**
  * `idempotencyKey` marks one logical action. If the connection drops or a gateway fails, the
@@ -32,6 +50,7 @@ async function request(path, { method = 'GET', body, signal, headers, idempotenc
   const token = tokenProvider()
   const delays = idempotencyKey ? RETRY_DELAYS_MS : []
   let res
+  let rateLimited = false // a 429 is retried once, after the Retry-After the server asks for
   for (let attempt = 0; ; attempt++) {
     try {
       res = await fetch(`${BASE}${path}`, {
@@ -47,10 +66,14 @@ async function request(path, { method = 'GET', body, signal, headers, idempotenc
       })
     } catch (e) {
       if (e.name === 'AbortError') throw e
-      if (attempt < delays.length) { await sleep(delays[attempt]); continue }
+      if (attempt < delays.length) { await sleep(delays[attempt], signal); continue }
       throw new ApiError("Can't reach the API. Is the backend running?", { status: 0, code: 'network' })
     }
-    if (RETRY_STATUS.has(res.status) && attempt < delays.length) { await sleep(delays[attempt]); continue }
+    if (RETRY_STATUS.has(res.status) && attempt < delays.length) { await sleep(delays[attempt], signal); continue }
+    if (res.status === 429 && !rateLimited) {
+      const wait = retryAfterMs(res)
+      if (wait <= RETRY_AFTER_MAX_MS) { rateLimited = true; await sleep(wait, signal); continue }
+    }
     break
   }
   if (res.status === 304) return { notModified: true, etag: res.headers.get('etag') }
@@ -67,13 +90,14 @@ async function request(path, { method = 'GET', body, signal, headers, idempotenc
 // ------------------------------------------------------------------ cache for deterministic plans
 const MAX_ENTRIES = 80
 const planCache = new Map()
+const inFlight = new Map() // body → promise of the plan request in flight for it
 function remember(key, value) {
   planCache.delete(key)
   planCache.set(key, value)
   if (planCache.size > MAX_ENTRIES) planCache.delete(planCache.keys().next().value)
 }
-/** Forget cached plans (on sign-out, so the next session on this browser starts clean). */
-export function clearPlanCache() { planCache.clear() }
+/** Forget cached and in-flight plans (on sign-out, so the next session on this browser starts clean). */
+export function clearPlanCache() { planCache.clear(); inFlight.clear() }
 
 export const getMeta = () => request('/meta').then((r) => r.data)
 export const generateScenario = (params, signal) => request('/scenario', { method: 'POST', body: params, signal }).then((r) => r.data)
@@ -85,14 +109,29 @@ export const getMe = () => request('/auth/me').then((r) => r.data)
 export const listFabs = () => request('/fabs').then((r) => r.data)
 export const getFab = (id) => request(`/fabs/${id}`).then((r) => r.data)
 
+// Identical plan requests in flight share one fetch: a slider nudged back to a value whose
+// solve is still running joins that solve instead of starting a second one. Dropping a
+// caller (its signal aborts) rejects that caller only; the solve runs on, since the server
+// works on it regardless, and its answer lands in the cache for the next request.
+const forCaller = (promise, signal) => new Promise((resolve, reject) => {
+  if (signal?.aborted) { reject(abortError()); return }
+  const onAbort = () => reject(abortError())
+  signal?.addEventListener('abort', onAbort, { once: true })
+  promise.then(resolve, reject).finally(() => signal?.removeEventListener('abort', onAbort))
+})
+
 /** Plan one strategy. Resolves from the in-browser cache when the same request was made before. */
-export async function plan(scenario, weights, algorithm, signal) {
+export function plan(scenario, weights, algorithm, signal) {
   const body = { scenario, weights, algorithm }
   const key = JSON.stringify(body)
-  if (planCache.has(key)) return { result: planCache.get(key), cache: 'browser' }
-  const { data, cache } = await request('/plan', { method: 'POST', body, signal })
-  remember(key, data)
-  return { result: data, cache }
+  if (planCache.has(key)) return Promise.resolve({ result: planCache.get(key), cache: 'browser' })
+  if (!inFlight.has(key)) {
+    const p = request('/plan', { method: 'POST', body })
+      .then(({ data, cache }) => { remember(key, data); return { result: data, cache } })
+      .finally(() => { if (inFlight.get(key) === p) inFlight.delete(key) })
+    inFlight.set(key, p)
+  }
+  return forCaller(inFlight.get(key), signal)
 }
 
 export const runBenchmark = (params, signal) => request('/benchmark', { method: 'POST', body: params, signal }).then((r) => r.data)

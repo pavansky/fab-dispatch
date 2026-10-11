@@ -345,6 +345,7 @@ svg.floor.adding { cursor: crosshair; }
 .bench-table td { white-space: nowrap; }
 
 .loading, .fatal { padding: 60px; text-align: center; color: var(--ink-3); }
+.notice-bar { background: var(--signal-wash); color: var(--ink); border: 1px solid var(--signal); border-radius: 3px; padding: 8px 12px; font-size: 13px; }
 .error-bar { background: var(--critical-wash); color: var(--critical); border: 1px solid var(--critical); border-radius: 3px; padding: 8px 12px; font-size: 13px; }
 
 @media (max-width: 1280px) {
