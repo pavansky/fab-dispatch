@@ -2,6 +2,52 @@
 
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: SemVer.
 
+## [Unreleased]
+
+### Fixed
+- **The evidence base is tested.** Every study script behind `docs/ANALYSIS.md` (`benchmark`,
+  `scale_study`, `certified_bound`, `duration_study`, `predictive_study`, `learned_policy_study`) and
+  the UI-fixture export now have smoke tests that run their real entry points at a tiny size and check
+  the tables' keys and that no heuristic beats a proven optimum (`tests/test_scripts.py`). Coverage
+  counts `scripts/` as well as `app/`, with the CI floor set one point below the measured figure.
+- **The exact solver is held to the hard constraints** on every preset of every fab (6 × 16), and the
+  full-size (14 × 45) optimality proof now covers every preset, not only the normal shift.
+- **Conventional-commit check** runs on pushes to `main` as well as pull requests, and no longer
+  rejects commits that carry a `Co-authored-by` trailer (a trailer is provenance, not a format error).
+- **README and docs numbers that had gone stale**: the test badge, the per-layer test counts and the
+  reviewers' page are now checked by `tests/test_release.py` against the suites; the duplicated
+  coverage percentages are replaced by the floors CI enforces.
+- **Help articles**: *The five strategies* no longer recommends ALNS as "closest to optimal" on the
+  strength of the 4 × 12 result the full-size proof overturned, and *Benchmark and optimality* says
+  that the in-app *Measure gaps* is the small-shift study (the hosted API has a 60 s limit) and links
+  to the full-size results.
+- `docs/ONBOARDING_A_FAB.md` pointed at a pull request template that does not exist (only the issue
+  template does); `docs/quickstart.md` no longer carries its own, different troubleshooting table.
+- `THIRD_PARTY_NOTICES.md` lists highspy and scikit-learn (the dev dependencies behind ANALYSIS.md),
+  the libraries bundled by `psycopg[binary]` and uvicorn's `[standard]` extras; the notices test now
+  matches package names as tokens, not substrings, and covers `requirements-dev.txt` too.
+
+### Changed
+- UI fixtures record the measured `runtime_ms` instead of hand-pinned values, with
+  `frontend/src/test/fixtures/_export_meta.json` noting that the export runs at reduced solver
+  budgets on the export machine; the fixture contract test also compares enum-like fields and whether
+  lists have items, not only key sets and types.
+- CI tests Python 3.13 (every minor from 3.11 to 3.14) and runs the component tests on Node 20, the
+  oldest version the app claims to support. Slow tests (`pytest -m slow`) run on pushes to `main`.
+- The README says that the production app's fast first load comes from a five-minute keep-warm cron,
+  which also keeps the database from scaling to zero; the README's limitations point at the model's
+  limits in ANALYSIS.md and at the hosted function limit that confines the live *Measure gaps* to
+  small shifts.
+
+### Added
+- `scripts/*`: size flags for every study (`--only`, `--gap-size`, `--scaling-sizes`,
+  `--budget-seeds`; `--areas`, `--area-size`, `--events`, `--sizes`; `--train-n`, `--test-n`,
+  `--gbm-iters`, `--fab`; `--engineers`, `--jobs`), each defaulting to the published study.
+- A slow test running ALNS and PyVRP at the shipped iteration budgets on a full shift: hard
+  constraints, determinism across two runs, and cost no worse than at the test budget.
+- `make slow`, and `CONTRIBUTING.md` states that commit trailers are allowed and that the history
+  before v2.9.0 was authored in batches and rewritten.
+
 ## [2.8.0] - 2026-10-06
 
 ### Added
