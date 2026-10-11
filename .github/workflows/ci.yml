@@ -111,11 +111,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # package.json says engines.node >=20.19 (and so do the README and run.py); this is the only
-      # place that version is actually exercised.
+      # place that version is actually exercised. jsdom 30, the component-test environment, needs
+      # Node 22, so on Node 20 this checks what a Node 20 user gets: install, build, lint and the
+      # pure-library tests (vitest.node20.config.js). The full suite runs on Node 22 above.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: "20.19", cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
-      - run: npm test
+      - run: npm run build
+      - run: npx eslint . --max-warnings 0
+      - run: npx vitest run -c vitest.node20.config.js
 
   e2e:
     name: e2e · Playwright

@@ -134,7 +134,7 @@ time.
 | **In your browser** | **[Open in GitHub Codespaces](https://codespaces.new/pavansky/fab-dispatch?quickstart=1)**: installs and starts everything, nothing on your machine | ~3 min |
 | **On your machine** | `git clone https://github.com/pavansky/fab-dispatch.git && cd fab-dispatch && python3 run.py` | ~3 min |
 
-**One command, locally.** You need Python **3.11–3.14** and Node.js **20.19+**. Then:
+**One command, locally.** You need Python **3.11–3.14** and Node.js **20.19+** (the component tests need Node 22, because jsdom 30 does). Then:
 
 ```bash
 git clone https://github.com/pavansky/fab-dispatch.git

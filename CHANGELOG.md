@@ -88,8 +88,9 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
   `frontend/src/test/fixtures/_export_meta.json` noting that the export runs at reduced solver
   budgets on the export machine; the fixture contract test also compares enum-like fields and whether
   lists have items, not only key sets and types.
-- CI tests Python 3.13 (every minor from 3.11 to 3.14) and runs the component tests on Node 20, the
-  oldest version the app claims to support. Slow tests (`pytest -m slow`) run on pushes to `main`.
+- CI tests Python 3.13 (every minor from 3.11 to 3.14) and, on Node 20 (the oldest version the app
+  claims to support), runs the install, build, lint and library tests; the component tests need
+  Node 22 because jsdom 30 does, and the README says so. Slow tests (`pytest -m slow`) run on pushes to `main`.
 - The README says that the production app's fast first load comes from a five-minute keep-warm cron,
   which also keeps the database from scaling to zero; the README's limitations point at the model's
   limits in ANALYSIS.md and at the hosted function limit that confines the live *Measure gaps* to
