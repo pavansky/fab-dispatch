@@ -19,9 +19,17 @@ benchmarks. Mapping this problem onto it:
                      integer rate PyVRP charges
 
 PyVRP works in integers, so time is in tenths of a minute and cost in thousandths of a
-point (fine enough that a waiting weight with two decimals, e.g. 0.25/min, is exact). The one term it can't express is the convex workload-balance penalty, so the
-result is re-simulated and re-costed by our own planner. Every reported number therefore
-comes from the same engine the other algorithms use.
+point (fine enough that a waiting weight with two decimals, e.g. 0.25/min, is exact). The one
+term it can't express is the convex workload-balance penalty, so the result is re-simulated
+and re-costed by our own planner. Every reported number therefore comes from the same engine
+the other algorithms use.
+
+Because of that missing term, the plan PyVRP calls best can be dearer by the planner's cost
+than one it found earlier (moving a job onto a fuller route is free for PyVRP and costs the
+workload weight here). So every new PyVRP best is re-scored by the planner as it is found
+(``_PlannerBest``, through PyVRP's ILS callbacks), the regret-2 warm start is scored the same
+way, and the cheapest by the planner's cost is the plan returned. A longer search with the
+same seed sees every best a shorter one saw, so more iterations never return a dearer plan.
 """
 
 from __future__ import annotations
@@ -31,6 +39,8 @@ from typing import NamedTuple
 
 import numpy as np
 from pyvrp import Activity, ActivityType, Model, ProblemData, Route, Solution, solve
+from pyvrp.IteratedLocalSearch import IteratedLocalSearchCallbacks, IteratedLocalSearchParams
+from pyvrp.solve import SolveParams
 from pyvrp.stop import MaxIterations, MaxRuntime, MultipleCriteria
 
 from ..config import get_settings
@@ -132,52 +142,98 @@ def run_pyvrp(
         return {}
 
     data = _with_matrices(m.data(), arcs, jobs, profiles, p)
+    client_ids = [c.name for c in data.clients()]
     t_warm = time.perf_counter()
-    initial = _warm_start(p, data, vt_order, [j.id for j in jobs])
+    initial, warm = _warm_start(p, data, vt_order, client_ids)
+    keep = _PlannerBest(p, vt_order, client_ids)
+    keep.offer(initial, warm.total_cost())  # the warm start itself is a candidate
     t_search = time.perf_counter()
     # MaxRuntime starts here, after the warm start, the same split as ALNS reports.
     stop = MultipleCriteria([MaxIterations(max_iterations), MaxRuntime(runtime_s)])
-    res = solve(data, stop, seed=seed, collect_stats=False, display=False, initial_solution=initial)
+    params = SolveParams(ils=IteratedLocalSearchParams(callbacks=keep))
+    res = solve(data, stop, seed=seed, collect_stats=False, display=False, params=params, initial_solution=initial)
+    keep.offer(res.best)  # also the final best, in case no callback fired (no improvement on the start)
     search_s = time.perf_counter() - t_search
 
-    # Re-play PyVRP's routes through our planner, so every number uses one engine.
-    client_ids = [c.name for c in data.clients()]
+    # Re-play the chosen routes through our planner, so every number uses one engine.
     decisions: dict[str, Decision] = {}
-    for route in res.best.routes():
-        tech_id = vt_order[route.vehicle_type()]
-        for act in route.schedule():
-            if act.type != ActivityType.CLIENT:  # depots appear in the schedule too
-                continue
-            jid = client_ids[act.idx]
-            ins = p.append(tech_id, jid)
-            if ins is None:
-                continue  # infeasible under our exact rules (e.g. a FORBIDDEN arc); repaired below
-            decisions[jid] = Decision(
-                tech_id=tech_id,
-                cost=round(ins.cost, 2),
-                breakdown=ins.breakdown,
-                explanation=(
-                    f"Placed by PyVRP iterated local search over the whole shift "
-                    f"({res.num_iterations} iterations) as stop "
-                    f"{len(p.routes[tech_id])} of {tech_id}'s route, at marginal cost {ins.cost:.1f}."
-                ),
-            )
+    for tech_id, jid in _visits(keep.best, vt_order, client_ids):
+        ins = p.append(tech_id, jid)
+        if ins is None:
+            continue  # infeasible under our exact rules (e.g. a FORBIDDEN arc); repaired below
+        decisions[jid] = Decision(
+            tech_id=tech_id,
+            cost=round(ins.cost, 2),
+            breakdown=ins.breakdown,
+            explanation=(
+                f"Placed by PyVRP iterated local search over the whole shift ({res.num_iterations} iterations, "
+                f"cheapest of {keep.scored} plans by the planner's cost) as stop "
+                f"{len(p.routes[tech_id])} of {tech_id}'s route, at marginal cost {ins.cost:.1f}."
+            ),
+        )
     # Anything PyVRP left out that still fits and pays for itself (cost < 0) gets a regret-insertion pass.
     for jid, d in run_regret(p).items():
         d.explanation = "Added after PyVRP by regret repair: " + d.explanation
         decisions[jid] = d
+    assert abs(p.total_cost() - keep.best_cost) < 1e-6, "the returned plan must be the one that was scored"
     p.meta["solver"] = {
         "iterations": res.num_iterations,
         "hit_time_cap": res.num_iterations < max_iterations,
         "warm_start_s": round(t_search - t_warm, 4),
         "search_s": round(search_s, 4),
+        "plans_scored": keep.scored,
         "runtime_ms": round((time.perf_counter() - t0) * 1000, 1),
     }
     return decisions
 
 
-def _warm_start(p: Planner, data, vt_order: list[str], client_names: list[str]) -> Solution | None:
-    """Seed the search with a regret-2 plan built on a scratch copy of the planner."""
+def _visits(solution: Solution | None, vt_order: list[str], client_ids: list[str]) -> list[tuple[str, str]]:
+    """(engineer, job) in route order for a PyVRP solution; empty for no solution."""
+    if solution is None:
+        return []
+    out = []
+    for route in solution.routes():
+        tech_id = vt_order[route.vehicle_type()]
+        for act in route.schedule():
+            if act.type == ActivityType.CLIENT:  # depots appear in the schedule too
+                out.append((tech_id, client_ids[act.idx]))
+    return out
+
+
+class _PlannerBest(IteratedLocalSearchCallbacks):
+    """Keeps the PyVRP solution that is cheapest by the planner's cost, not PyVRP's.
+
+    Each candidate is scored exactly as ``run_pyvrp`` would return it: replayed into a copy of
+    the planner (infeasible visits skipped) and completed by the regret-insertion repair pass,
+    so the score is the ``total_cost`` of the plan the user would get. ``offer`` takes a
+    candidate from outside the search; ``on_best`` is PyVRP's callback for every new best."""
+
+    def __init__(self, p: Planner, vt_order: list[str], client_ids: list[str]):
+        self.p, self.vt_order, self.client_ids = p, vt_order, client_ids
+        self.best: Solution | None = None
+        self.best_cost = float("inf")
+        self.scored = 0
+
+    def score(self, solution: Solution | None) -> float:
+        scratch = self.p.clone()
+        for tech_id, jid in _visits(solution, self.vt_order, self.client_ids):
+            scratch.append(tech_id, jid)
+        run_regret(scratch)
+        return scratch.total_cost()
+
+    def offer(self, solution: Solution | None, cost: float | None = None) -> None:
+        cost = self.score(solution) if cost is None else cost
+        self.scored += 1
+        if cost < self.best_cost - 1e-9:
+            self.best, self.best_cost = solution, cost
+
+    def on_best(self, best: Solution) -> None:
+        self.offer(best)
+
+
+def _warm_start(p: Planner, data, vt_order: list[str], client_names: list[str]) -> tuple[Solution | None, Planner]:
+    """Seed the search with a regret-2 plan built on a scratch copy of the planner. Returns
+    the PyVRP solution (None if PyVRP can't represent it) and that scratch planner."""
     scratch = p.clone()
     run_regret(scratch)
     index = {n: i for i, n in enumerate(client_names)}
@@ -187,9 +243,9 @@ def _warm_start(p: Planner, data, vt_order: list[str], client_names: list[str]) 
         if visits:
             routes.append(Route(data, [Activity(ActivityType.CLIENT, index[j]) for j in visits], vt))
     try:
-        return Solution(data, routes)
+        return Solution(data, routes), scratch
     except RuntimeError:
-        return None
+        return None, scratch
 
 
 class _Arcs(NamedTuple):

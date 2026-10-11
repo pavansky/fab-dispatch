@@ -97,6 +97,27 @@ def test_pyvrp_objective_is_our_cost_for_its_own_routes(monkeypatch, weights):
     assert pyvrp_points == pytest.approx(replay.cost_parts()["operating"], abs=0.1)
 
 
+def test_pyvrp_more_iterations_never_return_a_dearer_plan():
+    """PyVRP's own objective lacks the convex workload term, so the plan it calls best after
+    more iterations can be dearer by the planner's cost than one it found earlier (seed 0:
+    a job moved onto a fuller route, 0.09 cheaper for PyVRP, +5 workload here). Every PyVRP
+    best is re-scored by the planner and the cheapest kept, so with the same seed a larger
+    budget can never lose to a smaller one, nor to the regret-2 warm start."""
+    from app.algorithms.regret import run_regret
+
+    sc = generate(0, 14, 45, "normal")
+    warm = Planner(sc, Weights())
+    run_regret(warm)
+    costs = {}
+    for its in (300, 1000):
+        p = Planner(sc, Weights())
+        run_pyvrp(p, runtime_s=120, max_iterations=its)
+        costs[its] = p.total_cost()
+    assert costs[1000] <= costs[300] + 1e-6, costs
+    assert costs[300] <= warm.total_cost() + 1e-6
+    assert p.meta["solver"]["plans_scored"] >= 2  # the warm start and at least one PyVRP best
+
+
 def _live_instance(seed: int, clock: float = 180.0):
     """A re-plan at ``clock``: started stops frozen at their real times, previous owners known."""
     sc = generate(seed, 6, 18, "normal")
