@@ -1,9 +1,10 @@
 """Runtime settings, read once from environment variables (prefix ``FAB_``) or ``.env``.
 
-Local development needs none of them: the defaults give a SQLite store and an
-in-memory Qdrant collection, so the brief's "no API keys, runs locally" rule holds.
-Production sets ``FAB_DATABASE_URL`` (Supabase/any Postgres) and, optionally,
-``FAB_QDRANT_URL``.
+Local development needs none of them: the defaults give a SQLite store and exact
+nearest-neighbour search in NumPy for repair history (no Qdrant), so the brief's
+"no API keys, runs locally" rule holds. Production sets ``FAB_DATABASE_URL``
+(Supabase/any Postgres) and, optionally, ``FAB_QDRANT_URL`` (a Qdrant server) or
+``FAB_QDRANT_PATH`` (embedded Qdrant on disk).
 """
 
 from __future__ import annotations
@@ -29,10 +30,14 @@ class Settings(BaseSettings):
     db_schema: str = Field(
         "public", pattern=r"^[a-z_][a-z0-9_]{0,62}$", description="Postgres schema; lets UAT share a database safely"
     )
-    qdrant_url: str | None = Field(None, description="Qdrant server URL; unset = embedded local mode")
+    qdrant_url: str | None = Field(
+        None, description="Qdrant server URL; unset = no server (FAB_QDRANT_PATH, else exact NumPy search)"
+    )
     qdrant_api_key: str | None = None
     qdrant_path: str | None = Field(
-        None, description="optional on-disk path for embedded Qdrant; unset = in-memory per process"
+        None,
+        description="on-disk path for embedded Qdrant (ignored when FAB_ENV=test); unset, with no "
+        "FAB_QDRANT_URL = exact NumPy search, no Qdrant at all",
     )
     tenant_databases: dict[str, str] = Field(
         default_factory=dict,
