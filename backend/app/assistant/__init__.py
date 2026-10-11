@@ -11,9 +11,14 @@ __all__ = ["Action", "Answer", "AskContext", "AskRequest", "Assistant", "Citatio
 
 @lru_cache
 def get_assistant() -> Assistant:
-    from ..deps import get_planning
+    from ..deps import get_planning, get_repairs
     from ..fabs import get_profile
     from .index import get_index
 
     planning = get_planning()
-    return Assistant(get_index(), lambda sc, w, a: planning.plan(sc, w, a).result, get_profile)
+    repairs = get_repairs()
+
+    def similar(profile, family, symptom, roster):
+        return repairs.similar(profile, family, symptom, roster=roster)
+
+    return Assistant(get_index(), lambda sc, w, a: planning.plan(sc, w, a).result, get_profile, repairs=similar)
