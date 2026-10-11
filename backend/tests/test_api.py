@@ -126,3 +126,35 @@ def test_sse_stream_replays_events_after_cursor(scenario):
         assert r.headers["content-type"].startswith("text/event-stream")
         text = "".join(r.iter_text())
     assert "event: shift_started" in text and "event: replanned" in text
+
+
+def test_router_404_and_405_use_the_error_envelope():
+    r = anonymous.get("/api/no-such-endpoint")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found" and "detail" not in r.json()
+    r = anonymous.delete("/api/meta")
+    assert r.status_code == 405 and r.json()["error"]["code"] == "method_not_allowed"
+    assert "GET" in r.headers["allow"]
+
+
+def test_sse_cursor_is_validated_not_a_500(scenario):
+    sid = client.post("/api/shifts", json={"scenario": scenario, "algorithm": "greedy"}).json()["state"]["id"]
+    r = client.get(f"/api/shifts/{sid}/stream", params={"after": "abc"})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid"
+    assert client.get(f"/api/shifts/{sid}/stream", params={"after": -1}).status_code == 422
+    # A malformed Last-Event-ID (here a superscript digit) falls back to ?after instead of failing.
+    with client.stream("GET", f"/api/shifts/{sid}/stream", headers={"Last-Event-ID": b"\xb2"}) as r:
+        assert r.status_code == 200
+        assert "event: shift_started" in "".join(r.iter_text())
+
+
+def test_unhandled_errors_still_carry_cors_headers(monkeypatch):
+    from app.routes import fabs
+
+    def boom():
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(fabs, "all_profiles", boom)
+    r = client.get("/api/fabs", headers={"Origin": "http://localhost:5173"})
+    assert r.status_code == 500 and r.json()["error"]["code"] == "internal"
+    assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert r.headers["x-request-id"]

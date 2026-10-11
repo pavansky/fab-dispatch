@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
 from .cache import ENGINE_VERSION
@@ -35,7 +36,11 @@ def create_app() -> FastAPI:
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
     )
+    # The last middleware added is the outermost. CORS goes outside RequestContext, so even the
+    # 500 that RequestContext answers for an unhandled error carries CORS headers (otherwise the
+    # browser reports an opaque CORS failure instead of the error envelope).
     app.add_middleware(GZipMiddleware, minimum_size=1024)
+    app.add_middleware(RequestContext)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -43,14 +48,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["ETag", "X-Cache", "X-Request-ID", "Server-Timing"],
     )
-    app.add_middleware(RequestContext)
 
+    # Starlette's HTTPException (FastAPI's subclasses it), so the router's own 404 and 405
+    # use the error envelope too.
     @app.exception_handler(HTTPException)
     async def http_error(_: Request, exc: HTTPException):
         code = {
             401: "unauthorised",
             403: "forbidden",
             404: "not_found",
+            405: "method_not_allowed",
             409: "conflict",
             413: "too_large",
             422: "invalid",

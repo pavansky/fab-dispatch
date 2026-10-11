@@ -207,7 +207,11 @@ def events(
 
 @router.get("/{shift_id}/stream")
 async def stream(
-    shift_id: str, request: Request, last_event_id: str | None = Header(None), user: User = Depends(require("viewer"))
+    shift_id: str,
+    request: Request,
+    after: int = Query(0, ge=0, description="resume after this event id (Last-Event-ID wins when sent)"),
+    last_event_id: str | None = Header(None),
+    user: User = Depends(require("viewer")),
 ):
     """Server-Sent Events. The stream tails the shift's event log by id, so it works with
     many server instances and resumes on reconnect (EventSource sends Last-Event-ID).
@@ -215,9 +219,9 @@ async def stream(
     the browser reconnects on its own. Open streams double as presence heartbeats."""
     await to_thread.run_sync(_load, shift_id, user)
     store, settings = store_for_shift(shift_id), get_settings()
-    cursor = (
-        int(last_event_id) if last_event_id and last_event_id.isdigit() else int(request.query_params.get("after", 0))
-    )
+    # isascii: "²".isdigit() is True but int("²") raises, which would be a 500.
+    valid_header = last_event_id and last_event_id.isascii() and last_event_id.isdigit()
+    cursor = int(last_event_id) if valid_header else after
 
     async def gen():
         nonlocal cursor
