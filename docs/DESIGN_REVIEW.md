@@ -39,7 +39,7 @@ strategies on the same constraint engine, explains every decision, and runs live
    a paired bootstrap confidence interval excludes zero.
 3. **The scaling claim is measured.** A 20,000-engineer organisation's 222 areas are each planned
    as independent problems in parallel because the problem decomposes by fab, skill and area
-   (<<DR-SCALE-SHORT>>), and a live tool-down re-plans in well under a second.
+   (211 s on a 4-core container, 1.9 s per area), and a live tool-down re-plans in well under a second.
 
 ---
 
@@ -361,7 +361,8 @@ plan that changes under them.
 
 ### How fast is a live re-plan?
 Measured through the real live-dispatch code, 50 tool-downs into a live 30 × 100 shift, spread
-over the whole shift: <<DR-LIVE>>
+over the whole shift: **median 247 ms, 95th percentile 542 ms**, max 602 ms (ALNS, 10–54 open jobs at the event,
+none hitting the 0.6 s live cap) on a 4-core Intel Xeon @ 2.1 GHz container.
 
 ### What stops two dispatchers from corrupting a shift?
 Three mechanisms (D21):
@@ -534,12 +535,27 @@ Yes (`python -m scripts.scale_study`, ANALYSIS "Scale"). The company study plans
 areas (each a fresh plan of its own 30 × 100 shift, not a re-plan of one shared plan) in parallel,
 and records per area whether the solver's safety cap stopped it:
 
-<<DR-SCALE-TABLE>>
+| What | Measured (4-core Intel Xeon @ 2.1 GHz container, 2 workers) |
+|---|---|
+| Plan a whole 20,000-engineer company (6,660 on shift, 22,200 jobs, 222 areas, PyVRP) | **211 s** wall clock, 420 CPU-seconds, 1.87 s per area (p95 2.31 s); 0/222 areas hit the 3 s cap |
+| Live tool-down re-plan through the real dispatch code (50 events over the whole shift, 10–54 open jobs) | **247 ms** median, 542 ms p95 |
+| Live load implied by the generated company (12,216 tool-downs per 720-minute shift, 0.28 a second) | about 7% of one CPU core |
 
 ### What if you don't decompose?
 It's slower and worse:
 
-<<DR-SINGLE>>
+| One problem (one seed, 3 s search cap) | Regret-2 | ALNS | PyVRP |
+|---|---|---|---|
+| 100 × 300 | 2.9 s, cost 3,224 | 6.7 s, 13 iterations, cost 3,190 | 7.0 s, 550 iterations, cost 3,250 |
+| 150 × 500 | 14.2 s, cost 6,012 | 19.1 s, 6 iterations, cost 6,012 | 33.3 s, 355 iterations, cost 6,105 |
+| 300 × 1,000 | 148 s, cost 11,511 | 210 s, 5 iterations, cost 11,511 | killed by the container's memory limit (regenerate: `python -m scripts.benchmark --seeds 20`) |
+
+ALNS's search budget used to start before its regret-2 warm start, so from 150 × 500 up it ran
+zero iterations and returned the warm start unchanged; the budget now starts after the warm start,
+as PyVRP's does, and both report `warm_start_s` and `search_s`. At these sizes a 3 s search gives
+either method a handful of iterations, and neither reliably beats regret-2 (ANALYSIS "Scale"). And
+the gaps grow with size: PyVRP is 2.7% from optimal at 14 × 45, about 4% at 20 × 65, and 7.5–8.4% at
+30 × 100 (one seed each at the larger sizes, old wait model).
 
 ### How did you get the optimum at 30 × 100?
 Full enumeration doesn't scale: about 39,000 routes at 14 × 45 (seed 0), 409,000 at 20 × 65 (27 minutes to prove),
@@ -766,8 +782,8 @@ else.
 | Exact proof time at 14 × 45 | 20 s mean, 138 s worst, about 39,000 routes (seed 0) |
 | Certified bound at 30 × 100 | optimum in [1828.0, 1844.3]; PyVRP within 8.4% (one seed, old code) |
 | Idle wait saved by search vs regret-2 | 54–74% (static; charged from the second stop) |
-| Live re-plan | <<DR-LIVE-ROW>> |
-| 20,000-engineer company, 222 areas planned in parallel | <<DR-COMPANY-ROW>> |
+| Live re-plan | 247 ms median, 542 ms p95 (4-core container) |
+| 20,000-engineer company, 222 areas planned in parallel | 211 s on a 4-core container, 2 workers, no area capped |
 | Repair search | 0.1 ms per query, 80 ms index build |
 | Assistant evaluation | 42/42 cited correctly, 8/8 off-topic refused |
 | Tests | 455 (320 backend, 102 components, 33 end-to-end) |

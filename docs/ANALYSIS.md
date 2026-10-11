@@ -168,7 +168,33 @@ study therefore also prints the **gap on the changeable cost**, (strategy − op
 penalty of jobs no engineer in the instance can serve). One seed per preset with the current code
 (`python -m scripts.benchmark --only gaps-full --gap-seeds 1`):
 
-<<GAPSFULL1>>
+| Preset (seed 0) | Greedy | Hungarian | Regret-2 | ALNS | PyVRP |
+|---|---|---|---|---|---|
+| Normal shift | 32.0% | 28.9% | 22.9% | 3.7% | 3.6% |
+| Litho crunch | 6.4% | 5.3% | 4.3% | 0.9% | 2.2% |
+| Excursion / surge | 28.4% | 27.9% | 12.4% | 4.0% | 2.0% |
+| Overstaffed | 29.7% | 36.2% | 20.9% | 1.5% | 1.2% |
+| Mean of the four | 24.2% | 24.6% | 15.1% | 2.5% | 2.3% |
+
+Four shifts, 21 s per proof on average (36 s worst), 27,400 routes per shift. On seed 0 no job is
+uncoverable by certification in any preset (the litho-crunch penalty there is capacity: one
+qualified engineer who can't fit every job), so the changeable-cost gap equals the whole-cost gap.
+Where the fixed penalty is real it matters: litho crunch on seeds 0–2
+(`python -m scripts.benchmark --only gaps-full --gap-seeds 3 --presets litho_crunch`), where jobs
+no engineer on shift is certified for are 31% of the optimum on average (47% on seed 1):
+
+| Litho crunch, 3 seeds | Mean gap | Worst gap | Mean gap on the changeable cost |
+|---|---|---|---|
+| Greedy | 4.0% | 6.4% | 5.5% |
+| Hungarian | 5.3% | 5.8% | 8.3% |
+| Regret-2 | 2.5% | 4.3% | 3.4% |
+| **ALNS** | **0.6%** | **0.9%** | **0.9%** |
+| PyVRP | 1.4% | 2.2% | 1.9% |
+
+So the litho crunch is not the "easy" preset the whole-cost gap suggests: on the cost a dispatcher
+can change, Hungarian is 8.3% off and PyVRP 1.9%, not 5.3% and 1.4%. The capacity-bound part of
+the penalty (jobs a qualified engineer exists for but can't reach in time) is left in the
+changeable cost on purpose: a better plan can serve those.
 
 **ALNS at a larger budget.** The earlier claim that 20,000 ALNS iterations lower its normal-shift
 gap from 8.1% to 5.2% and no further was made without a script; it is now reproducible with
@@ -189,15 +215,29 @@ that optimum within 0.49% in 7 s (versus 83 s for the full proof), and its gaps 
 | 20 × 65 (proven, old code) | 1 shift | 409,000 | exact | exact | 3.9% | 6.3% |
 | 30 × 100 (certified, old code) | **1 shift** | 8.3 million | 1828.0 | 1844.3 (within 0.89%) | 7.5–8.4% | 14.4–15.4% |
 
-<<CG20X65>>
+With the current code, 20 × 65 on three seeds (`python -m scripts.certified_bound 20 65 out/cg_20x65
+--seeds 3`; 392,000–414,000 routes per shift, 37 s to enumerate, 2 s of column generation and
+10–36 s of integer search each on the 4-core container):
+
+| 20 × 65, seed | Lower bound | Best plan (within) | Greedy | Hungarian | Regret-2 | ALNS | PyVRP |
+|---|---|---|---|---|---|---|---|
+| 0 | 916.5 | 921.6 (0.55%) | ≤36.7% | ≤19.0% | ≤19.5% | ≤8.3% | ≤9.9% |
+| 1 | 718.6 | 726.1 (1.05%) | ≤46.9% | ≤30.6% | ≤32.8% | ≤10.7% | ≤16.1% |
+| 2 | 843.2 | 852.4 (1.09%) | ≤46.1% | ≤29.5% | ≤32.2% | ≤11.0% | ≤7.7% |
+| **mean of 3** | | | 43.2% | 26.4% | 28.2% | **10.0%** | 11.2% |
+
+Each cell is a certified *maximum* gap to the optimum (the heuristic's distance to the lower bound;
+the true gap is at most 1.1 points smaller). At 20 × 65 both search methods are about 10% off on
+average, 2.5–4× their 14 × 45 one-seed gaps (3.6–3.7%), with ALNS ahead on two of three seeds. No
+job on these shifts is uncoverable by certification, so the changeable-cost gap is the same.
 
 The 30 × 100 bound took 13 minutes of enumeration, 12 s of column generation and 40 minutes of
-integer search, **on one seed**. Read with that n in mind: the 30 × 100 reading (at most 8.4% above
-the optimum) is inside the range already seen at 14 × 45, where the worst of 80 shifts was 10.0%, so
-it is consistent with the gap *growing with size on average* (2.7% mean at 14 × 45 versus about 8%
-for the single 30 × 100 shift) but does not establish it on its own. All these rows predate the
-idle-wait change. Reproduce (any number of seeds and any preset):
-`python -m scripts.certified_bound 30 100 out/cg_30x100 --seeds 3 --preset normal`.
+integer search, **on one seed** (n = 1), under the old wait model. Read with that n in mind: a
+single 30 × 100 reading of at most 8.4% above the optimum is inside the range already seen at
+14 × 45, where the worst of 80 shifts was 10.0%, so on its own it does not establish that the gap
+grows with size. The three-seed 20 × 65 measurement above does support it (about 10% mean against
+2–4% at 14 × 45), and the 30 × 100 row is consistent with it. Reproduce at any size, seed count and
+preset: `python -m scripts.certified_bound 30 100 out/cg_30x100 --seeds 3 --preset normal`.
 
 ### Scale: 20,000 engineers, measured
 
@@ -208,7 +248,38 @@ It also drives 50 tool-downs into one live 30 × 100 shift through the real live
 over the whole 720-minute shift so the number of open jobs varies as it would in practice, and solves
 three undecomposed problems. Reproduce: `python -m scripts.scale_study out/company`.
 
-<<SCALE>>
+Measured on the 4-core Intel Xeon @ 2.1 GHz container, 2 workers (the laptop numbers this replaced,
+46.7 s wall for 222 areas on 16 workers and a 217 ms live median, were taken before the idle-wait
+change and without recording whether the cap bound; regenerate on that hardware with the command
+above):
+
+| What | Measured |
+|---|---|
+| Plan **222 independent areas** (6,660 engineers, 22,200 jobs, PyVRP, 2 workers) | **211 s** wall clock, 420 CPU-s; 1.87 s per area (p95 2.31 s); every area ran its full 1,000 iterations, **0/222 hit the 3 s cap** (so no capped-vs-uncapped comparison was needed; the script runs one when any area is capped) |
+| **Live tool-down** re-planned through the real live-dispatch code (50 events at clocks 7–713 of 720, 10–54 open jobs at the event, ALNS) | **p50 247 ms, p95 542 ms**, max 602 ms; 0/50 hit the 0.6 s live cap |
+| Tool-down rate implied by the generated company | 12,216 tool-downs across the 222 shifts = **0.28 per second** over the 720-minute shift |
+
+At 0.28 tool-downs per second and 247 ms per re-plan, live re-planning needs about 7% of one core
+(one core serves about 4 re-plans a second at the median). The same work *without* decomposition,
+as one problem (one seed; `warm` is the regret-2 warm start both search methods pay before their
+3 s search budget starts):
+
+| One problem | Regret-2 | ALNS | PyVRP |
+|---|---|---|---|
+| 100 × 300 | 2.9 s, cost 3,224 | 6.7 s (2.8 warm + 3.6 search, **13 iterations**), cost 3,190 | 7.0 s (3.0 warm + 3.2 search, 550 iterations), cost 3,250 |
+| 150 × 500 | 14.2 s, cost 6,012 | 19.1 s (15.2 warm + 3.2 search, 6 iterations), cost 6,012 | 33.3 s (15.1 warm + 3.8 search, 355 iterations), cost 6,105 |
+| 300 × 1,000 | 148 s, cost 11,511 | 210 s (144 warm + 63 search, 5 iterations), cost 11,511 | killed by the container's memory limit while building PyVRP's 1,300-location matrices (regenerate: `python -m scripts.benchmark --seeds 20`, i.e. the scale study on a laptop; it measured 62 s, cost 6,994 there under the old wait model) |
+
+Two findings. **Decomposition is required, not optional**: one big problem is slower than 222
+areas in parallel and gives the search methods seconds of budget for hundreds of jobs. **ALNS's
+budget at size was an accounting bug, now fixed, and the plan is still mostly the warm start.** Its
+deadline used to start before the regret-2 warm start, so at 150 × 500 and up it ran *zero*
+iterations and returned the regret-2 plan unchanged. With the deadline starting after the warm
+start it runs 13 iterations at 100 × 300 (cost 3,224 → 3,190, 1% below regret-2 and 2% below PyVRP
+at the same cap) and 5–6 at the larger sizes, where a single destroy-and-repair of a 500-job plan
+takes most of the budget and no improvement was found. PyVRP at the same 3 s cap is 1–2% *worse*
+than regret-2 at these sizes, because its 355–550 iterations are too few for a 300–500-job
+instance; at 14 × 45 it has 1,000 iterations for 45 jobs. These are single runs on one seed.
 
 ### Solve time (ms, one shift)
 

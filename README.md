@@ -104,7 +104,7 @@ is marked for regeneration. Full tables and method in [docs/ANALYSIS.md](docs/AN
 
 **At scale (measured):** the scale study plans 222 independent areas of 30 engineers × 100 jobs
 (6,660 engineers on shift) in parallel and drives 50 tool-downs through the live-dispatch code;
-<<README-SCALE>> At 30 × 100, on one seed, PyVRP was certified within 8.4% of the optimum (old code).
+on a 4-core container that takes 211 s wall clock (1.9 s per area, none hitting the solver's cap) and a live tool-down re-plans in 247 ms median (542 ms p95), spread over the whole shift. At 30 × 100, on one seed, PyVRP was certified within 8.4% of the optimum (old code).
 Details: [ANALYSIS, "Scale"](docs/ANALYSIS.md).
 
 \*Median of 5 runs, 14 engineers × 45 jobs, on a 4-core Intel Xeon @ 2.1 GHz container (an Apple M5
