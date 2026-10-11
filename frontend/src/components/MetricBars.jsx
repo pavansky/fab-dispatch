@@ -15,6 +15,7 @@ export default function MetricBars({ results, keys, onPick, highlight }) {
         return (
           <figure key={key} className="mchart" style={{ margin: 0 }}>
             <h3>{def.label}<span>{def.unit} · {def.better === 'max' ? 'higher' : 'lower'} is better</span></h3>
+            {def.help && <p className="mnote">{def.help}</p>}
             {ordered.map((r) => {
               const v = r.metrics[key]
               return (

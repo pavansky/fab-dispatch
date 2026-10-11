@@ -55,7 +55,7 @@ export default function FrontierChart({ points, margin, caption, wide = false })
         ))}
         <g className="axis"><line x1={M.l} x2={W - M.r} y1={H - M.b} y2={H - M.b} /><line x1={M.l} x2={M.l} y1={M.t} y2={H - M.b} /></g>
         <text x={(W + M.l) / 2} y={H - 6} textAnchor="middle">SOLVE LATENCY (LOG) →</text>
-        <text transform={`translate(12 ${(H - M.b + M.t) / 2}) rotate(-90)`} textAnchor="middle">← OPERATING COST</text>
+        <text transform={`translate(12 ${(H - M.b + M.t) / 2}) rotate(-90)`} textAnchor="middle">← TOTAL COST</text>
         {front.length > 1 && <path className="front-line" d={front.map((p, i) => `${i ? 'L' : 'M'} ${x(p.latency)} ${y(p.cost)}`).join(' ')} />}
         {points.filter((p) => !p.front).map((p) => {
           const by = beatenBy(p)
