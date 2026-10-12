@@ -1,8 +1,8 @@
 # Runtime dependencies. Everything is free/open-source; nothing needs an API key.
 # Exact pins, except numpy/scipy: ranges so Python 3.11-3.14 each get a matching wheel.
-fastapi==0.142.2
+fastapi==0.143.0
 uvicorn[standard]==0.54.0
-pydantic==2.13.5
+pydantic==2.14.0
 pydantic-settings==2.15.0
 numpy>=2.3,<3              # range, not a pin: 2.5 dropped Python 3.11
 scipy>=1.16,<2            # Hungarian (linear_sum_assignment) and the exact MILP (HiGHS)
