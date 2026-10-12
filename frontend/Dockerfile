@@ -7,7 +7,7 @@ COPY . .
 RUN npm run build
 
 # Unprivileged nginx: runs as the nginx user (uid 101), listens on 8080, no root in the container.
-FROM nginxinc/nginx-unprivileged:1.29-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 LABEL org.opencontainers.image.source="https://github.com/pavansky/fab-dispatch" \
       org.opencontainers.image.licenses="MIT"
 USER root
