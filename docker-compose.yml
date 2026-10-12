@@ -3,7 +3,7 @@
 # The plain local setup (README quick start) needs none of this.
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment: { POSTGRES_DB: fab, POSTGRES_USER: fab, POSTGRES_PASSWORD: fab }
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U fab -d fab"], interval: 5s, timeout: 3s, retries: 10 }
