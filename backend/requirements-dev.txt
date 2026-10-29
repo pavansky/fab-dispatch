@@ -2,7 +2,7 @@
 pytest==9.1.1
 pytest-cov==7.1.0
 httpx==0.28.1
-ruff==0.16.9
+ruff==0.17.2
 pip-audit==2.10.1
 pyyaml==6.0.3            # docs-site consistency test reads mkdocs.yml
 scikit-learn==1.9.1         # quantile model in scripts/duration_study.py; dev only
