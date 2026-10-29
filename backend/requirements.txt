@@ -1,13 +1,13 @@
 # Runtime dependencies. Everything is free/open-source; nothing needs an API key.
 # Exact pins, except numpy/scipy: ranges so Python 3.11-3.14 each get a matching wheel.
-fastapi==0.142.2
+fastapi==0.162.0
 uvicorn[standard]==0.54.0
-pydantic==2.13.5
-pydantic-settings==2.15.0
+pydantic==2.14.1
+pydantic-settings==2.16.1
 numpy>=2.3,<3              # range, not a pin: 2.5 dropped Python 3.11
 scipy>=1.16,<2            # Hungarian (linear_sum_assignment) and the exact MILP (HiGHS)
-pyvrp==0.14.0            # state-of-the-art VRPTW iterated local search, MIT
-qdrant-client==1.19.1    # repair-history vector search (embedded locally, server in prod)
+pyvrp==0.14.1            # state-of-the-art VRPTW iterated local search, MIT
+qdrant-client==1.20.0    # repair-history vector search (embedded locally, server in prod)
 pyjwt[crypto]==2.15.1    # verifies Supabase (ES256/RS256 via JWKS) and demo (HS256) tokens
 psycopg[binary]==3.3.6   # Postgres / Supabase in production; unused with the SQLite default
 highspy==1.15.1          # certified bounds at scale (scripts/certified_bound.py), the documented reproduce command
